@@ -75,6 +75,16 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             {dai::CameraBoardSocket::CAM_D, "CAM_D"}
         };
 
+        // Apply BoardConfig proven in oak_diagnostic.cpp (MUST be before nodes?)
+        // GPIO 42 (FSIN_4LANE) -> INPUT / HIGH / PULL_DOWN
+        auto boardConfig = dai::BoardConfig();
+        boardConfig.gpio[42] = dai::BoardConfig::GPIO(
+            dai::BoardConfig::GPIO::Direction::INPUT, 
+            dai::BoardConfig::GPIO::Level::HIGH, 
+            dai::BoardConfig::GPIO::Pull::PULL_DOWN
+        );
+        impl_->pipeline.setBoardConfig(boardConfig);
+
         auto sync = impl_->pipeline.create<dai::node::Sync>();
         sync->setSyncThreshold(std::chrono::milliseconds(50));
         
@@ -106,15 +116,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             encoder->bitstream.link(sync->inputs[name]);
         }
 
-        // Apply BoardConfig proven in oak_diagnostic.cpp
-        // GPIO 42 (FSIN_4LANE) -> INPUT / HIGH / PULL_DOWN
-        auto boardConfig = dai::BoardConfig();
-        boardConfig.gpio[42] = dai::BoardConfig::GPIO(
-            dai::BoardConfig::GPIO::Direction::INPUT, 
-            dai::BoardConfig::GPIO::Level::HIGH, 
-            dai::BoardConfig::GPIO::Pull::PULL_DOWN
-        );
-        impl_->pipeline.setBoardConfig(boardConfig);
+        // BoardConfig moved to top
 
         impl_->device = std::make_shared<dai::Device>(impl_->pipeline);
         impl_->syncQueue = impl_->device->getOutputQueue("quad_sync", 4, false);

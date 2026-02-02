@@ -10,6 +10,13 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 namespace micecam {
 
 struct SessionConfig {
@@ -120,7 +127,11 @@ private:
     std::thread writer_thread_;
 
     // File handles
+#ifdef _WIN32
+    HANDLE h_file_ = INVALID_HANDLE_VALUE;
+#else
     std::ofstream bin_file_;
+#endif
     std::string metadata_path_;
 
     // Metadata accumulation
@@ -134,9 +145,10 @@ private:
     std::mutex checksum_mutex_;
 
     // I/O Aggregation (Super Block)
-    std::vector<uint8_t> aggregation_buffer_;
+    uint8_t* aggregation_buffer_ = nullptr;
+    size_t current_buffer_pos_{0};
     uint64_t total_bytes_on_disk_{0};
-    static constexpr size_t AGGREGATION_THRESHOLD = 32 * 1024 * 1024; // 32MB
+    static constexpr size_t AGGREGATION_THRESHOLD = 128 * 1024 * 1024; // 128MB
 };
 
 }  // namespace micecam

@@ -19,7 +19,7 @@ int main() {
     RingBuffer buffer(600);
     
     const size_t frame_size = 1920 * 1080 * 3 / 10; // ~0.6MB simulated MJPEG
-    const int total_frames = 1000;
+    const int total_frames = 10000;
     
     std::cout << "Starting DiskWriter benchmark..." << std::endl;
     if (!writer.start()) return 1;

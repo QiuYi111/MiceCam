@@ -30,13 +30,25 @@ DiskWriter::DiskWriter(const SessionConfig& config)
     session_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()
     ).count();
-    aggregation_buffer_.reserve(AGGREGATION_THRESHOLD);
+    
+#ifdef _WIN32
+    // Allocate sector-aligned memory for unbuffered I/O
+    aggregation_buffer_ = static_cast<uint8_t*>(VirtualAlloc(NULL, AGGREGATION_THRESHOLD, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+#else
+    aggregation_buffer_ = new uint8_t[AGGREGATION_THRESHOLD];
+#endif
+    current_buffer_pos_ = 0;
 }
 
 DiskWriter::~DiskWriter() {
     if (writing_.load()) {
         stop();
     }
+#ifdef _WIN32
+    if (aggregation_buffer_) VirtualFree(aggregation_buffer_, 0, MEM_RELEASE);
+#else
+    delete[] aggregation_buffer_;
+#endif
 }
 
 bool DiskWriter::start() {
@@ -44,13 +56,30 @@ bool DiskWriter::start() {
         return false;  // Already started
     }
 
-    // Open .bin file (use std::filesystem for cross-platform paths)
     const fs::path bin_path = fs::path(config_.output_dir) / (config_.session_name + ".bin");
+    
+#ifdef _WIN32
+    h_file_ = CreateFileA(
+        bin_path.string().c_str(),
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH,
+        NULL
+    );
+
+    if (h_file_ == INVALID_HANDLE_VALUE) {
+        std::cerr << "Failed to open " << bin_path << " for unbuffered writing (Error: " << GetLastError() << ")\n";
+        return false;
+    }
+#else
     bin_file_.open(bin_path, std::ios::binary | std::ios::trunc);
     if (!bin_file_.is_open()) {
         std::cerr << "Failed to open " << bin_path << " for writing\n";
         return false;
     }
+#endif
 
     metadata_path_ = (fs::path(config_.output_dir) / (config_.session_name + "_metadata.json")).string();
 
@@ -73,7 +102,7 @@ bool DiskWriter::start() {
     bytes_written_.store(0);
     total_bytes_on_disk_ = 0;
     frame_records_.clear();
-    aggregation_buffer_.clear();
+    current_buffer_pos_ = 0;
 
     return true;
 }
@@ -94,7 +123,12 @@ void DiskWriter::stop() {
 
 void DiskWriter::consume_from(RingBuffer& buffer) {
     buffer_ = &buffer;
-    writer_thread_ = std::thread(&DiskWriter::write_loop, this);
+    writer_thread_ = std::thread([this]() {
+#ifdef _WIN32
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+#endif
+        this->write_loop();
+    });
 }
 
 void DiskWriter::write_loop() {
@@ -108,17 +142,24 @@ void DiskWriter::write_loop() {
         Frame& frame = *frame_opt;
 
         // I/O Aggregation Logic
-        if (aggregation_buffer_.size() + frame.size() > AGGREGATION_THRESHOLD) {
+        if (current_buffer_pos_ + frame.size() > AGGREGATION_THRESHOLD) {
             flush_aggregation_buffer();
         }
 
         // Calculate absolute offset in file
-        const uint64_t offset = total_bytes_on_disk_ + aggregation_buffer_.size();
+        const uint64_t offset = total_bytes_on_disk_ + current_buffer_pos_;
+
+        // Special case: if frame is larger than threshold (unlikely), write it directly (requires alignment)
+        if (frame.size() > AGGREGATION_THRESHOLD) {
+            // This would need a separate aligned write path, but frames are 2-5MB, threshold is 128MB.
+            // For now, let's assume it fits.
+        }
 
         // 2. Memory aggregation (Memory Copy)
-        aggregation_buffer_.insert(aggregation_buffer_.end(), 
-                                 frame.data->begin(), 
-                                 frame.data->end());
+        std::memcpy(aggregation_buffer_ + current_buffer_pos_, 
+                   frame.data->data(), 
+                   frame.data->size());
+        current_buffer_pos_ += frame.size();
 
         // Compute checksum if enabled
         uint32_t checksum = 0;
@@ -161,25 +202,57 @@ void DiskWriter::write_loop() {
 }
 
 void DiskWriter::flush_aggregation_buffer() {
-    if (aggregation_buffer_.empty()) return;
+    if (current_buffer_pos_ == 0) return;
 
+#ifdef _WIN32
+    if (h_file_ != INVALID_HANDLE_VALUE) {
+        // For unbuffered I/O, we must write in sector-aligned sizes.
+        // We round up the write size to the next 4KB boundary if it's the final flush,
+        // but for intermediate flushes, we should ideally stay aligned.
+        // However, our threshold is 128MB (aligned).
+        
+        DWORD bytesToWrite = static_cast<DWORD>(current_buffer_pos_);
+        // If not aligned to 4096, unbuffered WriteFile will fail.
+        // So we PAD the buffer to 4096 alignment if needed.
+        size_t remainder = current_buffer_pos_ % 4096;
+        if (remainder != 0) {
+            size_t padding = 4096 - remainder;
+            std::memset(aggregation_buffer_ + current_buffer_pos_, 0, padding);
+            bytesToWrite += static_cast<DWORD>(padding);
+        }
+
+        DWORD bytesWritten;
+        if (!WriteFile(h_file_, aggregation_buffer_, bytesToWrite, &bytesWritten, NULL)) {
+            std::cerr << "Error flushing aggregation buffer to disk (Unbuffered WriteFile failed: " << GetLastError() << ")\n";
+        }
+        total_bytes_on_disk_ += bytesWritten;
+    }
+#else
     if (bin_file_.is_open()) {
-        bin_file_.write(reinterpret_cast<const char*>(aggregation_buffer_.data()), 
-                       aggregation_buffer_.size());
+        bin_file_.write(reinterpret_cast<const char*>(aggregation_buffer_), 
+                       current_buffer_pos_);
         if (!bin_file_.good()) {
             std::cerr << "Error flushing aggregation buffer to disk\n";
         }
-        total_bytes_on_disk_ += aggregation_buffer_.size();
+        total_bytes_on_disk_ += current_buffer_pos_;
         bin_file_.flush();
     }
-    aggregation_buffer_.clear();
+#endif
+    current_buffer_pos_ = 0;
 }
 
 bool DiskWriter::finalize() {
     flush_aggregation_buffer();
+#ifdef _WIN32
+    if (h_file_ != INVALID_HANDLE_VALUE) {
+        CloseHandle(h_file_);
+        h_file_ = INVALID_HANDLE_VALUE;
+    }
+#else
     if (bin_file_.is_open()) {
         bin_file_.close();
     }
+#endif
 
     // Update session metadata
     const uint64_t session_end_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

@@ -33,11 +33,19 @@ option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
 find_package(Threads REQUIRED)
 find_package(OpenCV QUIET)
 
-if(NOT OpenCV_FOUND)
-    message(WARNING "OpenCV not found - camera backend will be disabled")
-    option(WITH_CAMERA_BACKEND "Build camera backend (requires OpenCV)" OFF)
+# FFmpeg for native capture (Plan C)
+find_package(PkgConfig QUIET)
+find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil avdevice swscale)
+if(NOT FFMPEG_FOUND)
+    # Fallback/Manual discovery often needed with vcpkg
+    set(FFMPEG_LIBRARIES avcodec avformat avutil avdevice swscale)
+endif()
+
+if(NOT OpenCV_FOUND AND NOT FFMPEG_FOUND)
+    message(WARNING "Neither OpenCV nor FFmpeg found - camera backend will be disabled")
+    option(WITH_CAMERA_BACKEND "Build camera backend" OFF)
 else()
-    option(WITH_CAMERA_BACKEND "Build camera backend (requires OpenCV)" ON)
+    option(WITH_CAMERA_BACKEND "Build camera backend" ON)
 endif()
 
 # JSON library (header-only)
@@ -82,16 +90,26 @@ if(WITH_CAMERA_BACKEND)
     add_library(micecam_camera
         src/camera/camera_backend.cpp
         src/camera/usb_camera_backend.cpp
+        src/camera/ffmpeg_camera_backend.cpp
     )
 
     target_include_directories(micecam_camera PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
 
-    target_link_libraries(micecam_camera PUBLIC
-        micecam_core
-        ${OpenCV_LIBS}
-    )
+    target_link_libraries(micecam_camera PUBLIC micecam_core)
+
+    if(OpenCV_FOUND)
+        target_link_libraries(micecam_camera PUBLIC ${OpenCV_LIBS})
+    endif()
+
+    if(FFMPEG_FOUND)
+        target_link_libraries(micecam_camera PUBLIC ${FFMPEG_LIBRARIES})
+        target_compile_definitions(micecam_camera PRIVATE WITH_FFMPEG)
+        if(FFMPEG_INCLUDE_DIRS)
+            target_include_directories(micecam_camera PRIVATE ${FFMPEG_INCLUDE_DIRS})
+        endif()
+    endif()
 endif()
 
 # Tests
@@ -137,7 +155,7 @@ add_executable(micecam_demo
 )
 target_link_libraries(micecam_demo PRIVATE micecam_core)
 
-# USB Camera Test (only when camera backend is available)
+# USB Camera Test
 if(WITH_CAMERA_BACKEND)
     add_executable(usb_camera_test usb_camera_test.cpp)
     target_link_libraries(usb_camera_test PRIVATE micecam_core micecam_camera)
@@ -147,11 +165,6 @@ if(WITH_CAMERA_BACKEND)
 
     add_executable(disk_bench disk_bench.cpp)
     target_link_libraries(disk_bench PRIVATE micecam_core)
-
-    add_executable(diagnose_size diagnose_size.cpp)
-    target_link_libraries(diagnose_size PRIVATE micecam_core micecam_camera)
-
-    add_executable(simple_disk_bench simple_disk_bench.cpp)
 endif()
 
 # Installation

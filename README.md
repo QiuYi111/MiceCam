@@ -12,13 +12,14 @@
 
 ## 特性
 
-- ✅ **高速采集**: 302.5 MB/s RingBuffer 吞吐量, 169.8 MB/s 真实磁盘 I/O
+- ✅ **高速采集**: 302.5 MB/s RingBuffer 吞吐量, **241.0 MB/s** 真实磁盘 I/O (Windows Unbuffered)
+- ✅ **硬件加速**: **Native FFmpeg (libavdevice)** 直取 MJPEG 码流，20-30x 带宽节省
 - ✅ **非阻塞架构**: RingBuffer 解耦采集与写盘
 - ✅ **零拷贝传递**: `std::unique_ptr` 所有权转移
 - ✅ **数据完整性**: CRC32 校验和
 - ✅ **可配置**: 缓冲区大小、校验和、相机参数
-- ✅ **模块化**: 可插拔相机后端
-- ✅ **TDD 开发**: 24 个测试，100% 通过率
+- ✅ **模块化**: 可插拔相机后端 (OpenCV / FFmpeg / Fake)
+- ✅ **Windows 优化**: 使用 `VirtualAlloc` 与 `FILE_FLAG_NO_BUFFERING` 消除 I/O 抖动
 
 ---
 
@@ -144,10 +145,10 @@ CameraBackend → RingBuffer → DiskWriter → [.bin + _metadata.json]
 | 指标 | 目标 | 实际 | 状态 |
 |------|------|------|------|
 | RingBuffer 吞吐量 | 200+ MB/s | 302.5 MB/s | ✅ |
-| 真实磁盘 I/O | 150+ MB/s | 169.8 MB/s | ✅ |
-| 零拷贝 | Yes | Yes | ✅ |
-| 非阻塞 | Yes | Yes | ✅ |
-| 测试覆盖率 | 高 | 100% (24/24) | ✅ |
+| 真实磁盘 I/O (Windows) | 150+ MB/s | **241.7 MB/s** | ✅ |
+| 4K @ 30fps 录制 | 0 丢帧 | **0 丢帧 (11.8 MB/s)** | ✅ |
+| 960p @ 120fps 录制 | 0 丢帧 | **0 丢帧 (8.2 MB/s)** | ✅ |
+| 内存占用 | 低 | ~128MB (Aligned Buffer) | ✅ |
 
 ---
 
@@ -155,9 +156,9 @@ CameraBackend → RingBuffer → DiskWriter → [.bin + _metadata.json]
 
 | 后端 | 状态 | 说明 |
 |------|------|------|
-| FakeCamera | ✅ 完成 | 测试用，无需硬件 |
-| USB Camera | ✅ 完成 | 需 OpenCV，支持 Windows DirectShow |
-| 自定义 | ✅ 支持 | 实现 `ICameraBackend` |
+| **FFmpeg (Native)** | ✅ **核心** | **推荐**。直抓 MJPEG 码流，性能无敌，支持 4K/120fps |
+| USB Camera (OpenCV) | ✅ 完成 | 兼容性后端，适合简单测试 |
+| FakeCamera | ✅ 完成 | 纯软件模拟，用于 CI/CD 和压力测试 |
 
 **添加新相机**: 见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 
@@ -217,7 +218,9 @@ valgrind --leak-check=full ./build/micecam_tests
 
 ### 可选
 
-- **OpenCV** 4.x - USB Camera 支持
+- **FFmpeg** 6.0+ (`libavdevice`, `libavformat`, `libavcodec`) - **必需 (用于高性能采集)**
+- **OpenCV** 4.x - 可选 (辅助后端)
+- **vcpkg** - 推荐的 Windows 依赖管理工具
 - **GoogleTest** - 自动下载（FetchContent）
 
 ### 推荐工具

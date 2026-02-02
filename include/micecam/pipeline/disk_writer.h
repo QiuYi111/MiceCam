@@ -106,6 +106,7 @@ public:
 
 private:
     void write_loop();
+    void flush_aggregation_buffer();
 
     // CRC32 checksum (simple implementation)
     static uint32_t compute_crc32(const uint8_t* data, size_t length);
@@ -131,6 +132,11 @@ private:
     // Checksum state
     uint32_t rolling_checksum_;
     std::mutex checksum_mutex_;
+
+    // I/O Aggregation (Super Block)
+    std::vector<uint8_t> aggregation_buffer_;
+    uint64_t total_bytes_on_disk_{0};
+    static constexpr size_t AGGREGATION_THRESHOLD = 32 * 1024 * 1024; // 32MB
 };
 
 }  // namespace micecam

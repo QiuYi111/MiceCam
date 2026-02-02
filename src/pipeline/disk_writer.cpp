@@ -30,6 +30,7 @@ DiskWriter::DiskWriter(const SessionConfig& config)
     session_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()
     ).count();
+    aggregation_buffer_.reserve(AGGREGATION_THRESHOLD);
 }
 
 DiskWriter::~DiskWriter() {
@@ -70,7 +71,9 @@ bool DiskWriter::start() {
     writing_.store(true);
     frames_written_.store(0);
     bytes_written_.store(0);
+    total_bytes_on_disk_ = 0;
     frame_records_.clear();
+    aggregation_buffer_.clear();
 
     return true;
 }
@@ -104,17 +107,18 @@ void DiskWriter::write_loop() {
 
         Frame& frame = *frame_opt;
 
-        // Get current file position (offset before writing)
-        const uint64_t offset = bin_file_.tellp();
-
-        // Write frame data
-        bin_file_.write(reinterpret_cast<const char*>(frame.data->data()),
-                       frame.data->size());
-
-        if (!bin_file_.good()) {
-            std::cerr << "Error writing frame " << frame.sequence_id << " to disk\n";
-            break;
+        // I/O Aggregation Logic
+        if (aggregation_buffer_.size() + frame.size() > AGGREGATION_THRESHOLD) {
+            flush_aggregation_buffer();
         }
+
+        // Calculate absolute offset in file
+        const uint64_t offset = total_bytes_on_disk_ + aggregation_buffer_.size();
+
+        // 2. Memory aggregation (Memory Copy)
+        aggregation_buffer_.insert(aggregation_buffer_.end(), 
+                                 frame.data->begin(), 
+                                 frame.data->end());
 
         // Compute checksum if enabled
         uint32_t checksum = 0;
@@ -152,11 +156,27 @@ void DiskWriter::write_loop() {
         bytes_written_.fetch_add(frame.size());
     }
 
-    // Flush to disk
-    bin_file_.flush();
+    // Flush remaining data
+    flush_aggregation_buffer();
+}
+
+void DiskWriter::flush_aggregation_buffer() {
+    if (aggregation_buffer_.empty()) return;
+
+    if (bin_file_.is_open()) {
+        bin_file_.write(reinterpret_cast<const char*>(aggregation_buffer_.data()), 
+                       aggregation_buffer_.size());
+        if (!bin_file_.good()) {
+            std::cerr << "Error flushing aggregation buffer to disk\n";
+        }
+        total_bytes_on_disk_ += aggregation_buffer_.size();
+        bin_file_.flush();
+    }
+    aggregation_buffer_.clear();
 }
 
 bool DiskWriter::finalize() {
+    flush_aggregation_buffer();
     if (bin_file_.is_open()) {
         bin_file_.close();
     }

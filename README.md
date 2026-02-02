@@ -24,7 +24,7 @@
 
 ## 快速开始
 
-### 5 分钟上手
+### Linux/macOS 快速开始
 
 ```bash
 # 1. 检查环境
@@ -41,6 +41,25 @@
 
 # 5. 处理数据（可选）
 python tools/read_bin.py test_output/session_001
+```
+
+### Windows 快速开始
+
+```powershell
+# 1. 检查环境（在 Developer PowerShell 中运行）
+.\check_env.ps1
+
+# 2. 一键构建
+.\build.ps1
+
+# 3. 运行测试
+.\build\Debug\micecam_tests.exe
+
+# 4. 运行演示
+.\build\Debug\micecam_demo.exe
+
+# 5. Release 构建
+.\build.ps1 -Release
 ```
 
 ### 代码示例
@@ -137,7 +156,7 @@ CameraBackend → RingBuffer → DiskWriter → [.bin + _metadata.json]
 | 后端 | 状态 | 说明 |
 |------|------|------|
 | FakeCamera | ✅ 完成 | 测试用，无需硬件 |
-| USB Camera | ⚠️  代码完成 | 需 OpenCV + 硬件 |
+| USB Camera | ✅ 完成 | 需 OpenCV，支持 Windows DirectShow |
 | 自定义 | ✅ 支持 | 实现 `ICameraBackend` |
 
 **添加新相机**: 见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
@@ -211,7 +230,7 @@ valgrind --leak-check=full ./build/micecam_tests
 
 ## 系统要求
 
-- **操作系统**: macOS 10.15+, Ubuntu 20.04+, 类似 Linux
+- **操作系统**: Windows 10/11, macOS 10.15+, Ubuntu 20.04+
 - **内存**: 建议 4GB+（取决于缓冲区大小）
 - **磁盘**: 建议 SSD（200+ MB/s 持续写入）
 

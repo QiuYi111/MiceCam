@@ -32,19 +32,19 @@ bool USBCameraBackend::initialize(const CameraConfig& config) {
     bool opened = false;
     
 #ifdef _WIN32
-    // For raw MJPEG capture, DirectShow often performs better than MSMF 
-    // which tends to decode to NV12 even when told not to.
-    std::cout << "Trying DirectShow backend (preferred for raw)..." << std::endl;
-    impl_->cap.open(config.device_id, cv::CAP_DSHOW);
+    // Prioritize MSMF for MSMF-specific raw formats (like NV12/YUY2)
+    // which are more compact than DirectShow's forced BGR.
+    std::cout << "Trying MSMF backend (preferred for NV12 raw)..." << std::endl;
+    impl_->cap.open(config.device_id, cv::CAP_MSMF);
     if (impl_->cap.isOpened()) {
-        std::cout << "Using DirectShow backend" << std::endl;
+        std::cout << "Using MSMF backend" << std::endl;
         opened = true;
     } else {
-        // Fallback to MSMF
-        std::cout << "DirectShow failed, trying MSMF backend..." << std::endl;
-        impl_->cap.open(config.device_id, cv::CAP_MSMF);
+        // Fallback to DirectShow
+        std::cout << "MSMF failed, trying DirectShow backend..." << std::endl;
+        impl_->cap.open(config.device_id, cv::CAP_DSHOW);
         if (impl_->cap.isOpened()) {
-            std::cout << "Using MSMF backend" << std::endl;
+            std::cout << "Using DirectShow backend" << std::endl;
             opened = true;
         }
     }
@@ -67,16 +67,18 @@ bool USBCameraBackend::initialize(const CameraConfig& config) {
     // FourCC code for MJPEG
     impl_->cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
     
-    // Set resolution BEFORE fps for best results
-    impl_->cap.set(cv::CAP_PROP_FRAME_WIDTH, config.width);
-    impl_->cap.set(cv::CAP_PROP_FRAME_HEIGHT, config.height);
-    
-    // Set FPS
-    impl_->cap.set(cv::CAP_PROP_FPS, config.fps);
-    
-    // Disable BGR conversion to get raw MJPEG bytes
-    std::cout << "Disabling BGR conversion for raw capture..." << std::endl;
-    impl_->cap.set(cv::CAP_PROP_CONVERT_RGB, false);
+    // Set capture properties
+    if (opened) {
+        // Force MJPEG format for hardware-level compression
+        impl_->cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        
+        // Disable automatic BGR conversion to get raw bytes
+        impl_->cap.set(cv::CAP_PROP_CONVERT_RGB, 0);
+
+        impl_->cap.set(cv::CAP_PROP_FRAME_WIDTH, config.width);
+        impl_->cap.set(cv::CAP_PROP_FRAME_HEIGHT, config.height);
+        impl_->cap.set(cv::CAP_PROP_FPS, config.fps);
+    }
     
     // Reduce buffer size for lower latency (1 frame buffer)
     impl_->cap.set(cv::CAP_PROP_BUFFERSIZE, 1);

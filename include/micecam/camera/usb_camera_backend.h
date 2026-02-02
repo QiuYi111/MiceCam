@@ -3,13 +3,14 @@
 #include "micecam/camera/camera_backend.h"
 #include <atomic>
 #include <mutex>
+#include <vector>
 
 namespace micecam {
 
 // USB Webcam backend using OpenCV
 class USBCameraBackend : public ICameraBackend {
 public:
-    USBCameraBackend() = default;
+    USBCameraBackend();
     ~USBCameraBackend() override;
 
     bool initialize(const CameraConfig& config) override;
@@ -29,6 +30,10 @@ public:
     [[nodiscard]] std::string get_backend_name() const override {
         return "USBCameraBackend";
     }
+
+    // Static utility to enumerate available cameras
+    // Returns a vector of device IDs that can be opened
+    [[nodiscard]] static std::vector<int> enumerate_cameras(int max_devices = 10);
 
 private:
     CameraConfig config_;

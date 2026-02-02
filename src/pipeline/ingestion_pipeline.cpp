@@ -55,7 +55,7 @@ void IngestionPipeline::stop() {
 
     running_.store(false);
 
-    // Stop camera
+    // Stop camera FIRST to unblock any pending get_frame() calls
     camera_->stop();
 
     // Wait for camera thread

@@ -224,6 +224,12 @@ cmake --build build --config Release --target oak_quad_recorder
 - 硬件同步触发，帧间延迟 < 1ms
 - 每路相机独立 `.bin` 文件
 
+**Metadata Format (.jsonl)**
+Robust streaming JSON Lines format.
+- line 1: `session_start` (Config, Resolution, FPS)
+- line N: `frame` (Sequence ID, Timestamp, Offset, Size, Checksum)
+- line End: `session_end` (Summary)
+
 **添加新相机**: 见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 
 ---

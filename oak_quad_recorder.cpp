@@ -56,7 +56,11 @@ int main(int argc, char* argv[]) {
         micecam::SessionConfig session_config{
             .output_dir = output_base,
             .session_name = session_name,
-            .enable_checksums = true
+            .enable_checksums = true,
+            .camera_backend_name = "OAK-4P-OV9782",
+            .width = config.width,
+            .height = config.height,
+            .fps = config.fps
         };
 
         auto proxy = master_backend->create_proxy(i);

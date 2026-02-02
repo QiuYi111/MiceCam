@@ -194,8 +194,12 @@ if(WITH_CAMERA_BACKEND)
         target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera)
 
         add_executable(oak_quad_recorder oak_quad_recorder.cpp)
-        target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera)
-    endif()
+    target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera)
+    
+    add_executable(oak_diagnostic oak_diagnostic.cpp)
+    target_include_directories(oak_diagnostic PRIVATE ${DEPTHAI_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
+endif()
 
     # FFmpeg camera test
     add_executable(ffmpeg_camera_test ffmpeg_camera_test.cpp)

@@ -67,39 +67,60 @@ OAKCameraBackend::~OAKCameraBackend() {
 
 bool OAKCameraBackend::initialize(const CameraConfig& config) {
     try {
-        // Build 4-camera sync pipeline
-        std::vector<dai::CameraBoardSocket> sockets = {
-            dai::CameraBoardSocket::CAM_A,
-            dai::CameraBoardSocket::CAM_B,
-            dai::CameraBoardSocket::CAM_C,
-            dai::CameraBoardSocket::CAM_D
+        impl_->pipeline.setXLinkChunkSize(0);
+        
+        std::vector<std::pair<dai::CameraBoardSocket, std::string>> sockets = {
+            {dai::CameraBoardSocket::CAM_A, "CAM_A"},
+            {dai::CameraBoardSocket::CAM_B, "CAM_B"},
+            {dai::CameraBoardSocket::CAM_C, "CAM_C"},
+            {dai::CameraBoardSocket::CAM_D, "CAM_D"}
         };
 
         auto sync = impl_->pipeline.create<dai::node::Sync>();
-
-        for(int i = 0; i < (int)sockets.size(); ++i) {
-            auto socket = sockets[i];
-            auto cam = impl_->pipeline.create<dai::node::Camera>();
-            cam->setBoardSocket(socket);
-            
-            // Note: B036801 (IMX296) supports 1920x1200 or 1440x1080
-            // We use VideoEncoder for device-side MJPEG to keep host CPU low
-            auto encoder = impl_->pipeline.create<dai::node::VideoEncoder>();
-            encoder->setDefaultProfilePreset(config.fps, dai::VideoEncoderProperties::Profile::MJPEG);
-            
-            cam->video.link(encoder->input);
-            encoder->bitstream.link(sync->inputs[std::to_string(i)]);
-        }
-
+        sync->setSyncThreshold(std::chrono::milliseconds(50));
+        
         auto xout = impl_->pipeline.create<dai::node::XLinkOut>();
         xout->setStreamName("quad_sync");
         sync->out.link(xout->input);
 
-        // Connect to device
+        for(const auto& [socket, name] : sockets) {
+            auto cam = impl_->pipeline.create<dai::node::ColorCamera>();
+            cam->setBoardSocket(socket);
+            
+            // OV9782 native resolution
+            cam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
+            cam->setFps(static_cast<float>(config.fps));
+            
+            // Sync Strategy for OV9782 (Hardware Master/Slave):
+            // CAM_A drives FSYNC (OUTPUT), others listen (INPUT)
+            if (socket == dai::CameraBoardSocket::CAM_A) {
+                cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::OUTPUT);
+            } else {
+                cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::INPUT);
+            }
+            
+            auto encoder = impl_->pipeline.create<dai::node::VideoEncoder>();
+            encoder->setDefaultProfilePreset(config.fps, dai::VideoEncoderProperties::Profile::MJPEG);
+            
+            cam->video.link(encoder->input);
+            encoder->bitstream.link(sync->inputs[name]);
+        }
+
+        // OV9782 Specific Board Configuration (from ROS reference)
+        // Pull down GPIO 42 (FSIN_4LANE / FSIN_MODE_SELECT) to ensure proper sync signal routing?
+        auto boardConfig = dai::BoardConfig();
+        // GPIO 42: INPUT, HIGH, PULL_DOWN - derived from ROS oak_ffc_sync_publisher.cpp line 156
+        boardConfig.gpio[42] = dai::BoardConfig::GPIO(
+            dai::BoardConfig::GPIO::Direction::INPUT, 
+            dai::BoardConfig::GPIO::Level::HIGH, 
+            dai::BoardConfig::GPIO::Pull::PULL_DOWN
+        );
+        impl_->pipeline.setBoardConfig(boardConfig);
+
         impl_->device = std::make_shared<dai::Device>(impl_->pipeline);
         impl_->syncQueue = impl_->device->getOutputQueue("quad_sync", 4, false);
 
-        std::cout << "OAK-4P Quad-Camera Backend initialized (HW Sync + MJPEG)\n";
+        std::cout << "OAK-4P Quad-Camera Backend initialized (OV9782 HW Master/Slave Sync)\n";
         return true;
     } catch (const std::exception& e) {
         std::cerr << "OAK Initialization Failed: " << e.what() << "\n";

@@ -162,8 +162,12 @@ std::unique_ptr<Frame> OAKCameraBackend::get_frame() {
         impl_->cv.notify_all();
     }
     
-    auto imgFrame = impl_->current_group->get<dai::ImgFrame>("0");
-    if (!imgFrame) return nullptr;
+    std::string name = "CAM_A"; 
+    auto imgFrame = impl_->current_group->get<dai::ImgFrame>(name);
+    if (!imgFrame) {
+        std::cout << "Master failed to get " << name << " from group\n";
+        return nullptr;
+    }
 
     auto data = std::make_unique<std::vector<uint8_t>>(imgFrame->getData());
     impl_->last_delivered_seq[0] = impl_->total_frame_groups_;
@@ -223,8 +227,12 @@ std::unique_ptr<Frame> VirtualOAKBackend::get_frame() {
 
     if (!impl.running_ || !impl.current_group) return nullptr;
 
-    auto imgFrame = impl.current_group->get<dai::ImgFrame>(std::to_string(socket_index_));
-    if (!imgFrame) return nullptr;
+    std::string name = "CAM_" + std::string(1, 'A' + socket_index_);
+    auto imgFrame = impl.current_group->get<dai::ImgFrame>(name);
+    if (!imgFrame) {
+        std::cout << "Proxy " << socket_index_ << " failed to get " << name << "\n";
+        return nullptr;
+    }
 
     frame_count_++;
     auto data = std::make_unique<std::vector<uint8_t>>(imgFrame->getData());

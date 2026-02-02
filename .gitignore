@@ -8,3 +8,4 @@ build/
 test_output/
 .vscode/
 .idea/
+3rdParty/*

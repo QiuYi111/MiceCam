@@ -198,9 +198,28 @@ CameraBackend → RingBuffer → DiskWriter → [.bin + _metadata.json]
 | 后端 | 状态 | 说明 |
 |------|------|------|
 | **FFmpeg (Native)** | ✅ **核心** | **推荐**。直抓 MJPEG 码流，性能无敌，支持 4K/120fps |
-| **OAK (DepthAI)** | ✅ 完成 | **新增**。原生支持 OAK 相机，支持高分辨率与高效转换 |
+| **OAK-4P (DepthAI)** | ✅ **新增** | 支持 OAK-4P-New 四摄同步，设备端 MJPEG 编码，4x IMX296 全局快门 |
 | USB Camera (OpenCV) | ✅ 完成 | 兼容性后端，适合简单测试 |
 | FakeCamera | ✅ 完成 | 纯软件模拟，用于 CI/CD 和压力测试 |
+
+### OAK-4P 多摄像头支持 (新增)
+
+MiceCam 现已支持 **OAK-4P-New** 四摄像头硬件同步录制：
+
+```powershell
+# 构建 OAK 工具
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DWITH_CAMERA_BACKEND=ON -DCMAKE_PREFIX_PATH="C:/vcpkg/installed/x64-windows"
+cmake --build build --config Release --target oak_quad_recorder
+
+# 运行四摄录像
+.\build\Release\oak_quad_recorder.exe
+```
+
+**特性**：
+- 4x IMX296 全局快门 (1920x1200 @ 30fps)
+- 设备端 MJPEG 硬件编码，主机 CPU 负载低
+- 硬件同步触发，帧间延迟 < 1ms
+- 每路相机独立 `.bin` 文件
 
 **添加新相机**: 见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 

@@ -81,7 +81,13 @@ bool DiskWriter::start() {
     }
 #endif
 
-    metadata_path_ = (fs::path(config_.output_dir) / (config_.session_name + "_metadata.json")).string();
+    // Open metadata file (.jsonl) for streaming
+    metadata_path_ = (fs::path(config_.output_dir) / (config_.session_name + "_metadata.jsonl")).string();
+    metadata_file_.open(metadata_path_, std::ios::out | std::ios::trunc);
+    if (!metadata_file_.is_open()) {
+        std::cerr << "Failed to open " << metadata_path_ << " for writing\n";
+        return false;
+    }
 
     // Initialize session metadata
     session_metadata_ = SessionMetadata{
@@ -97,11 +103,17 @@ bool DiskWriter::start() {
         .session_checksum = 0
     };
 
+    // Write Session Header
+    nlohmann::json header = session_metadata_.to_json();
+    header["type"] = "session_start";
+    metadata_file_ << header.dump() << "\n";
+    metadata_file_.flush();
+
     writing_.store(true);
     frames_written_.store(0);
     bytes_written_.store(0);
     total_bytes_on_disk_ = 0;
-    frame_records_.clear();
+    // frame_records_.clear(); removed
     current_buffer_pos_ = 0;
 
     return true;
@@ -187,9 +199,13 @@ void DiskWriter::write_loop() {
             .checksum = checksum
         };
 
-        {
-            std::lock_guard<std::mutex> lock(metadata_mutex_);
-            frame_records_.push_back(record);
+        // Stream metadata to disk
+        nlohmann::json j_record = record.to_json();
+        j_record["type"] = "frame";
+        
+        // No mutex needed for stream (single writer thread)
+        if (metadata_file_.is_open()) {
+            metadata_file_ << j_record.dump() << std::endl; // std::endl flushes
         }
 
         // Update counters
@@ -264,26 +280,16 @@ bool DiskWriter::finalize() {
     session_metadata_.total_bytes = bytes_written_.load();
     session_metadata_.session_checksum = rolling_checksum_;
 
-    // Write metadata JSON
-    nlohmann::json metadata_json;
-    metadata_json["session"] = session_metadata_.to_json();
-    metadata_json["frames"] = nlohmann::json::array();
-
-    {
-        std::lock_guard<std::mutex> lock(metadata_mutex_);
-        for (const auto& record : frame_records_) {
-            metadata_json["frames"].push_back(record.to_json());
-        }
+    // Write Session Footer
+    nlohmann::json footer = session_metadata_.to_json();
+    footer["type"] = "session_end";
+    
+    if (metadata_file_.is_open()) {
+        metadata_file_ << footer.dump() << "\n";
+        metadata_file_.close();
     }
 
-    std::ofstream meta_file(metadata_path_);
-    if (!meta_file.is_open()) {
-        std::cerr << "Failed to open " << metadata_path_ << " for writing\n";
-        return false;
-    }
-
-    meta_file << metadata_json.dump(2);
-    meta_file.close();
+    // No bulk JSON array write anymore
 
     std::cout << "Session finalized:\n"
               << "  Frames written: " << session_metadata_.total_frames << "\n"

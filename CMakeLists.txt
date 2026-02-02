@@ -214,6 +214,7 @@ if(BUILD_TESTS)
         tests/camera/fake_camera.cpp
         tests/pipeline/pipeline_test.cpp
         tests/pipeline/integration_test.cpp
+        tests/pipeline/disk_writer_stream_test.cpp
         tests/pipeline/hdf5_test.cpp
         tests/pipeline/configurable_buffer_test.cpp
         tests/benchmark/stress_test.cpp

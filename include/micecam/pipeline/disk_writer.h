@@ -133,12 +133,10 @@ private:
     std::ofstream bin_file_;
 #endif
     std::string metadata_path_;
-
-    // Metadata accumulation
-    std::vector<FrameMetadataRecord> frame_records_;
+    std::ofstream metadata_file_;
     SessionMetadata session_metadata_;
     uint64_t session_start_ns_;
-    std::mutex metadata_mutex_;
+    // Metadata mutex removed - serialized usage (stream)
 
     // Checksum state
     uint32_t rolling_checksum_;

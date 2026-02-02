@@ -213,10 +213,13 @@ cmake --build build --config Release --target oak_quad_recorder
 
 # 运行四摄录像
 .\build\Release\oak_quad_recorder.exe
+
+# 运行硬件诊断 (测试单摄像头)
+.\build\Release\oak_diagnostic.exe
 ```
 
 **特性**：
-- 4x IMX296 全局快门 (1920x1200 @ 30fps)
+- 4x OV9782 (1280x800 @ 30fps) 或 4x IMX296
 - 设备端 MJPEG 硬件编码，主机 CPU 负载低
 - 硬件同步触发，帧间延迟 < 1ms
 - 每路相机独立 `.bin` 文件

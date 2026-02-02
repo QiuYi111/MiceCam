@@ -8,6 +8,7 @@ dependencies = [
     "numpy",
     "opencv-python",
     "h5py",
+    "depthai>=3.3.0",
 ]
 
 [tool.uv]

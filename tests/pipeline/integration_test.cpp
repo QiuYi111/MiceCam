@@ -1,8 +1,11 @@
 #include "micecam/pipeline/ingestion_pipeline.h"
 #include "camera/fake_camera.h"
 #include <gtest/gtest.h>
+#include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+
+namespace fs = std::filesystem;
 
 namespace micecam {
 
@@ -59,9 +62,9 @@ TEST_F(PipelineIntegrationTest, EndToEndFakeCameraCapture) {
     EXPECT_GT(frames_captured, num_frames_to_capture * 0.5)  // At least 50%
         << "Only captured " << frames_captured << " / " << num_frames_to_capture << " frames";
 
-    // Verify: Check files exist
-    const std::string bin_path = test_dir_ + "/test_session.bin";
-    const std::string json_path = test_dir_ + "/test_session_metadata.json";
+    // Verify: Check files exist (use std::filesystem for cross-platform paths)
+    const fs::path bin_path = fs::path(test_dir_) / "test_session.bin";
+    const fs::path json_path = fs::path(test_dir_) / "test_session_metadata.json";
 
     std::ifstream bin_file(bin_path, std::ios::binary | std::ios::ate);
     ASSERT_TRUE(bin_file.is_open()) << "Binary file not created";
@@ -188,7 +191,7 @@ TEST_F(PipelineIntegrationTest, DataIntegrityCheck) {
     pipeline.stop();
 
     // Load metadata and verify all checksums are non-zero
-    const std::string json_path = test_dir_ + "/integrity_test_metadata.json";
+    const fs::path json_path = fs::path(test_dir_) / "integrity_test_metadata.json";
     std::ifstream json_file(json_path);
     nlohmann::json metadata;
     json_file >> metadata;

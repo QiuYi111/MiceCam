@@ -2,8 +2,11 @@
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
+
+namespace fs = std::filesystem;
 
 namespace micecam {
 
@@ -40,15 +43,15 @@ bool DiskWriter::start() {
         return false;  // Already started
     }
 
-    // Open .bin file
-    const std::string bin_path = config_.output_dir + "/" + config_.session_name + ".bin";
+    // Open .bin file (use std::filesystem for cross-platform paths)
+    const fs::path bin_path = fs::path(config_.output_dir) / (config_.session_name + ".bin");
     bin_file_.open(bin_path, std::ios::binary | std::ios::trunc);
     if (!bin_file_.is_open()) {
         std::cerr << "Failed to open " << bin_path << " for writing\n";
         return false;
     }
 
-    metadata_path_ = config_.output_dir + "/" + config_.session_name + "_metadata.json";
+    metadata_path_ = (fs::path(config_.output_dir) / (config_.session_name + "_metadata.json")).string();
 
     // Initialize session metadata
     session_metadata_ = SessionMetadata{

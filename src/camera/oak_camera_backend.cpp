@@ -67,7 +67,6 @@ OAKCameraBackend::~OAKCameraBackend() {
 
 bool OAKCameraBackend::initialize(const CameraConfig& config) {
     try {
-        impl_->pipeline.setXLinkChunkSize(0);
         
         std::vector<std::pair<dai::CameraBoardSocket, std::string>> sockets = {
             {dai::CameraBoardSocket::CAM_A, "CAM_A"},
@@ -91,8 +90,9 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             cam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
             cam->setFps(static_cast<float>(config.fps));
             
-            // Sync Strategy for OV9782 (Hardware Master/Slave):
-            // CAM_A drives FSYNC (OUTPUT), others listen (INPUT)
+            // Sync Strategy based on PROVEN DIAGNOSTIC TOOL:
+            // CAM_A is Master (OUTPUT), others are Slaves (INPUT).
+            // This works with BoardConfig GPIO 42 PULL_DOWN.
             if (socket == dai::CameraBoardSocket::CAM_A) {
                 cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::OUTPUT);
             } else {
@@ -106,10 +106,9 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             encoder->bitstream.link(sync->inputs[name]);
         }
 
-        // OV9782 Specific Board Configuration (from ROS reference)
-        // Pull down GPIO 42 (FSIN_4LANE / FSIN_MODE_SELECT) to ensure proper sync signal routing?
+        // Apply BoardConfig proven in oak_diagnostic.cpp
+        // GPIO 42 (FSIN_4LANE) -> INPUT / HIGH / PULL_DOWN
         auto boardConfig = dai::BoardConfig();
-        // GPIO 42: INPUT, HIGH, PULL_DOWN - derived from ROS oak_ffc_sync_publisher.cpp line 156
         boardConfig.gpio[42] = dai::BoardConfig::GPIO(
             dai::BoardConfig::GPIO::Direction::INPUT, 
             dai::BoardConfig::GPIO::Level::HIGH, 
@@ -120,7 +119,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
         impl_->device = std::make_shared<dai::Device>(impl_->pipeline);
         impl_->syncQueue = impl_->device->getOutputQueue("quad_sync", 4, false);
 
-        std::cout << "OAK-4P Quad-Camera Backend initialized (OV9782 HW Master/Slave Sync)\n";
+        std::cout << "OAK-4P Quad-Camera Backend initialized (HW Sync Master/Slave)\n";
         return true;
     } catch (const std::exception& e) {
         std::cerr << "OAK Initialization Failed: " << e.what() << "\n";

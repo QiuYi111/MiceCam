@@ -1,0 +1,10 @@
+build/
+.clangd/
+.cache/
+*.bin
+*.json
+*.h5
+*.hdf5
+test_output/
+.vscode/
+.idea/

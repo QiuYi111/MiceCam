@@ -14,11 +14,9 @@
 
 - ✅ **高速采集**: 302.5 MB/s RingBuffer 吞吐量, **241.0 MB/s** 真实磁盘 I/O (Windows Unbuffered)
 - ✅ **硬件加速**: **Native FFmpeg (libavdevice)** 直取 MJPEG 码流，20-30x 带宽节省
+- ✅ **4K/120fps**: 实测支持 4K @ 30fps 与 960p @ 120fps 持续录像，零丢帧
+- ✅ **数据修复**: 提供 `recover_index.py` 扫描恢复因意外中断（如断电）损坏的视频文件
 - ✅ **非阻塞架构**: RingBuffer 解耦采集与写盘
-- ✅ **零拷贝传递**: `std::unique_ptr` 所有权转移
-- ✅ **数据完整性**: CRC32 校验和
-- ✅ **模块化**: 可插拔相机后端 (OpenCV / FFmpeg / OAK / Fake)
-- ✅ **OAK 支持**: 原生支持 Luxonis OAK 系列相机 (depthai-core)
 - ✅ **Windows 优化**: 使用 `VirtualAlloc` 与 `FILE_FLAG_NO_BUFFERING` 消除 I/O 抖动
 
 ---
@@ -76,6 +74,15 @@ uv run python tools/bin_to_images.py <session_path>.bin <output_dir>
 
 ```bash
 uv run python tools/read_bin.py <session_path>
+```
+
+### 数据修复 (Index Recovery)
+
+如果录像过程中程序被强行终止（如压力测试手动 Ctrl+C），会导致 `.bin` 文件很大但对应的 `.json` 缺失或不完整。使用此工具可以扫描 `bin` 文件内容并重建索引：
+
+```powershell
+uv run python tools/recover_index.py
+# 此脚本默认扫描 test_output/ffmpeg_bench_4K_30fps.bin 并生成 _recovered_metadata.json
 ```
 
 ### Windows 快速开始

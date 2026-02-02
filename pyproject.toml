@@ -1,0 +1,14 @@
+[project]
+name = "micecam-tools"
+version = "0.1.0"
+description = "Tools for processing MiceCam data"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "h5py",
+]
+
+[tool.uv]
+managed = true

@@ -24,33 +24,68 @@ class MiceCamReader:
         """
         self.session_path = Path(session_path)
 
-        # 处理路径：移除 .bin 后缀（如果有）
-        if self.session_path.suffix == '.bin':
-            self.session_path = self.session_path.with_suffix('')
+        # 智能路径处理
+        if self.session_path.suffix == '.json' and '_metadata' in self.session_path.name:
+            # 用户直接提供了元数据路径
+            self.metadata_path = self.session_path
+            session_name = self.session_path.name.replace('_metadata.json', '')
+            self.session_path = self.session_path.parent / session_name
+            self.bin_path = self.session_path.with_suffix('.bin')
+        else:
+            # 移除 .bin 后缀（如果有）
+            if self.session_path.suffix == '.bin':
+                self.session_path = self.session_path.with_suffix('')
 
-        self.bin_path = self.session_path.with_suffix('.bin')
-        # 元数据文件是 session_name_metadata.json
-        self.metadata_path = self.session_path.parent / (self.session_path.name + '_metadata.json')
+            self.bin_path = self.session_path.with_suffix('.bin')
+            # 元数据文件是 session_name_metadata.json
+            self.metadata_path = self.session_path.parent / (self.session_path.name + '_metadata.json')
 
         # 验证文件存在
-        if not self.bin_path.exists():
-            raise FileNotFoundError(f"Binary file not found: {self.bin_path}")
         if not self.metadata_path.exists():
-            raise FileNotFoundError(f"Metadata file not found: {self.metadata_path}")
-
+            # 尝试搜索同目录下可能的元数据文件
+            matches = list(self.session_path.parent.glob(f"{self.session_path.name}*_metadata.json"))
+            if matches:
+                self.metadata_path = matches[0]
+            else:
+                raise FileNotFoundError(f"Metadata file not found: {self.metadata_path}")
+        
         # 加载元数据
         with open(self.metadata_path, 'r') as f:
-            self.metadata = json.load(f)
+            try:
+                self.metadata = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"Warning: Metadata JSON is malformed or truncated: {e}")
+                # Try to recover a partial JSON if possible (very basic)
+                f.seek(0)
+                content = f.read()
+                # If it's a frames list that got cut off, we might still have something
+                raise e
 
-        self.session_info = self.metadata['session']
-        self.frames = self.metadata['frames']
+        self.session_info = self.metadata.get('session', {})
+        self.frames = self.metadata.get('frames', [])
 
-        # 相机参数
-        self.width = self.session_info['width']
-        self.height = self.session_info['height']
-        self.fps = self.session_info['fps']
-        self.total_frames = self.session_info['total_frames']
-        self.total_bytes = self.session_info['total_bytes']
+        # Smart binary path: if the session name in JSON matches a file, use it.
+        # Otherwise, check if the metadata file name corresponds to a bin file.
+        candidate_bin = self.bin_path
+        if not candidate_bin.exists():
+            # Try removing "_metadata.json" or "_recovered_metadata.json"
+            alt_name = self.metadata_path.name.split('_metadata.json')[0]
+            # Try removing "_recovered" as well
+            if alt_name.endswith('_recovered'):
+                alt_name = alt_name.replace('_recovered', '')
+            candidate_bin = self.metadata_path.parent / (alt_name + '.bin')
+            
+        if not candidate_bin.exists():
+            raise FileNotFoundError(f"Binary file not found. Checked: {self.bin_path} and {candidate_bin}")
+        
+        self.bin_path = candidate_bin
+
+        # 相机参数 (provide defaults for recovered sessions)
+        self.width = self.session_info.get('width', 0)
+        self.height = self.session_info.get('height', 0)
+        self.fps = self.session_info.get('fps', 30.0)
+        self.total_frames = self.session_info.get('total_frames', len(self.frames))
+        self.total_bytes = self.session_info.get('total_bytes', 0)
 
         # 验证数据完整性
         self._validate()
@@ -75,16 +110,9 @@ class MiceCamReader:
         Returns:
             numpy array (height, width, channels) 或 None
         """
-        if frame_id < 1 or frame_id > len(self.frames):
-            print(f"Error: Frame {frame_id} out of range [1, {len(self.frames)}]")
+        frame_data = self.get_raw_frame_bytes(frame_id)
+        if frame_data is None:
             return None
-
-        frame_info = self.frames[frame_id - 1]
-
-        # 读取帧数据
-        with open(self.bin_path, 'rb') as f:
-            f.seek(frame_info['offset'])
-            frame_data = f.read(frame_info['size'])
 
         # 转换为 numpy array
         frame = np.frombuffer(frame_data, dtype=np.uint8)
@@ -96,10 +124,44 @@ class MiceCamReader:
         elif frame.size == self.width * self.height:
             frame = frame.reshape(self.height, self.width)
         else:
-            print(f"Warning: Unexpected frame size {frame.size}")
+            # 可能是压缩格式 (如 MJPEG)，尝试解码
+            try:
+                import cv2
+                decoded = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+                if decoded is not None:
+                    return decoded
+            except ImportError:
+                print("Error: opencv-python is not installed, cannot decode compressed frames.")
+            except Exception as e:
+                print(f"Error during decoding frame {frame_id}: {e}")
+            
+            print(f"Warning: Unexpected frame size {frame.size} and failed to decode as image.")
             frame = frame.reshape(-1)
 
         return frame
+
+    def get_raw_frame_bytes(self, frame_id: int) -> Optional[bytes]:
+        """
+        获取指定帧的原始字节数据（压缩或原始格式）
+
+        Args:
+            frame_id: 帧序号（从 1 开始）
+
+        Returns:
+            bytes 或 None
+        """
+        if frame_id < 1 or frame_id > len(self.frames):
+            print(f"Error: Frame {frame_id} out of range [1, {len(self.frames)}]")
+            return None
+
+        frame_info = self.frames[frame_id - 1]
+
+        # 读取帧数据
+        with open(self.bin_path, 'rb') as f:
+            f.seek(frame_info['offset'])
+            frame_data = f.read(frame_info['size'])
+
+        return frame_data
 
     def get_frames(self, start: int = 1, end: Optional[int] = None) -> List[np.ndarray]:
         """

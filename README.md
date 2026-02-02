@@ -2,7 +2,11 @@
 
 > 实验室高速相机数据采集系统 | High-speed camera data acquisition for laboratory use
 
-**版本**: v0.1.0 | **状态**: Stage 1 生产就绪 ✅ | **测试**: 24/24 passing (100%)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-brightgreen.svg)](CHANGELOG.md)
+[![Tests: 29/29](https://img.shields.io/badge/tests-29%2F29-brightgreen.svg)](README.md#测试)
+
+**版本**: v0.1.0 | **状态**: 完整 MVP ✅ | **测试**: 29/29 passing (100%)
 
 ---
 

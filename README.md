@@ -17,8 +17,8 @@
 - ✅ **非阻塞架构**: RingBuffer 解耦采集与写盘
 - ✅ **零拷贝传递**: `std::unique_ptr` 所有权转移
 - ✅ **数据完整性**: CRC32 校验和
-- ✅ **可配置**: 缓冲区大小、校验和、相机参数
-- ✅ **模块化**: 可插拔相机后端 (OpenCV / FFmpeg / Fake)
+- ✅ **模块化**: 可插拔相机后端 (OpenCV / FFmpeg / OAK / Fake)
+- ✅ **OAK 支持**: 原生支持 Luxonis OAK 系列相机 (depthai-core)
 - ✅ **Windows 优化**: 使用 `VirtualAlloc` 与 `FILE_FLAG_NO_BUFFERING` 消除 I/O 抖动
 
 ---
@@ -41,7 +41,41 @@
 ./build/micecam_demo
 
 # 5. 处理数据（可选）
-python tools/read_bin.py test_output/session_001
+uv run python tools/read_bin.py test_output/session_001
+```
+
+---
+
+## Python 工具
+
+由于 MiceCam 采用高效的自定义 `.bin` 格式，我们提供了 Python 工具进行数据处理。Python 环境通过 [uv](https://github.com/astral-sh/uv) 进行管理。
+
+### 环境准备
+
+1. **安装 uv**: 见 [uv 安装指南](https://docs.astral.sh/uv/getting-started/installation/)。
+2. **初始化环境**:
+   ```bash
+   uv sync
+   ```
+
+### 图片提取 (Extract Frames)
+
+将 `.bin` 文件中的每一帧提取并保存为图片。如果是 MJPEG 采集，该脚本会**零编码开销**直接保存为 `.jpg`，速度极快。
+
+```powershell
+# 提取到同名文件夹
+uv run python tools/bin_to_images.py <session_path>.bin
+
+# 指定输出目录
+uv run python tools/bin_to_images.py <session_path>.bin <output_dir>
+```
+
+### 数据读取 (Read Metadata)
+
+读取并显示会话的元数据摘要：
+
+```bash
+uv run python tools/read_bin.py <session_path>
 ```
 
 ### Windows 快速开始
@@ -157,6 +191,7 @@ CameraBackend → RingBuffer → DiskWriter → [.bin + _metadata.json]
 | 后端 | 状态 | 说明 |
 |------|------|------|
 | **FFmpeg (Native)** | ✅ **核心** | **推荐**。直抓 MJPEG 码流，性能无敌，支持 4K/120fps |
+| **OAK (DepthAI)** | ✅ 完成 | **新增**。原生支持 OAK 相机，支持高分辨率与高效转换 |
 | USB Camera (OpenCV) | ✅ 完成 | 兼容性后端，适合简单测试 |
 | FakeCamera | ✅ 完成 | 纯软件模拟，用于 CI/CD 和压力测试 |
 

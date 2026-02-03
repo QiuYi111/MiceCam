@@ -40,6 +40,10 @@ last_status = {"is_recording": False}
 def index():
     return send_from_directory('ui', 'index.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory('ui', 'favicon.ico') # Assuming favicon.ico exists in ui/ or handle 404 gracefully
+    
 def get_sdk_env():
     env = os.environ.copy()
     sdk_path = os.path.abspath("build/bindings/python/Release")
@@ -55,6 +59,18 @@ def get_sdk_env():
 @app.route('/api/status', methods=['GET'])
 def get_status():
     global last_status
+    
+    # 1. Check if we are in "Recovery Mode" (Crash detected, restarting worker)
+    if current_session and current_session.get("is_recovering"):
+        # We pretend everything is fine to the UI to avoid reset
+        return jsonify({
+            "is_recording": True, 
+            "status": "recovering",
+            "fps": 0,
+            "session": current_session["session_name"]
+        })
+
+    # 2. Check active worker
     if recorder_process and recorder_process.poll() is None:
         try:
             if os.path.exists("recorder_status.json"):
@@ -153,8 +169,10 @@ def start_recording():
         "auto_decode": data.get('auto_decode', False),
         "backend": backend,
         "width": width, "height": height, "fps": fps, "dev_idx": worker_dev_idx,
+        "width": width, "height": height, "fps": fps, "dev_idx": worker_dev_idx,
         "user_stop_intent": False,
-        "restart_count": 0
+        "restart_count": 0,
+        "is_recovering": False
     }
     
     launch_worker()
@@ -198,11 +216,18 @@ def monitor_loop():
                 
                 # Check if it was a crash or intentional
                 if current_session and not current_session.get("user_stop_intent") and ret != 0:
-                    if current_session["restart_count"] < 3:
+                    if current_session["restart_count"] < 5: # Increased limit
                         logger.warning(f"CRASH DETECTED. Restarting session {current_session['session_name']}...")
                         current_session["restart_count"] += 1
+                        current_session["is_recovering"] = True # ENTER RECOVERY MODE
+                        
                         launch_worker()
-                        continue # Skip cleanup for now
+                        
+                        # Give it a moment to spin up before clearing recovery flag
+                        # Ideally, we should check if process is stable, but a sleep helps for now
+                        time.sleep(1.0) 
+                        current_session["is_recovering"] = False
+                        continue # Skip cleanup
                     else:
                         logger.error("Maximum restarts reached. Stopping.")
 

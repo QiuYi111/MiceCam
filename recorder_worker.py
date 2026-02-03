@@ -121,12 +121,19 @@ def main():
         print("[Worker] Exit success.")
 
     except Exception as e:
-        print(f"[Worker] CRITICAL ERROR: {e}")
-        with open(status_file, "w") as f:
-            json.dump({"error": str(e), "is_recording": False}, f)
+        print(f"[Worker] CRITICAL ERROR: {e}", flush=True)
+        # Do NOT write "is_recording": False to the status file here.
+        # The Gateway (supervisor) is responsible for deciding if the session ends 
+        # or if we should restart. Writing False here causes the UI to flicker/reset.
+        # We only log the error.
         sys.exit(1)
 
 if __name__ == "__main__":
+    # Force unbuffered output for better logging
+    if sys.version_info >= (3, 7):
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+        
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     main()

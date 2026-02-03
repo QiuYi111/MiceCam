@@ -16,5 +16,9 @@ recordings/
 *.jpeg
 *.jsonl
 # Python caches
-__pycache__/
 *.pyc
+
+# PyInstaller
+build/
+dist/
+*.spec

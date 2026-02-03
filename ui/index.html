@@ -453,6 +453,8 @@
             let isRecording = false;
             let serverConnected = false;
             let cameraData = [];
+            let consecutiveFailures = 0;
+            const MAX_FAILURES = 4; // Allow ~2 seconds of downtime (500ms * 4)
 
             async function api(method, path, body = null) {
                 try {
@@ -570,7 +572,11 @@
 
             async function updateStatus() {
                 const result = await api('GET', '/status');
+
                 if (result && !result.error) {
+                    // Update connection UI
+                    updateConnectionStatus(true, result.status === 'recovering');
+
                     document.getElementById('captured').textContent = result.captured || 0;
                     document.getElementById('written').textContent = result.written || 0;
                     document.getElementById('fpsStat').textContent = Math.round(result.fps || 0);
@@ -578,10 +584,31 @@
                     document.getElementById('dropped').textContent = result.dropped || 0;
                     document.getElementById('elapsed').textContent = Math.round(result.elapsed_seconds || 0) + 's';
 
+                    if (result.is_recording) {
+                        // Reset failure counter if we get a positive signal
+                        consecutiveFailures = 0;
+                    }
+
                     if (!result.is_recording && isRecording) {
-                        isRecording = false;
-                        updateUI(false);
-                        clearInterval(statusInterval);
+                        consecutiveFailures++;
+                        console.log(`[UI] Missing recording signal (${consecutiveFailures}/${MAX_FAILURES})`);
+
+                        // DEBOUNCE: Only stop UI if we miss multiple heartbeats
+                        if (consecutiveFailures >= MAX_FAILURES) {
+                            console.log("[UI] Lost backend signal. Stopping UI.");
+                            isRecording = false;
+                            updateUI(false);
+                            clearInterval(statusInterval);
+                            consecutiveFailures = 0;
+                        }
+                    }
+                } else {
+                    // API failure (network error)
+                    if (isRecording) {
+                        consecutiveFailures++;
+                        if (consecutiveFailures >= MAX_FAILURES) {
+                            updateConnectionStatus(false);
+                        }
                     }
                 }
             }
@@ -592,14 +619,20 @@
                 document.getElementById('recordingIndicator').classList.toggle('active', recording);
             }
 
-            function updateConnectionStatus(connected) {
+            function updateConnectionStatus(connected, recovering = false) {
                 const dot = document.getElementById('statusDot');
                 const text = document.getElementById('statusText');
-                if (connected) {
-                    dot.classList.remove('disconnected');
+                if (recovering) {
+                    dot.className = 'connection-dot'; // Reset
+                    dot.style.backgroundColor = '#fbc02d'; // Amber
+                    text.textContent = 'Backend recovering...';
+                } else if (connected) {
+                    dot.className = 'connection-dot connected';
+                    dot.style.backgroundColor = ''; // Reset inline
                     text.textContent = 'Connected to server';
                 } else {
-                    dot.classList.add('disconnected');
+                    dot.className = 'connection-dot disconnected';
+                    dot.style.backgroundColor = ''; // Reset inline
                     text.textContent = 'Server not running - start CLI first';
                 }
             }

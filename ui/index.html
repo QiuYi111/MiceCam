@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiceCam</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #1a4b8c;
+            --primary-hover: #143d72;
+            --bg-color: #f0f2f5;
+            --text-color: #202124;
+            --text-secondary: #5f6368;
+            --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Header */
+        .app-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .logo-icon {
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-title h1 {
+            font-size: 20px;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        .app-title p {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 2px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid #e8eaed;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Form elements */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-color);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        select,
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            font-size: 14px;
+            color: var(--text-color);
+            background: white;
+            transition: border-color 0.2s;
+        }
+
+        select:focus,
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        /* Buttons */
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-primary:disabled {
+            background: #dadce0;
+            color: #bdc1c6;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #d93025;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b31412;
+        }
+
+        .btn-danger:disabled {
+            background: #fce8e6;
+            color: #ea4335;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Status Grid */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: #e8eaed;
+            /* Borders */
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #e8eaed;
+        }
+
+        .stat {
+            background: white;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--primary-color);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Recording Indicator */
+        .recording-strip {
+            background: #fce8e6;
+            color: #d93025;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: none;
+            /* flex when active */
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            border: 1px solid #f9d7d4;
+        }
+
+        .recording-strip.active {
+            display: flex;
+        }
+
+        .rec-dot {
+            width: 10px;
+            height: 10px;
+            background: #d93025;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* Status Bar */
+        .status-bar {
+            background: white;
+            padding: 8px 16px;
+            border-top: 1px solid #e8eaed;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .connection-dot.connected {
+            background: #1e8e3e;
+        }
+
+        /* API Section */
+        .api-info {
+            font-size: 11px;
+            color: #aaa;
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .progress-bar-container {
+            margin-bottom: 24px;
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid #e8eaed;
+            display: none;
+        }
+
+        .progress-bar-fill {
+            height: 8px;
+            background: #e8eaed;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-val {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: var(--text-color);
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-header">
+        <div class="logo-icon">🐭</div>
+        <div class="app-title">
+            <h1>MiceCam</h1>
+            <p>Behavior Recording System</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Recording Strip -->
+        <div class="recording-strip" id="recordingIndicator">
+            <div class="rec-dot"></div>
+            <span>RECORDING IN PROGRESS</span>
+        </div>
+
+        <!-- Camera Selection -->
+        <div class="card">
+            <div class="card-title">
+                <span>📹</span> Source & Output
+            </div>
+            <div class="form-group">
+                <label>Camera Device</label>
+                <select id="cameraSelect">
+                    <option value="">Scanning devices...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Session Name</label>
+                <input type="text" id="sessionName" placeholder="mouse_trial_01">
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <input type="checkbox" id="autoDecode" style="width: auto;">
+                <label for="autoDecode" style="margin: 0; font-weight: normal;">Auto-decode to Images (Slow)</label>
+            </div>
+            <div class="form-group">
+                <div class="form-group">
+                    <label>Output Directory</label>
+                    <input type="text" id="output" placeholder="Default: recordings/">
+                </div>
+                <div class="form-group" style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+                    <div>
+                        <label>Resolution</label>
+                        <select id="resSelect">
+                            <option value="">Select camera first</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>FPS</label>
+                        <input type="number" id="fpsInput" value="60" min="1" max="240">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Decode Progress -->
+            <div class="progress-bar-container" id="decodeProgress">
+                <div class="progress-text">
+                    <span>Auto-decoding images...</span>
+                    <span id="decodePct">0%</span>
+                </div>
+                <div class="progress-bar-fill">
+                    <div class="progress-val" id="decodeVal"></div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="card">
+                <div class="card-title">
+                    <span>⚡</span> Controls
+                </div>
+                <div class="buttons">
+                    <button class="btn btn-primary" id="startBtn" onclick="startRecording()">
+                        <span>▶</span> Start Recording
+                    </button>
+                    <button class="btn btn-danger" id="stopBtn" onclick="stopRecording()" disabled>
+                        <span>⏹</span> Stop Recording
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="card">
+                <div class="card-title">
+                    <span>📊</span> Statistics
+                </div>
+                <div class="status-grid">
+                    <div class="stat">
+                        <div class="stat-value" id="elapsed">0s</div>
+                        <div class="stat-label">Duration</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="fpsStat">0</div>
+                        <div class="stat-label">FPS</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="mb">0.0</div>
+                        <div class="stat-label">Size (MB)</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="captured">0</div>
+                        <div class="stat-label">Frames</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="dropped">0</div>
+                        <div class="stat-label">Dropped</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="written">0</div>
+                        <div class="stat-label">Written</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="api-info">
+                Backend Port: 18080 • <a href="http://127.0.0.1:18080/api/status" target="_blank"
+                    style="color: inherit">API
+                    Status</a>
+            </div>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <div class="status-bar">
+            <div class="connection-dot" id="statusDot"></div>
+            <span id="statusText">Connecting to backend...</span>
+        </div>
+
+        <script>
+            const API_URL = 'http://127.0.0.1:18080/api';
+            let statusInterval = null;
+            let isRecording = false;
+            let serverConnected = false;
+            let cameraData = [];
+
+            async function api(method, path, body = null) {
+                try {
+                    const options = { method };
+                    if (body) {
+                        options.headers = { 'Content-Type': 'application/json' };
+                        options.body = JSON.stringify(body);
+                    }
+                    const resp = await fetch(`${API_URL}${path}`, options);
+                    return await resp.json();
+                } catch (e) {
+                    return { error: e.message };
+                }
+            }
+
+            async function loadCameras() {
+                const result = await api('GET', '/cameras');
+                const select = document.getElementById('cameraSelect');
+
+                if (Array.isArray(result) && result.length > 0) {
+                    cameraData = result;
+                    const currentVal = select.value;
+                    select.innerHTML = result.map((c, i) =>
+                        `<option value="${c.index}" ${c.index == currentVal ? 'selected' : (i === 0 && !currentVal ? 'selected' : '')}>${c.name}</option>`
+                    ).join('');
+
+                    if (!currentVal || currentVal !== select.value) {
+                        updateResolutions();
+                    }
+
+                    if (!serverConnected) {
+                        serverConnected = true;
+                        updateConnectionStatus(true);
+                    }
+                } else {
+                    select.innerHTML = '<option value="">No cameras found</option>';
+                    cameraData = [];
+                    updateResolutions();
+                    if (serverConnected) {
+                        serverConnected = false;
+                        updateConnectionStatus(false);
+                    }
+                }
+            }
+
+            function updateResolutions() {
+                const select = document.getElementById('cameraSelect');
+                const deviceIndex = select.value;
+                const resSelect = document.getElementById('resSelect');
+                // Loose comparison to match int from JSON with string from value
+                const cam = cameraData.find(c => c.index == deviceIndex);
+
+                if (cam && cam.resolutions && cam.resolutions.length > 0) {
+                    resSelect.innerHTML = cam.resolutions.map(r =>
+                        `<option value="${r}">${r}</option>`
+                    ).join('');
+                } else {
+                    resSelect.innerHTML = '<option value="">Auto-detect</option>';
+                }
+            }
+
+            document.getElementById('cameraSelect').addEventListener('change', updateResolutions);
+
+            async function startRecording() {
+                const select = document.getElementById('cameraSelect');
+                const deviceIndex = select.value; // Keep as string to support "oak"
+                const sessionName = document.getElementById('sessionName').value;
+                const outputDir = document.getElementById('output').value;
+                const resolution = document.getElementById('resSelect').value;
+                const fps = parseInt(document.getElementById('fpsInput').value);
+                const autoDecode = document.getElementById('autoDecode').checked;
+
+                const payload = {
+                    device_index: deviceIndex,
+                    session_name: sessionName || null,
+                    output_dir: outputDir || null,
+                    resolution: resolution || null,
+                    fps: isNaN(fps) ? null : fps,
+                    auto_decode: autoDecode
+                };
+
+                const result = await api('POST', '/start', payload);
+                if (result.success) {
+                    isRecording = true;
+                    updateUI(true);
+                    statusInterval = setInterval(updateStatus, 500);
+                } else {
+                    alert('Failed: ' + (result.error || 'Unknown error'));
+                }
+            }
+
+            async function stopRecording() {
+                const result = await api('POST', '/stop');
+                if (result.success) {
+                    isRecording = false;
+                    updateUI(false);
+                    clearInterval(statusInterval);
+                    updateStatus();
+                }
+            }
+
+            async function updateStatus() {
+                const result = await api('GET', '/status');
+                if (result && !result.error) {
+                    document.getElementById('captured').textContent = result.captured || 0;
+                    document.getElementById('written').textContent = result.written || 0;
+                    document.getElementById('fpsStat').textContent = Math.round(result.fps || 0);
+                    document.getElementById('mb').textContent = ((result.bytes || 0) / 1000000).toFixed(1);
+                    document.getElementById('dropped').textContent = result.dropped || 0;
+                    document.getElementById('elapsed').textContent = Math.round(result.elapsed_seconds || 0) + 's';
+
+                    if (!result.is_recording && isRecording) {
+                        isRecording = false;
+                        updateUI(false);
+                        clearInterval(statusInterval);
+                    }
+                }
+            }
+
+            function updateUI(recording) {
+                document.getElementById('startBtn').disabled = recording;
+                document.getElementById('stopBtn').disabled = !recording;
+                document.getElementById('recordingIndicator').classList.toggle('active', recording);
+            }
+
+            function updateConnectionStatus(connected) {
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                if (connected) {
+                    dot.classList.remove('disconnected');
+                    text.textContent = 'Connected to server';
+                } else {
+                    dot.classList.add('disconnected');
+                    text.textContent = 'Server not running - start CLI first';
+                }
+            }
+
+            // Toggle visibility immediately
+            const chkDecode = document.getElementById('autoDecode');
+            const boxDecode = document.getElementById('decodeProgress');
+
+            function updateDecodeVisibility() {
+                boxDecode.style.display = chkDecode.checked ? 'block' : 'none';
+            }
+            chkDecode.addEventListener('change', updateDecodeVisibility);
+            updateDecodeVisibility(); // Init state
+
+            // Set default session name
+            const sessionInput = document.getElementById('sessionName');
+            const now = new Date();
+            const ts = 'session_' + now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            if (sessionInput) sessionInput.value = ts;
+
+            // Check decode progress independent of recording
+            setInterval(async () => {
+                // Get current session name preference
+                const sessName = document.getElementById('sessionName').value || "default_session";
+
+                const res = await api('GET', '/decode_progress?session_name=' + encodeURIComponent(sessName));
+
+                // Only update values if visible
+                if (chkDecode.checked) {
+                    if (res && res.status === 'decoding') {
+                        document.getElementById('decodePct').textContent = Math.round(res.percent) + '%';
+                        document.getElementById('decodeVal').style.width = res.percent + '%';
+                        document.getElementById('decodeVal').style.backgroundColor = 'var(--primary-color)';
+                    } else if (res && res.status === 'completed') {
+                        document.getElementById('decodePct').textContent = 'Completed';
+                        document.getElementById('decodeVal').style.width = '100%';
+                        document.getElementById('decodeVal').style.backgroundColor = '#4caf50'; // Green
+                    } else if (res && res.status === 'failed') {
+                        document.getElementById('decodePct').textContent = 'Error: ' + (res.error || 'Unknown');
+                        document.getElementById('decodeVal').style.backgroundColor = '#e53935'; // Red
+                        document.getElementById('decodeVal').style.width = '100%';
+                    } else {
+                        // Idle / Ready
+                        document.getElementById('decodePct').textContent = 'Ready (Starts after recording)';
+                        document.getElementById('decodeVal').style.width = '0%';
+                    }
+                }
+            }, 1000);
+
+            // Init
+            loadCameras();
+            setInterval(loadCameras, 5000);
+        </script>
+</body>
+
+</html>

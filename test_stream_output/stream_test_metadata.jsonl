@@ -1,5 +1,0 @@
-{"camera_backend":"MockBackend","end_timestamp_ns":0,"fps":30.0,"height":480,"session_checksum":0,"session_name":"stream_test","start_timestamp_ns":304411571700000,"total_bytes":0,"total_frames":0,"type":"session_start","width":640}
-{"checksum":0,"offset":0,"sequence_id":1,"size":100,"timestamp_ns":304411572551000,"type":"frame"}
-{"checksum":0,"offset":100,"sequence_id":2,"size":100,"timestamp_ns":304411572552000,"type":"frame"}
-{"checksum":0,"offset":200,"sequence_id":3,"size":100,"timestamp_ns":304411572553000,"type":"frame"}
-{"camera_backend":"MockBackend","end_timestamp_ns":304411792718500,"fps":30.0,"height":480,"session_checksum":0,"session_name":"stream_test","start_timestamp_ns":304411571700000,"total_bytes":300,"total_frames":3,"type":"session_end","width":640}

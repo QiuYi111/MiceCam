@@ -1,10 +1,6 @@
 /**
  * @file gpu_jpeg_decoder.cpp
- * @brief Implementation of GPU-accelerated MJPEG decoder
- * 
- * This file contains the PIMPL implementation of GpuJpegDecoder.
- * When NVDEC is available, it uses hardware decoding. Otherwise,
- * it falls back to a software implementation using libjpeg-turbo.
+ * @brief Implementation of GPU-accelerated MJPEG decoder using NVDEC
  */
 
 #include "micecam/gpu/gpu_jpeg_decoder.h"
@@ -12,147 +8,118 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <vector>
 
 #ifdef HAVE_NVDEC
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_gl_interop.h>
-// Note: nvcuvid.h would be included here for full NVDEC support
+#include <nvcuvid.h>
+
+// Error checking macro
+#define CUDA_DRV_CHECK(call) \
+    do { \
+        CUresult err = call; \
+        if (err != CUDA_SUCCESS) { \
+            const char* szErrName = nullptr; \
+            cuGetErrorName(err, &szErrName); \
+            std::cerr << "CUDA Driver Error: " << szErrName << " at " << __LINE__ << std::endl; \
+            return false; \
+        } \
+    } while (0)
+
 #endif
 
 namespace micecam {
 
-/**
- * @brief PIMPL implementation of GpuJpegDecoder
- */
 class GpuJpegDecoder::Impl {
 public:
     Impl(int width, int height, int queue_depth)
         : width_(width), height_(height), queue_depth_(queue_depth) {
         
-        std::cout << "[GpuJpegDecoder] Initializing for " << width << "x" << height << "\n";
+        std::cout << "[GpuJpegDecoder] Initializing " << width << "x" << height << "\n";
         
 #ifdef HAVE_NVDEC
-        if (!initCuda()) {
-            throw std::runtime_error("Failed to initialize CUDA");
-        }
-        if (!initNvdec()) {
-            std::cerr << "[GpuJpegDecoder] NVDEC init failed, using software fallback\n";
-            use_nvdec_ = false;
-        } else {
+        if (initNvdec()) {
             use_nvdec_ = true;
             std::cout << "[GpuJpegDecoder] NVDEC hardware decoding enabled\n";
+        } else {
+            std::cerr << "[GpuJpegDecoder] NVDEC init failed, hardware acceleration disabled\n";
         }
 #else
-        std::cout << "[GpuJpegDecoder] Built without NVDEC, using software fallback\n";
-        use_nvdec_ = false;
+        std::cout << "[GpuJpegDecoder] Built without NVDEC\n";
 #endif
-        
         initialized_ = true;
     }
     
     ~Impl() {
 #ifdef HAVE_NVDEC
-        cleanupCuda();
+        cleanupNvdec();
 #endif
     }
     
     void onFrame(const FrameView& frame) {
-        if (!initialized_) return;
+        if (!initialized_ || !use_nvdec_) return;
         
-        // Quick check: drop frame if queue is full
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            if (pending_frames_.size() >= static_cast<size_t>(queue_depth_)) {
-                dropped_frames_.fetch_add(1);
-                return;
-            }
+        // Push to queue for async processing
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        if (pending_frames_.size() >= static_cast<size_t>(queue_depth_)) {
+            dropped_frames_++;
+            return;
         }
         
-        // Copy frame data (we can't hold onto the view)
-        std::vector<uint8_t> frame_copy;
-        if (frame.data && frame.size > 0) {
-            frame_copy.assign(frame.data, frame.data + frame.size);
-        }
+        std::vector<uint8_t> data(frame.data, frame.data + frame.size);
+        pending_frames_.push({frame.sequence_id, std::move(data)});
         
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            pending_frames_.push({frame.sequence_id, std::move(frame_copy)});
-        }
-        
-        // In a real implementation, we would:
-        // 1. Upload to GPU async
-        // 2. Submit decode job to NVDEC
-        // 3. Map decoded output to OpenGL texture
-        
+        // In a real implementation, a separate thread would consume this
+        // and call cuvidDecodePicture.
         current_frame_id_.store(frame.sequence_id);
     }
     
-    GLuint getTexture() const {
-        return texture_id_;
-    }
-    
-    uint64_t getCurrentFrameId() const {
-        return current_frame_id_.load();
-    }
-    
-    uint64_t getDroppedFrames() const {
-        return dropped_frames_.load();
-    }
-    
-    bool isHealthy() const {
-        return initialized_ && !error_state_;
-    }
+    GLuint getTexture() const { return texture_id_; }
+    uint64_t getCurrentFrameId() const { return current_frame_id_.load(); }
+    uint64_t getDroppedFrames() const { return dropped_frames_.load(); }
+    bool isHealthy() const { return initialized_ && !error_state_; }
     
 private:
 #ifdef HAVE_NVDEC
-    bool initCuda() {
-        cudaError_t err = cudaSetDevice(0);
-        if (err != cudaSuccess) {
-            std::cerr << "[GpuJpegDecoder] CUDA device selection failed: " 
-                      << cudaGetErrorString(err) << "\n";
-            return false;
-        }
+    bool initNvdec() {
+        // 1. Init CUDA
+        if (cuInit(0) != CUDA_SUCCESS) return false;
+        if (cuDeviceGet(&cuda_device_, 0) != CUDA_SUCCESS) return false;
+        if (cuCtxCreate(&cuda_context_, CU_CTX_SCHED_BLOCKING_SYNC, cuda_device_) != CUDA_SUCCESS) return false;
         
-        // Create CUDA stream for async operations
-        err = cudaStreamCreate(&stream_);
-        if (err != cudaSuccess) {
-            std::cerr << "[GpuJpegDecoder] CUDA stream creation failed\n";
-            return false;
-        }
+        // 2. Create Decoder
+        CUVIDDECODECREATEINFO decodeInfo = {};
+        decodeInfo.CodecType = cudaVideoCodec_JPEG;
+        decodeInfo.ChromaFormat = cudaVideoChromaFormat_420; // Most webcams
+        decodeInfo.OutputFormat = cudaVideoSurfaceFormat_NV12;
+        decodeInfo.DeinterlaceMode = cudaVideoDeinterlaceMode_Weave;
+        decodeInfo.ulNumDecodeSurfaces = 4;
+        decodeInfo.ulNumOutputSurfaces = 1;
+        decodeInfo.ulCreationWidth = width_;
+        decodeInfo.ulCreationHeight = height_;
+        decodeInfo.ulMaxWidth = width_;
+        decodeInfo.ulMaxHeight = height_;
+        decodeInfo.ulTargetWidth = width_;
+        decodeInfo.ulTargetHeight = height_;
         
-        // Allocate pinned memory for efficient H2D transfer
-        err = cudaMallocHost(&pinned_buffer_, width_ * height_ * 3);
-        if (err != cudaSuccess) {
-            std::cerr << "[GpuJpegDecoder] Pinned memory allocation failed\n";
+        if (cuvidCreateDecoder(&decoder_, &decodeInfo) != CUDA_SUCCESS) {
+            std::cerr << "[GpuJpegDecoder] Failed to create NVDEC decoder\n";
             return false;
         }
         
         return true;
     }
     
-    bool initNvdec() {
-        // TODO: Full NVDEC initialization using nvcuvid
-        // 1. cuvidCreateVideoParser
-        // 2. cuvidCreateDecoder with JPEG codec
-        // 3. Create OpenGL texture and register with CUDA
-        
-        // For now, return false to use software fallback
-        return false;
+    void cleanupNvdec() {
+        if (decoder_) cuvidDestroyDecoder(decoder_);
+        if (cuda_context_) cuCtxDestroy(cuda_context_);
     }
     
-    void cleanupCuda() {
-        if (stream_) {
-            cudaStreamDestroy(stream_);
-            stream_ = nullptr;
-        }
-        if (pinned_buffer_) {
-            cudaFreeHost(pinned_buffer_);
-            pinned_buffer_ = nullptr;
-        }
-    }
-    
-    cudaStream_t stream_ = nullptr;
-    void* pinned_buffer_ = nullptr;
+    CUdevice cuda_device_ = 0;
+    CUcontext cuda_context_ = nullptr;
+    CUvideodecoder decoder_ = nullptr;
 #endif
     
     struct PendingFrame {
@@ -160,14 +127,10 @@ private:
         std::vector<uint8_t> data;
     };
     
-    int width_;
-    int height_;
-    int queue_depth_;
-    
+    int width_, height_, queue_depth_;
     bool initialized_ = false;
     bool use_nvdec_ = false;
     bool error_state_ = false;
-    
     GLuint texture_id_ = 0;
     std::atomic<uint64_t> current_frame_id_{0};
     std::atomic<uint64_t> dropped_frames_{0};
@@ -176,11 +139,8 @@ private:
     std::queue<PendingFrame> pending_frames_;
 };
 
-// Public interface implementation
-
 GpuJpegDecoder::GpuJpegDecoder(int width, int height, int queue_depth)
-    : impl_(std::make_unique<Impl>(width, height, queue_depth)) {
-}
+    : impl_(std::make_unique<Impl>(width, height, queue_depth)) {}
 
 GpuJpegDecoder::~GpuJpegDecoder() = default;
 

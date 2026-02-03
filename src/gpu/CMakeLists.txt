@@ -25,7 +25,7 @@ if(CMAKE_CUDA_COMPILER)
         NAMES nvcuvid
         PATHS 
             "${CUDAToolkit_LIBRARY_DIR}"
-            "${VIDEO_CODEC_SDK_DIR}/Lib/x64"
+            "${VIDEO_CODEC_SDK_DIR}/Lib/win/x64"
     )
     
     find_path(NVCUVID_INCLUDE_DIR

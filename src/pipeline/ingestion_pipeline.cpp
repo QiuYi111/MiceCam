@@ -8,7 +8,8 @@ IngestionPipeline::IngestionPipeline(
     const SessionConfig& session_config)
     : camera_(std::move(camera)),
       buffer_(session_config.ring_buffer_size),
-      writer_(session_config) {
+      writer_(session_config),
+      config_(session_config) {
 }
 
 IngestionPipeline::~IngestionPipeline() {
@@ -76,8 +77,29 @@ void IngestionPipeline::join() {
     // Writer thread is managed by DiskWriter
 }
 
+void IngestionPipeline::attach_observer(std::shared_ptr<IFrameObserver> observer) {
+    dispatcher_.attach(observer);
+}
+
+void IngestionPipeline::detach_observer(std::shared_ptr<IFrameObserver> observer) {
+    dispatcher_.detach(observer);
+}
+
+PipelineStats IngestionPipeline::get_stats() const {
+    PipelineStats stats;
+    stats.captured_frames = frames_captured_.load();
+    stats.dropped_frames = frames_dropped_.load();
+    stats.drop_rate = get_drop_rate();
+    stats.pending_buffer_size = buffer_.size();  // size() is already a function
+    // Throughput calculation would require timing; simplified here
+    stats.current_throughput_mbps = 0.0;
+    return stats;
+}
+
 void IngestionPipeline::camera_thread_func() {
     std::cout << "Camera thread started\n";
+
+    uint64_t sequence_id = 0;
 
     while (running_.load()) {
         auto frame = camera_->get_frame();
@@ -90,7 +112,21 @@ void IngestionPipeline::camera_thread_func() {
             break;
         }
 
-        // Try to push to buffer (non-blocking)
+        // RFC-001: Dispatch to observers (best-effort, non-blocking)
+        // Create a FrameView for observers before moving the frame
+        FrameView view;
+        view.data = frame->data ? frame->data->data() : nullptr;
+        view.size = frame->size();
+        view.sequence_id = frame->sequence_id;
+        view.timestamp = std::chrono::duration<double>(frame->timestamp.time_since_epoch()).count();
+        view.format = PixelFormat::MJPEG;  // Assuming MJPEG; could be dynamic
+        view.width = config_.width;
+        view.height = config_.height;
+        view.metadata_json = nullptr;
+
+        dispatcher_.dispatch(view);
+
+        // Critical path: push to ring buffer for disk write
         if (!buffer_.try_push(std::move(*frame))) {
             frames_dropped_.fetch_add(1);
         } else {

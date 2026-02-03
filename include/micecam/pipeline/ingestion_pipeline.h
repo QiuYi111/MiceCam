@@ -3,6 +3,8 @@
 #include "micecam/camera/camera_backend.h"
 #include "micecam/core/ring_buffer.h"
 #include "micecam/pipeline/disk_writer.h"
+#include "micecam/pipeline/frame_dispatcher.h"
+#include "micecam/types.h"
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -25,6 +27,10 @@ public:
 
     // Wait for completion
     void join();
+
+    // Observer management (thread-safe)
+    void attach_observer(std::shared_ptr<IFrameObserver> observer);
+    void detach_observer(std::shared_ptr<IFrameObserver> observer);
 
     // Get statistics
     [[nodiscard]] uint64_t get_frames_captured() const {
@@ -49,12 +55,16 @@ public:
         return writer_;
     }
 
+    // RFC-001: Get pipeline stats
+    [[nodiscard]] PipelineStats get_stats() const;
+
 private:
     void camera_thread_func();
 
     std::unique_ptr<ICameraBackend> camera_;
     RingBuffer buffer_;
     DiskWriter writer_;
+    FrameDispatcher dispatcher_;
 
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> frames_captured_{0};
@@ -62,6 +72,9 @@ private:
 
     std::thread camera_thread_;
     std::thread writer_thread_;
+
+    // For stats calculation
+    SessionConfig config_;
 };
 
 }  // namespace micecam

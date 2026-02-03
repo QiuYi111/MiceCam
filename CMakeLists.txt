@@ -29,10 +29,31 @@ endif()
 # Build options
 option(BUILD_TESTS "Build test suite" ON)
 option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
+option(BUILD_PYTHON_BINDINGS "Build Python bindings (requires pybind11)" OFF)
+option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
 
 # Dependencies
 find_package(Threads REQUIRED)
 find_package(OpenCV QUIET)
+
+# Standard CMake discovery
+include(FetchContent)
+
+# JSON library (header-only)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# libnop (header-only, required by depthai-core headers)
+FetchContent_Declare(
+    libnop
+    GIT_REPOSITORY https://github.com/luxonis/libnop.git
+    GIT_TAG ab842f51dc2eb13916dc98417c2186b78320ed10
+)
+FetchContent_MakeAvailable(libnop)
 
 # Luxonis DepthAI Core (Using Prebuilt)
 option(WITH_OAK_CAMERA "Build with OAK camera support (requires depthai-core)" ON)
@@ -105,21 +126,12 @@ endif()
 
 # JSON library (header-only)
 include(FetchContent)
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-)
-FetchContent_MakeAvailable(nlohmann_json)
+# nlohmann_json - Moved earlier
+# ... handled above ...
 
-# libnop (header-only, required by depthai-core headers)
+# libnop (header-only, required by depthai-core headers) - Moved earlier
 if(WITH_OAK_CAMERA)
-    FetchContent_Declare(
-        libnop
-        GIT_REPOSITORY https://github.com/luxonis/libnop.git
-        GIT_TAG ab842f51dc2eb13916dc98417c2186b78320ed10
-    )
-    FetchContent_MakeAvailable(libnop)
+    # ... libnop FetchContent already handled above ...
 endif()
 
 if(BUILD_TESTS)
@@ -138,6 +150,7 @@ add_library(micecam_core
     src/core/ring_buffer.cpp
     src/pipeline/disk_writer.cpp
     src/pipeline/ingestion_pipeline.cpp
+    src/pipeline/frame_dispatcher.cpp
     src/pipeline/hdf5_converter.cpp
 )
 
@@ -215,6 +228,7 @@ if(BUILD_TESTS)
         tests/pipeline/pipeline_test.cpp
         tests/pipeline/integration_test.cpp
         tests/pipeline/disk_writer_stream_test.cpp
+        tests/pipeline/observer_test.cpp
         tests/pipeline/hdf5_test.cpp
         tests/pipeline/configurable_buffer_test.cpp
         tests/benchmark/stress_test.cpp
@@ -254,4 +268,47 @@ target_link_libraries(micecam_demo PRIVATE micecam_core)
 
 
 # Installation
+# SDK Packaging Configuration
+if(MSVC)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    set(BUILD_SHARED_LIBS ON)
+endif()
+
+# Installation Rules
+include(GNUInstallDirs)
+
+install(TARGETS micecam_core
+    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+)
+
+install(DIRECTORY include/micecam DESTINATION include)
+
+if(WITH_CAMERA_BACKEND)
+    install(TARGETS micecam_camera
+        RUNTIME DESTINATION bin
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+    )
+endif()
+
+# Install Tools (Recorder only - oak_diagnostic is not built by default)
+if(WITH_OAK_CAMERA AND TARGET oak_quad_recorder)
+    install(TARGETS oak_quad_recorder
+        RUNTIME DESTINATION bin
+    )
+endif()
+
+# Main executable
 install(TARGETS micecam DESTINATION bin)
+
+# Python bindings (optional)
+if(BUILD_PYTHON_BINDINGS)
+    add_subdirectory(bindings/python)
+endif()
+
+# GPU preview module (optional)
+if(BUILD_GPU_PREVIEW)
+    add_subdirectory(src/gpu)
+endif()

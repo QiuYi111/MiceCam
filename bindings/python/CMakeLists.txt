@@ -47,8 +47,8 @@ target_link_libraries(_micecam PRIVATE
     micecam_camera
 )
 
-# Pass OAK camera define
-if(DEPTHAI_FOUND)
+# Pass OAK camera define if it was built with OAK support (requires OpenCV)
+if(DEPTHAI_FOUND AND OpenCV_FOUND)
     target_compile_definitions(_micecam PRIVATE WITH_OAK_CAMERA=1)
     message(STATUS "Python bindings: OAK camera support enabled")
 endif()

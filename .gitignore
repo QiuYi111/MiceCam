@@ -10,3 +10,11 @@ test_output/
 .idea/
 3rdParty/*
 *.log
+recordings/
+*_images/
+*.jpg
+*.jpeg
+*.jsonl
+# Python caches
+__pycache__/
+*.pyc

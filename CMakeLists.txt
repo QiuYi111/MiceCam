@@ -167,11 +167,15 @@ target_link_libraries(micecam_core PUBLIC
 if(WITH_CAMERA_BACKEND)
     add_library(micecam_camera
         src/camera/camera_backend.cpp
-        src/camera/usb_camera_backend.cpp
         src/camera/ffmpeg_camera_backend.cpp
     )
 
-    if(DEPTHAI_FOUND)
+    if(OpenCV_FOUND)
+        target_sources(micecam_camera PRIVATE src/camera/usb_camera_backend.cpp)
+        target_compile_definitions(micecam_camera PRIVATE WITH_USB_CAMERA)
+    endif()
+
+    if(DEPTHAI_FOUND AND OpenCV_FOUND)
         target_sources(micecam_camera PRIVATE src/camera/oak_camera_backend.cpp)
         target_compile_definitions(micecam_camera PRIVATE WITH_OAK_CAMERA)
     endif()

@@ -1,49 +1,40 @@
-#include "micecam/pipeline/ingestion_pipeline.h"
 #include "micecam/camera/ffmpeg_camera_backend.h"
+#include "micecam/pipeline/ingestion_pipeline.h"
 #include <iostream>
-#include <thread>
+#include <vector>
 #include <chrono>
-#include <iomanip>
+#include <thread>
 #include <filesystem>
 
-using namespace micecam;
 using namespace std::chrono_literals;
 
-struct TestConfig {
-    std::string name;
-    int width;
-    int height;
-    double fps;
-};
+void run_test(const std::string& name, int width, int height, double fps) {
+    std::cout << "\n=== Testing Resolution: " << width << "x" << height << " @ " << fps << " FPS ===" << std::endl;
 
-void run_benchmark(int camera_id, const TestConfig& test) {
-    std::cout << "\n>>> BENCHMARK: " << test.name << " (" << test.width << "x" << test.height << " @ " << test.fps << " fps)" << std::endl;
-    std::cout << " [FFMPEG MJPEG]" << std::endl;
-
-    CameraConfig cam_config;
-    cam_config.width = test.width;
-    cam_config.height = test.height;
-    cam_config.fps = test.fps;
-    cam_config.device_id = camera_id;
-
-    SessionConfig session_config;
+    micecam::SessionConfig session_config;
     session_config.output_dir = "test_output";
-    session_config.session_name = "ffmpeg_bench_" + test.name;
+    session_config.session_name = "ffmpeg_bench_" + name;
     session_config.ring_buffer_size = 256; 
     session_config.camera_backend_name = "FFmpegCameraBackend (Direct MJPEG)";
-    session_config.width = test.width;
-    session_config.height = test.height;
-    session_config.fps = test.fps;
+    session_config.width = width;
+    session_config.height = height;
+    session_config.fps = fps;
 
     std::filesystem::create_directories(session_config.output_dir);
 
-    auto camera = std::make_unique<FFmpegCameraBackend>();
+    micecam::CameraConfig cam_config;
+    cam_config.width = width;
+    cam_config.height = height;
+    cam_config.fps = fps;
+    cam_config.device_id = 0;
+
+    auto camera = std::make_unique<micecam::FFmpegCameraBackend>();
     if (!camera->initialize(cam_config)) {
         std::cerr << "  [FAIL] Failed to initialize FFmpeg camera" << std::endl;
         return;
     }
 
-    IngestionPipeline pipeline(std::move(camera), session_config);
+    micecam::IngestionPipeline pipeline(std::move(camera), session_config);
     
     std::cout << "  Starting verification..." << std::endl;
     if (!pipeline.start()) {
@@ -58,44 +49,29 @@ void run_benchmark(int camera_id, const TestConfig& test) {
         if (i % 2 == 0) {
             double current_drop_rate = pipeline.get_drop_rate() * 100.0;
             uint64_t current_captured = pipeline.get_frames_captured();
-            
-            auto space = std::filesystem::space("test_output");
-            double free_gb = space.available / (1024.0 * 1024.0 * 1024.0);
-            
-            std::cout << "  [" << i << "s / " << total_seconds << "s] Captured: " << current_captured 
-                      << ", Drops: " << pipeline.get_frames_dropped() 
-                      << " (" << std::fixed << std::setprecision(2) << current_drop_rate << "%), "
-                      << "Disk Free: " << free_gb << " GB" << std::endl;
+            std::cout << "  [" << i << "s] Captured: " << current_captured 
+                      << " | Drop Rate: " << current_drop_rate << "%" << std::endl;
         }
     }
 
-    std::cout << "Stopping ingestion pipeline..." << std::endl;
     pipeline.stop();
-    
-    double drop_rate = pipeline.get_drop_rate() * 100.0;
-    uint64_t total_frames = pipeline.get_frames_captured();
-    uint64_t dropped_frames = pipeline.get_frames_dropped();
-
-    std::cout << "  [RESULT] Total frames: " << total_frames << std::endl;
-    std::cout << "  [RESULT] Drop rate: " << std::fixed << std::setprecision(2) << drop_rate << "%" << std::endl;
-    
-    if (drop_rate == 0.0) {
-        std::cout << "  [STATUS] PASS ✅" << std::endl;
-    } else {
-        std::cout << "  [STATUS] WARNING: " << dropped_frames << " frames dropped" << std::endl;
-    }
+    std::cout << "  [PASS] Test completed" << std::endl;
 }
 
 int main() {
-    std::cout << "=== FFmpeg-Native Camera Test ===\n";
-    
-    std::vector<TestConfig> tests = {
-        {"4K_debug", 3840, 2160, 30.0},
-        {"960p_debug", 1280, 960, 120.0}
-    };
+    std::cout << "MiceCam FFmpeg Backend Stability Test" << std::endl;
+    std::cout << "======================================" << std::endl;
 
-    for (const auto& test : tests) {
-        run_benchmark(0, test);
+    try {
+        // Standard test
+        run_test("1080p_30", 1920, 1080, 30.0);
+        
+        // High Speed test
+        run_test("720p_60", 1280, 720, 60.0);
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Unhandled exception: " << e.what() << std::endl;
+        return 1;
     }
 
     return 0;

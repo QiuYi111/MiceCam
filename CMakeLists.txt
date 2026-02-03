@@ -16,6 +16,8 @@ if(MSVC)
     add_compile_options(/utf-8)
     # Disable min/max macros from Windows.h
     add_compile_definitions(NOMINMAX)
+    # Bypass OpenCV dependency in DepthAI headers
+    add_compile_definitions(DEPTHAI_TARGET_CORE)
 endif()
 
 # Ensure proper threading on all platforms
@@ -115,14 +117,29 @@ endif()
 find_package(PkgConfig QUIET)
 find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil avdevice swscale)
 if(NOT FFMPEG_FOUND)
-    set(FFMPEG_LIBRARIES avcodec avformat avutil avdevice swscale)
+    # Fallback for vcpkg on this system
+    set(FFMPEG_DIR "C:/vcpkg/installed/x64-windows")
+    if(EXISTS "${FFMPEG_DIR}")
+        set(FFMPEG_FOUND ON)
+        set(FFMPEG_INCLUDE_DIRS "${FFMPEG_DIR}/include")
+        set(FFMPEG_LIBRARIES 
+            "${FFMPEG_DIR}/lib/avcodec.lib"
+            "${FFMPEG_DIR}/lib/avformat.lib"
+            "${FFMPEG_DIR}/lib/avutil.lib"
+            "${FFMPEG_DIR}/lib/avdevice.lib"
+            "${FFMPEG_DIR}/lib/swscale.lib"
+        )
+        message(STATUS "Using manual FFmpeg paths from ${FFMPEG_DIR}")
+    else()
+        set(FFMPEG_LIBRARIES avcodec avformat avutil avdevice swscale)
+    endif()
 endif()
 
-if(NOT OpenCV_FOUND AND NOT FFMPEG_FOUND)
-    option(WITH_CAMERA_BACKEND "Build camera backend" OFF)
-else()
-    option(WITH_CAMERA_BACKEND "Build camera backend" ON)
+set(WITH_CAMERA_BACKEND_DEFAULT OFF)
+if(OpenCV_FOUND OR FFMPEG_FOUND OR DEPTHAI_FOUND)
+    set(WITH_CAMERA_BACKEND_DEFAULT ON)
 endif()
+option(WITH_CAMERA_BACKEND "Build camera backend" ${WITH_CAMERA_BACKEND_DEFAULT})
 
 # JSON library (header-only)
 include(FetchContent)
@@ -134,6 +151,10 @@ if(WITH_OAK_CAMERA)
     # ... libnop FetchContent already handled above ...
 endif()
 
+message(STATUS "DEPTHAI_FOUND: ${DEPTHAI_FOUND}")
+message(STATUS "FFMPEG_FOUND: ${FFMPEG_FOUND}")
+message(STATUS "OpenCV_FOUND: ${OpenCV_FOUND}")
+
 if(BUILD_TESTS)
     FetchContent_Declare(
         googletest
@@ -143,6 +164,7 @@ if(BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
     enable_testing()
 endif()
+
 
 # Core library (always built)
 add_library(micecam_core
@@ -165,19 +187,26 @@ target_link_libraries(micecam_core PUBLIC
 
 # Camera backend (optional)
 if(WITH_CAMERA_BACKEND)
-    add_library(micecam_camera
-        src/camera/camera_backend.cpp
-        src/camera/ffmpeg_camera_backend.cpp
-    )
-
-    if(OpenCV_FOUND)
-        target_sources(micecam_camera PRIVATE src/camera/usb_camera_backend.cpp)
-        target_compile_definitions(micecam_camera PRIVATE WITH_USB_CAMERA)
+    set(CAMERA_SOURCES src/camera/camera_backend.cpp)
+    
+    if(FFMPEG_FOUND)
+        list(APPEND CAMERA_SOURCES src/camera/ffmpeg_camera_backend.cpp)
+    endif()
+    
+    if(DEPTHAI_FOUND)
+        list(APPEND CAMERA_SOURCES src/camera/oak_camera_backend.cpp)
     endif()
 
-    if(DEPTHAI_FOUND AND OpenCV_FOUND)
-        target_sources(micecam_camera PRIVATE src/camera/oak_camera_backend.cpp)
-        target_compile_definitions(micecam_camera PRIVATE WITH_OAK_CAMERA)
+    add_library(micecam_camera ${CAMERA_SOURCES})
+
+    if(FFMPEG_FOUND)
+        target_compile_definitions(micecam_camera PUBLIC WITH_FFMPEG)
+        target_link_libraries(micecam_camera PUBLIC ${FFMPEG_LIBRARIES})
+    endif()
+
+    if(DEPTHAI_FOUND)
+        target_compile_definitions(micecam_camera PUBLIC WITH_OAK_CAMERA)
+        target_link_libraries(micecam_camera PUBLIC depthai::core)
     endif()
 
 
@@ -209,18 +238,21 @@ if(WITH_CAMERA_BACKEND)
     if(DEPTHAI_FOUND)
         add_executable(oak_camera_test oak_camera_test.cpp)
         target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera)
+        target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
 
         add_executable(oak_quad_recorder oak_quad_recorder.cpp)
-    target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera)
-    
-    add_executable(oak_diagnostic oak_diagnostic.cpp)
-    target_include_directories(oak_diagnostic PRIVATE ${DEPTHAI_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
-    target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
-endif()
+        target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera)
+        target_compile_definitions(oak_quad_recorder PRIVATE WITH_OAK_CAMERA)
+        
+        add_executable(oak_diagnostic oak_diagnostic.cpp)
+        target_include_directories(oak_diagnostic PRIVATE ${DEPTHAI_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+        target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
+    endif()
 
     # FFmpeg camera test
     add_executable(ffmpeg_camera_test ffmpeg_camera_test.cpp)
     target_link_libraries(ffmpeg_camera_test PRIVATE micecam_core micecam_camera)
+    target_compile_definitions(ffmpeg_camera_test PRIVATE WITH_FFMPEG)
 endif()
 
 # Tests

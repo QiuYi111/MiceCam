@@ -23,7 +23,6 @@
 #endif
 
 #ifdef WITH_CAMERA_BACKEND
-#include "micecam/camera/usb_camera_backend.h"
 #include "micecam/camera/ffmpeg_camera_backend.h"
 #endif
 
@@ -54,10 +53,10 @@ public:
             throw std::runtime_error("OAK camera support not compiled");
 #endif
         } else if (backend_name == "usb" || backend_name == "ffmpeg") {
-#ifdef WITH_CAMERA_BACKEND
+#ifdef WITH_FFMPEG
             camera_ = std::make_unique<FFmpegCameraBackend>();
 #else
-            throw std::runtime_error("USB/FFmpeg camera support not compiled");
+            throw std::runtime_error("FFmpeg/USB camera support not compiled");
 #endif
         } else {
             throw std::runtime_error("Unknown camera backend: " + backend_name);

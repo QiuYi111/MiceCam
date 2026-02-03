@@ -1,3 +1,4 @@
+#ifdef WITH_FFMPEG
 #pragma once
 
 #include "micecam/camera/camera_backend.h"
@@ -53,3 +54,5 @@ private:
 };
 
 } // namespace micecam
+#endif
+

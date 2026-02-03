@@ -47,8 +47,8 @@ target_link_libraries(_micecam PRIVATE
     micecam_camera
 )
 
-# Pass OAK camera define if it was built with OAK support (requires OpenCV)
-if(DEPTHAI_FOUND AND OpenCV_FOUND)
+# Pass OAK camera define if it was built with OAK support
+if(DEPTHAI_FOUND)
     target_compile_definitions(_micecam PRIVATE WITH_OAK_CAMERA=1)
     message(STATUS "Python bindings: OAK camera support enabled")
 endif()
@@ -56,7 +56,10 @@ endif()
 # Pass USB/FFmpeg camera define
 if(WITH_CAMERA_BACKEND)
     target_compile_definitions(_micecam PRIVATE WITH_CAMERA_BACKEND=1)
-    message(STATUS "Python bindings: USB camera support enabled")
+    if(FFMPEG_FOUND)
+        target_compile_definitions(_micecam PRIVATE WITH_FFMPEG=1)
+    endif()
+    message(STATUS "Python bindings: Camera backend enabled")
 endif()
 
 target_include_directories(_micecam PRIVATE

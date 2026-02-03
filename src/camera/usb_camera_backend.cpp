@@ -1,3 +1,4 @@
+#ifdef WITH_USB_CAMERA
 #include "micecam/camera/usb_camera_backend.h"
 #include <opencv2/opencv.hpp>
 #include <iostream>
@@ -198,4 +199,6 @@ std::vector<int> USBCameraBackend::enumerate_cameras(int max_devices) {
 }
 
 }  // namespace micecam
+#endif
+
 

@@ -1,3 +1,4 @@
+#ifdef WITH_USB_CAMERA
 #pragma once
 
 #include "micecam/camera/camera_backend.h"
@@ -46,3 +47,5 @@ private:
 };
 
 }  // namespace micecam
+#endif
+

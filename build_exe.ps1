@@ -27,6 +27,8 @@ uv run pyinstaller --noconsole `
     --add-data "$($sdk_path);." `
     --hidden-import "PyQt6" `
     --hidden-import "micecam" `
+    --hidden-import "recorder_worker" `
+    --hidden-import "micecam_utils" `
     micecam_app.py
 
 Write-Host "Build Complete. Executable is in dist/MiceCam/MiceCam.exe"

@@ -4,11 +4,12 @@ import time
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QLabel, QPushButton, QComboBox, QLineEdit, 
                              QGroupBox, QPlainTextEdit, QMessageBox, QFrame,
-                             QGridLayout, QScrollArea, QSizePolicy)
+                             QGridLayout, QScrollArea, QSizePolicy, QCheckBox, QProgressBar)
 from PyQt6.QtCore import Qt, QTimer, QSize
 from PyQt6.QtGui import QFont, QIcon, QColor, QTextCursor
 
 from gui.recorder_thread import RecorderThread, SDK_AVAILABLE
+from gui.decoder_thread import DecoderThread
 
 # --- STYLESHEET (WebUI Replica) ---
 STYLESHEET = """
@@ -79,6 +80,15 @@ QPlainTextEdit {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 12px;
 }
+QProgressBar {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #eee;
+}
+QProgressBar::chunk {
+    background-color: #1a4b8c;
+}
 /* Header */
 QFrame#Header {
     background-color: #1a4b8c;
@@ -109,11 +119,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MiceCam Pro")
-        self.resize(500, 750)
+        self.resize(500, 800)
         self.setStyleSheet(STYLESHEET)
         
         # State
         self.recorder = None
+        self.decoder = None
         self.is_recording = False
         
         # Setup UI
@@ -135,8 +146,7 @@ class MainWindow(QMainWindow):
         header.setFixedHeight(80)
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(20, 10, 20, 10)
-        
-        # Icon placeholder (Emoji works for now)
+         
         icon_lbl = QLabel("🐭")
         icon_lbl.setStyleSheet("font-size: 32px; background: rgba(255,255,255,0.1); border-radius: 20px; padding: 5px;")
         
@@ -157,7 +167,9 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(header)
         
-        # 2. Controls Scroll Area (for smaller screens)
+        # 2. Controls Scroll Area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
         scroll_content = QWidget()
         content_layout = QVBoxLayout(scroll_content)
         content_layout.setContentsMargins(20, 20, 20, 20)
@@ -173,7 +185,7 @@ class MainWindow(QMainWindow):
         
         self.edt_session = QLineEdit()
         self.edt_session.setPlaceholderText("Session Name")
-        self.refresh_session_name() # Init timestamp
+        self.refresh_session_name() 
         
         self.cb_res = QComboBox()
         self.cb_res.addItems(["1920x1080", "1280x720", "640x480"])
@@ -220,22 +232,23 @@ class MainWindow(QMainWindow):
         _, self.lbl_frames = make_stat("Frames", "frames")
         _, self.lbl_drop = make_stat("Dropped", "drop")
         _, self.lbl_time = make_stat("Duration", "time")
-        _, self.lbl_mb = make_stat("Size (MB)", "mb")
+        _, self.lbl_mb = make_stat("MB/s", "mb")
         _, self.lbl_mbps = make_stat("Mbps", "mbps")
         
         stat_layout.addWidget(make_stat("FPS", "fps")[0], 0, 0)
         stat_layout.addWidget(make_stat("Duration", "time")[0], 0, 1)
-        stat_layout.addWidget(make_stat("Mbps", "mbps")[0], 0, 2)
+        stat_layout.addWidget(make_stat("throughput", "mbps")[0], 0, 2)
         stat_layout.addWidget(make_stat("Frames", "frames")[0], 1, 0)
         stat_layout.addWidget(make_stat("Dropped", "drop")[0], 1, 1)
-        stat_layout.addWidget(make_stat("Size (MB)", "mb")[0], 1, 2)
+        stat_layout.addWidget(make_stat("Storage", "mb")[0], 1, 2)
         
         content_layout.addWidget(stat_grp)
         
         # -- Controls Group --
         ctl_grp = QGroupBox("⚡ Controls")
-        ctl_layout = QHBoxLayout(ctl_grp)
+        ctl_layout = QVBoxLayout(ctl_grp)
         
+        h_btns = QHBoxLayout()
         self.btn_start = QPushButton("▶ Start Recording")
         self.btn_start.setObjectName("StartBtn")
         self.btn_start.clicked.connect(self.start_recording)
@@ -245,8 +258,23 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_recording)
         
-        ctl_layout.addWidget(self.btn_start)
-        ctl_layout.addWidget(self.btn_stop)
+        h_btns.addWidget(self.btn_start)
+        h_btns.addWidget(self.btn_stop)
+        
+        # Auto Decode Checkbox
+        self.chk_decode = QCheckBox("Auto-Decode Session after finished")
+        self.chk_decode.setChecked(True)
+        
+        # Decode Progress
+        self.lbl_decode = QLabel("Decoding Progress:")
+        self.lbl_decode.setVisible(False)
+        self.prog_decode = QProgressBar()
+        self.prog_decode.setVisible(False)
+        
+        ctl_layout.addLayout(h_btns)
+        ctl_layout.addWidget(self.chk_decode)
+        ctl_layout.addWidget(self.lbl_decode)
+        ctl_layout.addWidget(self.prog_decode)
         
         content_layout.addWidget(ctl_grp)
         
@@ -260,16 +288,17 @@ class MainWindow(QMainWindow):
         
         content_layout.addWidget(log_grp)
         
-        # Add scroll content to layout
-        layout.addWidget(scroll_content)
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
         
-        self.log("System Ready. SDK Loaded: " + str(SDK_AVAILABLE))
+        self.log("System Ready. SDK Available: " + str(SDK_AVAILABLE))
+        if not SDK_AVAILABLE:
+            self.log("WARNING: Worker script not found. Recording will fail.")
 
     def log(self, text):
         ts = time.strftime("[%H:%M:%S]")
         line = f"{ts} {text}"
         self.log_view.appendPlainText(line)
-        # Auto scroll
         self.log_view.moveCursor(QTextCursor.MoveOperation.End)
 
     def refresh_session_name(self):
@@ -278,18 +307,9 @@ class MainWindow(QMainWindow):
 
     def refresh_cameras(self):
         self.cb_camera.clear()
-        
-        # Probe OAK
-        has_oak = False
-        try:
-             import _micecam
-             has_oak = _micecam.has_oak_support()
-        except: pass
-        
-        if has_oak:
-            self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
-            
-        # Probe USB (Generic)
+        # Probe OAK (Simple check if module exists/worker exists)
+        # We assume OAK is always an option in Pro app
+        self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
         for i in range(2):
             self.cb_camera.addItem(f"USB Camera Device {i}", str(i))
 
@@ -305,10 +325,12 @@ class MainWindow(QMainWindow):
     def start_recording(self):
         if self.is_recording: return
         
-        # Config
+        self.lbl_decode.setVisible(False)
+        self.prog_decode.setVisible(False)
+        self.prog_decode.setValue(0)
+        
         dev_id = self.cb_camera.currentData()
         backend = "oak" if dev_id == "oak" else "ffmpeg"
-        
         w, h = self.cb_res.currentText().split('x')
         
         cfg = {
@@ -321,7 +343,6 @@ class MainWindow(QMainWindow):
             "fps": float(self.edt_fps.text())
         }
         
-        # Setup Thread
         self.recorder = RecorderThread(cfg)
         self.recorder.log_message.connect(self.log)
         self.recorder.error_occurred.connect(self.on_error)
@@ -330,7 +351,6 @@ class MainWindow(QMainWindow):
         
         self.recorder.start()
         
-        # Update UI
         self.is_recording = True
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
@@ -338,31 +358,55 @@ class MainWindow(QMainWindow):
         
     def stop_recording(self):
         if self.recorder and self.is_recording:
-            self.log("Stopping request sent...")
-            self.btn_stop.setEnabled(False)
             self.recorder.stop()
+            self.btn_stop.setEnabled(False) # Prevent double click
             
     def on_stats(self, s):
         self.lbl_frames.setText(str(s['captured']))
         self.lbl_drop.setText(str(s['dropped']))
         self.lbl_fps.setText(str(s['fps']))
         self.lbl_time.setText(f"{s['elapsed']:.1f}s")
-        self.lbl_mbps.setText(str(s['mbps']))
-        # MB Size approx
-        self.lbl_mb.setText("--") # Calculating size from thread needs file path, skipping for now
+        self.lbl_mbps.setText(str(s['mbps'])) # Actually throughput now
+        self.lbl_mb.setText("--")
         
     def on_error(self, msg):
         self.log(f"ERROR: {msg}")
         QMessageBox.critical(self, "Error", msg)
-        # Thread will finish automatically
         
     def on_finished(self):
         self.is_recording = False
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.cb_camera.setEnabled(True)
-        self.refresh_session_name() # Prep for next
-        self.log("Session finished.")
+        
+        # Auto Decode Trigger
+        if self.chk_decode.isChecked():
+            self.start_decoding()
+        else:
+            self.refresh_session_name()
+            self.log("Session finished (No decode).")
+
+    def start_decoding(self):
+        self.lbl_decode.setVisible(True)
+        self.prog_decode.setVisible(True)
+        self.log("Starting Auto-Decode...")
+        
+        out_dir = self.edt_output.text()
+        sess = self.edt_session.text()
+        
+        self.decoder = DecoderThread(out_dir, sess)
+        self.decoder.progress_updated.connect(self.prog_decode.setValue)
+        self.decoder.status_message.connect(self.log)
+        self.decoder.finished_decoding.connect(self.on_decode_finished)
+        self.decoder.start()
+        
+        # Disable start while decoding? 
+        self.btn_start.setEnabled(False)
+
+    def on_decode_finished(self):
+        self.btn_start.setEnabled(True)
+        self.log("Auto-Decode Finished.")
+        self.refresh_session_name()
 
 if __name__ == "__main__":
     from PyQt6.QtWidgets import QApplication

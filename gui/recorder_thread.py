@@ -1,174 +1,156 @@
 import sys
-import time
 import os
+import time
 import json
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QProcess, QByteArray, QStandardPaths
 
-# Add SDK path (fallback logic similar to gateway)
-sdk_paths = [
-    os.path.abspath("build/bindings/python/Release"),
-    os.path.abspath(r"../../build/bindings/python/Release"),
-    r"D:\MiceCam\build\bindings\python\Release"
-]
-for p in sdk_paths:
-    if os.path.exists(p) and p not in sys.path:
-        sys.path.insert(0, p)
+# Check if worker script exists to define "Availability"
+# In a process-isolated architecture, "SDK Available" means "Can launch worker"
+SDK_AVAILABLE = True 
+if not os.path.exists("recorder_worker.py") and not getattr(sys, 'frozen', False):
+    # Try one level up?
+    if not os.path.exists(os.path.join("..", "recorder_worker.py")):
+         pass # Assume True for now, start() will validate path
 
-try:
-    import _micecam
-    SDK_AVAILABLE = True
-except ImportError as e:
-    SDK_AVAILABLE = False
-    print(f"Failed to load SDK: {e}")
 
-class RecorderThread(QThread):
-    # Signals
-    stats_updated = pyqtSignal(dict) # {captured, dropped, fps, mbps}
+class RecorderThread(QObject):
+    """
+    QProcess-based 'Thread' that acts as a Supervisor for the actual worker process.
+    This provides Process Isolation: If C++ crashes, the UI stays alive.
+    """
+    # Signals (Same Interface as before)
+    stats_updated = pyqtSignal(dict) 
     error_occurred = pyqtSignal(str)
     log_message = pyqtSignal(str)
     finished_recording = pyqtSignal()
     
     def __init__(self, config):
         """
-        config: dict with keys:
+        config dict:
           - output_dir
           - session_name
           - width, height, fps
           - device_id (int or 'oak')
-          - backend ('oak', 'ffmpeg', etc)
+          - backend ('oak' or 'ffmpeg')
         """
         super().__init__()
         self.config = config
-        self.pipeline = None
-        self.is_running = False
-        self._Stop_requested = False
+        self.process = None
+        self._is_running = False
 
-    def run(self):
-        if not SDK_AVAILABLE:
-            self.error_occurred.emit("MiceCam SDK not loaded.")
-            return
-
+    def start(self):
+        if self._is_running: return
+        self._is_running = True
+        
         cfg = self.config
-        self.log_message.emit(f"Initializing pipeline: {cfg['session_name']} ({cfg['backend']})")
         
-        try:
-            # Handle Backend Selection
-            dev_idx = 0
-            if cfg['backend'] != 'oak':
-                try: dev_idx = int(cfg['device_id'])
-                except: pass
-                
-            # Pipelines storage
-            self.pipelines = []
-            self.oak_master = None
-            
-            if cfg['backend'] == 'oak':
-                 self.log_message.emit("Initializing OAK-4P Master device...")
-                 try:
-                     # Initialize Master
-                     self.oak_master = _micecam.OAKMaster()
-                     if not self.oak_master.initialize(cfg['width'], cfg['height'], float(cfg['fps'])):
-                         raise RuntimeError("Failed to initialize OAK hardware")
-                     
-                     # Create 4 Proxies
-                     for i, suffix in enumerate(['_A', '_B', '_C', '_D']):
-                         # Assuming the Python binding supports (output, name, master, socket_idx, w, h, fps, append)
-                         # We need to match the signature from recorder_worker.py / module.cpp
-                         p = _micecam.Pipeline(
-                             cfg['output_dir'], 
-                             f"{cfg['session_name']}{suffix}", 
-                             self.oak_master, 
-                             i, 
-                             cfg['width'], cfg['height'], float(cfg['fps']), 
-                             False # append not supported in GUI yet
-                         )
-                         self.pipelines.append(p)
-                         
-                     self.oak_master.start() # Start hardware
-                 except Exception as e:
-                     self.error_occurred.emit(f"OAK Hardware Error: {e}")
-                     return
-            else:
-                # Standard single camera
-                self.pipeline = _micecam.Pipeline(
-                    cfg['output_dir'], 
-                    cfg['session_name'], 
-                    cfg['backend'], 
-                    cfg['width'], cfg['height'], float(cfg['fps']), 
-                    dev_idx
-                )
-                self.pipelines.append(self.pipeline)
-            
-            # Start all software pipelines
-            for p in self.pipelines:
-                p.start()
-                
-            self.is_running = True
-            self.log_message.emit(f"Recording started ({len(self.pipelines)} sensors).")
-            
-            start_time = time.time()
-            last_frames = 0
-            last_ts = time.time()
-            
-            while not self._Stop_requested:
-                 # Check all
-                 if any(not p.is_running() for p in self.pipelines):
-                     self.error_occurred.emit("One or more pipelines stopped unexpectedly!")
-                     break
-                 
-                 # Aggregate Stats
-                 total_captured = 0
-                 total_dropped = 0
-                 total_mbps = 0.0
-                 
-                 for p in self.pipelines:
-                     s = p.get_stats()
-                     total_captured += s['captured_frames']
-                     total_dropped += s['dropped_frames']
-                     total_mbps += s['throughput_mbps']
-                 
-                 # Calc FPS (Aggregate)
-                 now = time.time()
-                 dt = now - last_ts
-                 current_fps = 0.0
-                 if dt >= 1.0:
-                     msg_fps = (total_captured - last_frames) / dt
-                     # Average FPS per sensor for display? Or total? 
-                     # Usually user wants to know "Is it 30fps?". 
-                     # If we have 4 sensors at 30fps, total is 120. 
-                     # Let's show average per sensor.
-                     current_fps = msg_fps / len(self.pipelines)
-                     last_frames = total_captured
-                     last_ts = now
-                 
-                 # Enrich stats
-                 ui_stats = {
-                     "captured": total_captured,
-                     "dropped": total_dropped,
-                     "fps": round(current_fps, 1),
-                     "elapsed": now - start_time,
-                     "mbps": round(total_mbps, 1)
-                 }
-                 self.stats_updated.emit(ui_stats)
-                 
-                 time.sleep(0.1) 
-            
-            # Stop sequence
-            for p in self.pipelines:
-                p.stop()
-            
-            if self.oak_master:
-                self.oak_master.stop()
-                
-            self.log_message.emit("Recording stopped.")
-                
-        except Exception as e:
-            self.error_occurred.emit(f"Critical Error: {str(e)}")
-            self.log_message.emit(f"CRASH: {str(e)}")
+        # 1. Resolve Execution Strategy
+        # We use the "Dispatcher Pattern" where we call the main exe with --worker
+        # This works for both Python source and PyInstaller Frozen EXE.
         
-        self.finished_recording.emit()
-        self.is_running = False
-
+        exe_path = sys.executable
+        
+        # 2. Build Arguments
+        # call: <exe> --worker <output_dir> <session_name> <backend> <width> <height> <fps> <dev_idx>
+        
+        script_arg = []
+        if not getattr(sys, 'frozen', False):
+             # In source mode, sys.executable is python.exe
+             # We need to pass the script name 'micecam_app.py'
+             # Assuming micecam_app.py is in cwd or we find it
+             app_script = os.path.join(os.getcwd(), "micecam_app.py")
+             if not os.path.exists(app_script):
+                 app_script = "micecam_app.py" # Hope
+             script_arg = [app_script]
+             
+        args = script_arg + [
+            "--worker",
+            cfg['output_dir'],
+            cfg['session_name'],
+            cfg['backend'],
+            str(cfg['width']),
+            str(cfg['height']),
+            str(cfg['fps']),
+            str(cfg['device_id'])
+        ]
+        
+        self.log_message.emit(f"Spawning Worker: {exe_path} {args}")
+        self.process = QProcess()
+        
+        # --- FIX: Clean Environment for Child Process ---
+        # PyInstaller bundled apps sometimes inherit env vars that confuse the child process
+        # specifically if it's the same executable spawning itself.
+        env = QProcess.systemEnvironment()
+        clean_env = []
+        for e in env:
+            # Filtering out PYTHON vars is crucial if running from a messy environment
+            # but usually PyInstaller handles this. However, to be safe:
+            if e.startswith("PYTHONHOME=") or e.startswith("PYTHONPATH="):
+                continue
+            clean_env.append(e)
+            
+        self.process.setEnvironment(clean_env)
+        # ---------------------------------------------
+        
+        self.process.readyReadStandardOutput.connect(self.handle_stdout)
+        self.process.readyReadStandardError.connect(self.handle_stderr)
+        self.process.finished.connect(self.handle_finished)
+        
+        self.process.start(exe_path, args)
+        
     def stop(self):
-        self._Stop_requested = True
-        self.wait()
+        if self.process and self.process.state() == QProcess.ProcessState.Running:
+            self.log_message.emit("Sending Stop Signal...")
+            
+            # Method A: Create stop_signal.txt (Universal)
+            try:
+                with open("stop_signal.txt", "w") as f:
+                    f.write("STOP")
+            except Exception as e:
+                self.log_message.emit(f"Failed to write stop signal: {e}")
+                # Fallback: Terminate
+                self.process.terminate()
+        else:
+            self.finished_recording.emit()
+
+    def handle_stdout(self):
+        data = self.process.readAllStandardOutput().data().decode('utf-8', errors='ignore')
+        for line in data.splitlines():
+            line = line.strip()
+            if not line: continue
+            
+            if line.startswith("STATUS_UPDATE:"):
+                try:
+                    json_str = line[len("STATUS_UPDATE:"):]
+                    stats = json.loads(json_str)
+                    
+                    # Transform to UI Format if needed
+                    # worker sends: captured, dropped, written, elapsed_seconds, is_recording, fps
+                    ui_stats = {
+                        "captured": stats.get("captured", 0),
+                        "dropped": stats.get("dropped", 0),
+                        "fps": stats.get("fps", 0.0),
+                        "elapsed": stats.get("elapsed_seconds", 0.0),
+                        "mbps": 0.0 # Worker doesn't calculate this yet?
+                    }
+                    self.stats_updated.emit(ui_stats)
+                except Exception as e:
+                    print(f"Failed to parse status: {e}")
+            else:
+                # Forward generic logs to UI
+                self.log_message.emit(f"[Worker] {line}")
+
+    def handle_stderr(self):
+        data = self.process.readAllStandardError().data().decode('utf-8', errors='ignore')
+        for line in data.splitlines():
+             self.log_message.emit(f"[Worker/ERR] {line}")
+
+    def handle_finished(self, exit_code, exit_status):
+        self._is_running = False
+        if exit_code != 0:
+            self.error_occurred.emit(f"Worker crashed with code {exit_code}")
+            self.log_message.emit(f"CRASH: Worker process died (Exit {exit_code})")
+        else:
+            self.log_message.emit("Worker finished normally.")
+            
+        self.finished_recording.emit()

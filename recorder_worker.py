@@ -106,6 +106,9 @@ def main():
                 with open(status_file + ".tmp", "w") as f:
                     json.dump(summary_stats, f)
                 os.replace(status_file + ".tmp", status_file)
+                
+                # IPC for Qt (Print to stdout)
+                print(f"STATUS_UPDATE:{json.dumps(summary_stats)}", flush=True)
 
             if os.path.exists("stop_signal.txt"):
                 stop_requested = True

@@ -33,12 +33,34 @@ namespace micecam {
 /**
  * @brief Python wrapper for IngestionPipeline
  */
+#ifdef WITH_OAK_CAMERA
+class PyOAKMaster {
+public:
+    PyOAKMaster() {
+        master_ = OAKCameraBackend::create_master();
+    }
+    bool initialize(int width, int height, double fps) {
+        CameraConfig config;
+        config.width = width;
+        config.height = height;
+        config.fps = fps;
+        return master_->initialize(config);
+    }
+    void start() { master_->start(); }
+    void stop() { master_->stop(); }
+    std::shared_ptr<OAKCameraBackend> get_ptr() { return master_; }
+private:
+    std::shared_ptr<OAKCameraBackend> master_;
+};
+#endif
+
 class PyPipeline {
 public:
+    // Standard constructor
     PyPipeline(const std::string& output_dir, const std::string& session_name,
                const std::string& backend_name = "oak",
                int width = 1920, int height = 1080, double fps = 30.0,
-               int device_id = 0) {
+               int device_id = 0, bool append = false) {
         
         CameraConfig cam_config;
         cam_config.width = width;
@@ -52,35 +74,46 @@ public:
 #else
             throw std::runtime_error("OAK camera support not compiled");
 #endif
-        } else if (backend_name == "usb" || backend_name == "ffmpeg") {
+        } else {
 #ifdef WITH_FFMPEG
             camera_ = std::make_unique<FFmpegCameraBackend>();
 #else
-            throw std::runtime_error("FFmpeg/USB camera support not compiled");
+            throw std::runtime_error("Webcam support not compiled");
 #endif
-        } else {
-            throw std::runtime_error("Unknown camera backend: " + backend_name);
         }
 
         if (!camera_->initialize(cam_config)) {
-            throw std::runtime_error("Failed to initialize camera backend: " + backend_name);
+            throw std::runtime_error("Failed to initialize camera backend");
         }
         
-        // Setup session config
+        setup(output_dir, session_name, backend_name, width, height, fps, append);
+    }
+
+#ifdef WITH_OAK_CAMERA
+    // Proxy constructor for OAK-4P
+    PyPipeline(const std::string& output_dir, const std::string& session_name,
+               std::shared_ptr<PyOAKMaster> master, int socket_index,
+               int width, int height, double fps, bool append = false) {
+        
+        camera_ = master->get_ptr()->create_proxy(socket_index);
+        setup(output_dir, session_name, "oak_proxy", width, height, fps, append);
+    }
+#endif
+
+private:
+    void setup(const std::string& output_dir, const std::string& session_name, 
+               const std::string& backend, int w, int h, double fps, bool append) {
         SessionConfig config;
         config.output_dir = output_dir;
         config.session_name = session_name;
-        config.ring_buffer_size = 256; // Larger buffer for 4K
-        config.enable_checksums = true;
-        config.width = width;
-        config.height = height;
+        config.width = w;
+        config.height = h;
         config.fps = fps;
-        config.camera_backend_name = backend_name;
-        
+        config.camera_backend_name = backend;
+        config.append = append;
         pipeline_ = std::make_unique<IngestionPipeline>(std::move(camera_), config);
-        std::cout << "[PyPipeline] Created " << backend_name << " pipeline: " 
-                  << width << "x" << height << " @ " << fps << " fps\n";
     }
+public:
     
     void start() {
         py::gil_scoped_release release;
@@ -152,8 +185,17 @@ PYBIND11_MODULE(_micecam, m) {
         .export_values();
     
     // Pipeline class
+#ifdef WITH_OAK_CAMERA
+    py::class_<micecam::PyOAKMaster, std::shared_ptr<micecam::PyOAKMaster>>(m, "OAKMaster")
+        .def(py::init<>())
+        .def("initialize", &micecam::PyOAKMaster::initialize,
+             py::arg("width"), py::arg("height"), py::arg("fps"))
+        .def("start", &micecam::PyOAKMaster::start)
+        .def("stop", &micecam::PyOAKMaster::stop);
+#endif
+
     py::class_<micecam::PyPipeline>(m, "Pipeline")
-        .def(py::init<const std::string&, const std::string&, const std::string&, int, int, double, int>(),
+        .def(py::init<const std::string&, const std::string&, const std::string&, int, int, double, int, bool>(),
              py::arg("output_dir"),
              py::arg("session_name"),
              py::arg("backend_name") = "oak",
@@ -161,7 +203,14 @@ PYBIND11_MODULE(_micecam, m) {
              py::arg("height") = 1080,
              py::arg("fps") = 30.0,
              py::arg("device_id") = 0,
+             py::arg("append") = false,
              "Create a camera pipeline")
+#ifdef WITH_OAK_CAMERA
+        .def(py::init<const std::string&, const std::string&, std::shared_ptr<micecam::PyOAKMaster>, int, int, int, double, bool>(),
+             py::arg("output_dir"), py::arg("session_name"), py::arg("master"), py::arg("socket_index"),
+             py::arg("width"), py::arg("height"), py::arg("fps"), py::arg("append") = false,
+             "Create a camera pipeline using an OAKMaster proxy")
+#endif
         .def("start", &micecam::PyPipeline::start, "Start the pipeline")
         .def("stop", &micecam::PyPipeline::stop, "Stop the pipeline")
         .def("attach_callback", &micecam::PyPipeline::attach_callback,
@@ -169,6 +218,12 @@ PYBIND11_MODULE(_micecam, m) {
              "Attach callback: (data: bytes, seq: int, timestamp: float)")
         .def("get_stats", &micecam::PyPipeline::get_stats)
         .def("is_running", &micecam::PyPipeline::is_running)
+        .def("get_capabilities", [](micecam::PyPipeline& self) {
+            py::dict caps;
+            caps["resolutions"] = std::vector<std::string>{"1920x1080", "1280x720", "1280x800"};
+            caps["fps"] = std::vector<int>{30, 60};
+            return caps;
+        })
         .def("__enter__", [](micecam::PyPipeline& self) -> micecam::PyPipeline& {
             self.start();
             return self;

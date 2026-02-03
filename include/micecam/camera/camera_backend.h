@@ -39,6 +39,14 @@ public:
     [[nodiscard]] virtual uint64_t get_frame_count() const = 0;
     [[nodiscard]] virtual bool is_running() const = 0;
     [[nodiscard]] virtual std::string get_backend_name() const = 0;
+
+    // Capability discovery (optional default implementation)
+    [[nodiscard]] virtual std::vector<std::string> get_supported_resolutions() const {
+        return {"1920x1080", "1280x720", "640x480"};
+    }
+    [[nodiscard]] virtual std::vector<int> get_supported_fps() const {
+        return {30, 60};
+    }
 };
 
 }  // namespace micecam

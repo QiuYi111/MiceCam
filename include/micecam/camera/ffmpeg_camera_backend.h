@@ -37,6 +37,13 @@ public:
         return "FFmpegCameraBackend (Direct MJPEG)";
     }
 
+    [[nodiscard]] std::vector<std::string> get_supported_resolutions() const override {
+        return {"3840x2160", "1920x1080", "1280x720", "640x480"};
+    }
+    [[nodiscard]] std::vector<int> get_supported_fps() const override {
+        return {30, 60};
+    }
+
 private:
     CameraConfig config_;
     std::atomic<bool> running_{false};

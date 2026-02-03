@@ -27,6 +27,13 @@ public:
     [[nodiscard]] bool is_running() const override;
     [[nodiscard]] std::string get_backend_name() const override { return "OAKCameraBackend"; }
 
+    [[nodiscard]] std::vector<std::string> get_supported_resolutions() const override {
+        return {"1280x800", "1280x720", "640x400"};
+    }
+    [[nodiscard]] std::vector<int> get_supported_fps() const override {
+        return {30, 60, 120};
+    }
+
     /**
      * @brief Create a proxy backend for a specific camera socket
      * 

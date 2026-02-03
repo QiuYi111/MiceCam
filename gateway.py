@@ -13,11 +13,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='ui', static_url_path='')
 
-# Global State
-recorder_process = None
-current_session = None # { "name": ..., "output_dir": ..., "auto_decode": ... }
-last_status = {"is_recording": False}
-
 # Ensure SDK is loadable
 possible_sdk_paths = [
     os.path.abspath("build/bindings/python/Release"),
@@ -31,42 +26,19 @@ for p in possible_sdk_paths:
 try:
     import _micecam
     SDK_AVAILABLE = True
-    logger.info(f"Gateway loaded SDK version: {_micecam.__version__ if hasattr(_micecam, '__version__') else 'unknown'}")
+    logger.info("Gateway loaded SDK")
 except ImportError as e:
     SDK_AVAILABLE = False
     logger.warning(f"Gateway could not load SDK: {e}")
 
+# Global State
+recorder_process = None
+current_session = None # { "name": ..., "output_dir": ..., "auto_decode": ..., "user_stop_intent": False }
+last_status = {"is_recording": False}
+
 @app.route('/')
 def index():
     return send_from_directory('ui', 'index.html')
-
-@app.route('/api/cameras', methods=['GET'])
-def get_cameras():
-    cameras = []
-    
-    # Always offer OAK (Force enable)
-    cameras.append({
-         "index": "oak", 
-         "name": "Luxonis OAK-4P", 
-         "type": "oak", 
-         "resolutions": ["3840x2160", "1920x1080", "1280x800", "1280x720"]
-    })
-    
-    if SDK_AVAILABLE and _micecam.has_webcam_support():
-        for i in range(2):
-            cameras.append({
-                "index": i, 
-                "name": f"USB Camera {i}", 
-                "type": "usb", 
-                "resolutions": ["3840x2160", "1920x1080", "1280x720"]
-            })
-    elif not SDK_AVAILABLE:
-        # Fallback for when SDK fails to load - still show something
-        cameras.append({
-            "index": 0, "name": "USB Camera 0 (Fallback)", "type": "usb", "resolutions": ["1920x1080"]
-        })
-        
-    return jsonify(cameras)
 
 def get_sdk_env():
     env = os.environ.copy()
@@ -79,6 +51,71 @@ def get_sdk_env():
     else:
         env["PYTHONPATH"] = sdk_path
     return env
+
+@app.route('/api/status', methods=['GET'])
+def get_status():
+    global last_status
+    if recorder_process and recorder_process.poll() is None:
+        try:
+            if os.path.exists("recorder_status.json"):
+                with open("recorder_status.json", "r") as f:
+                    stats = json.load(f)
+                    stats["is_recording"] = True
+                    last_status = stats
+                    return jsonify(stats)
+        except: pass
+        return jsonify(last_status)
+    else:
+        return jsonify({"is_recording": False})
+
+@app.route('/api/decode_progress', methods=['GET'])
+def get_decode_progress():
+    target_session = request.args.get('session_name')
+    try:
+        if os.path.exists("decode_progress.json"):
+            with open("decode_progress.json", "r") as f:
+                data = json.load(f)
+                if target_session and data.get("session") != target_session:
+                    return jsonify({"status": "idle", "percent": 0})
+                return jsonify(data)
+    except: pass
+    return jsonify({"status": "idle", "percent": 0})
+
+@app.route('/api/cameras', methods=['GET'])
+def get_cameras():
+    cameras = []
+    
+    # Try to probe capabilities via SDK
+    oak_resolutions = ["1280x800", "1280x720"]
+    usb_resolutions = ["1920x1080", "1280x720", "640x480"]
+    
+    if SDK_AVAILABLE:
+        try:
+            # Create a temp pipeline to probe (optimized)
+            temp_p = _micecam.Pipeline("tmp", "probe", "oak", 1280, 800, 30.0, 0)
+            caps = temp_p.get_capabilities()
+            oak_resolutions = caps.get("resolutions", oak_resolutions)
+            temp_p.stop()
+        except: pass
+
+    # Always offer OAK
+    cameras.append({
+         "index": "oak", 
+         "name": "Luxonis OAK-4P (Quad Sync)", 
+         "type": "oak", 
+         "resolutions": oak_resolutions
+    })
+    
+    if SDK_AVAILABLE and _micecam.has_webcam_support():
+        for i in range(2):
+            cameras.append({
+                "index": i, 
+                "name": f"USB Camera {i}", 
+                "type": "usb", 
+                "resolutions": usb_resolutions
+            })
+            
+    return jsonify(cameras)
 
 @app.route('/api/start', methods=['POST'])
 def start_recording():
@@ -97,97 +134,59 @@ def start_recording():
         
     device_id = data.get('device_index', 0)
     backend = "oak" if device_id == "oak" else "ffmpeg"
-    width, height = 1920, 1080
+    
+    if backend == "oak":
+        width, height = 1280, 800
+    else:
+        width, height = 1920, 1080
+
     if data.get('resolution'):
         try: w, h = data['resolution'].split('x'); width, height = int(w), int(h)
         except: pass
     fps = float(data.get('fps', 30))
-    dev_idx_int = 0
-    try: dev_idx_int = int(device_id)
-    except: pass
+    # Pass 'oak' or integer string to worker
+    worker_dev_idx = str(device_id) 
 
-    cmd = [
-        sys.executable, "recorder_worker.py",
-        output_dir, session_name, backend,
-        str(width), str(height), str(fps), str(dev_idx_int)
-    ]
-    
     current_session = {
         "session_name": session_name,
         "output_dir": output_dir,
-        "auto_decode": data.get('auto_decode', False)
+        "auto_decode": data.get('auto_decode', False),
+        "backend": backend,
+        "width": width, "height": height, "fps": fps, "dev_idx": worker_dev_idx,
+        "user_stop_intent": False,
+        "restart_count": 0
     }
     
-    if os.path.exists("stop_signal.txt"): os.remove("stop_signal.txt")
-    if os.path.exists("recorder_status.json"): os.remove("recorder_status.json")
-
-    logger.info(f"Launching worker: {cmd}")
-    
-    # Use explicit environment and log file
-    env = get_sdk_env()
-    log_file = open("worker.log", "w") # Keep open? subprocess will inherit
-    # We assign stdout/stderr to this file. Note: This file handle stays open in Gateway? 
-    # Python closes it on GC? Better to let Popen handle it or keep it alive?
-    # For safety, we'll let Popen use it, but we need to ensure it flushes.
-    # Alternatively, use 'a' append mode.
-    
-    try:
-        recorder_process = subprocess.Popen(cmd, env=env, stdout=log_file, stderr=subprocess.STDOUT)
-    except Exception as e:
-        logger.error(f"Failed to spawn worker: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-    
-    last_status = {"is_recording": True}
-    
+    launch_worker()
     return jsonify({"success": True})
+
+def launch_worker():
+    global recorder_process, current_session
+    cfg = current_session
+    cmd = [
+        sys.executable, "recorder_worker.py",
+        cfg['output_dir'], cfg['session_name'], cfg['backend'],
+        str(cfg['width']), str(cfg['height']), str(cfg['fps']), str(cfg['dev_idx'])
+    ]
+    
+    if cfg['restart_count'] > 0:
+        cmd.append("--append") # Logic for worker to resume bin file
+
+    if os.path.exists("stop_signal.txt"): os.remove("stop_signal.txt")
+    
+    env = get_sdk_env()
+    log_file = open(f"worker_{cfg['session_name']}.log", "a")
+    recorder_process = subprocess.Popen(cmd, env=env, stdout=log_file, stderr=subprocess.STDOUT)
+    logger.info(f"Launched worker [Restart: {cfg['restart_count']}]: {cfg['session_name']}")
 
 @app.route('/api/stop', methods=['POST'])
 def stop_recording():
+    global current_session
+    if current_session:
+        current_session["user_stop_intent"] = True
     with open("stop_signal.txt", "w") as f:
         f.write("STOP")
     return jsonify({"success": True})
-
-@app.route('/api/status', methods=['GET'])
-def get_status():
-    global last_status
-    if recorder_process and recorder_process.poll() is None:
-        try:
-            # Retry loops for Windows file locking
-            for _ in range(3):
-                try:
-                    if os.path.exists("recorder_status.json"):
-                        with open("recorder_status.json", "r") as f:
-                            stats = json.load(f)
-                            stats["is_recording"] = True
-                            last_status = stats
-                            return jsonify(stats)
-                except:
-                    time.sleep(0.05)
-                    continue
-        except: pass
-        return jsonify(last_status)
-    else:
-        return jsonify({"is_recording": False})
-
-@app.route('/api/decode_progress', methods=['GET'])
-def get_decode_progress():
-    target_session = request.args.get('session_name')
-    
-    # Retry to handle Windows file locking contention
-    for _ in range(5):
-        try:
-            if os.path.exists("decode_progress.json"):
-                with open("decode_progress.json", "r") as f:
-                    data = json.load(f)
-                    # Filter by session if provided
-                    if target_session and data.get("session") != target_session:
-                        return jsonify({"status": "idle", "percent": 0, "reason": "session_mismatch"})
-                    return jsonify(data)
-        except:
-            time.sleep(0.05)
-            continue
-            
-    return jsonify({"status": "idle", "percent": 0})
 
 def monitor_loop():
     global recorder_process, current_session
@@ -196,15 +195,25 @@ def monitor_loop():
             ret = recorder_process.poll()
             if ret is not None:
                 logger.info(f"Worker exited with code {ret}")
-                recorder_process = None
                 
-                if current_session and current_session.get("auto_decode"):
-                    logger.info("Triggering auto-decode...")
+                # Check if it was a crash or intentional
+                if current_session and not current_session.get("user_stop_intent") and ret != 0:
+                    if current_session["restart_count"] < 3:
+                        logger.warning(f"CRASH DETECTED. Restarting session {current_session['session_name']}...")
+                        current_session["restart_count"] += 1
+                        launch_worker()
+                        continue # Skip cleanup for now
+                    else:
+                        logger.error("Maximum restarts reached. Stopping.")
+
+                # Clean exit or unrecoverable crash
+                if current_session and current_session.get("user_stop_intent") and current_session.get("auto_decode"):
+                    logger.info("Intentional stop. Triggering auto-decode...")
                     cfg = current_session
                     cmd_dec = [sys.executable, "decoder.py", cfg['output_dir'], cfg['session_name']]
-                    # Inject env for decoder too, just in case
                     start_decoder(cmd_dec)
-                    
+                
+                recorder_process = None
                 current_session = None
         
         time.sleep(1)

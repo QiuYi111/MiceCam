@@ -502,7 +502,6 @@
                 const select = document.getElementById('cameraSelect');
                 const deviceIndex = select.value;
                 const resSelect = document.getElementById('resSelect');
-                // Loose comparison to match int from JSON with string from value
                 const cam = cameraData.find(c => c.index == deviceIndex);
 
                 if (cam && cam.resolutions && cam.resolutions.length > 0) {
@@ -510,8 +509,23 @@
                         `<option value="${r}">${r}</option>`
                     ).join('');
                 } else {
-                    resSelect.innerHTML = '<option value="">Auto-detect</option>';
+                    resSelect.innerHTML = '<option value="1920x1080">1920x1080</option>';
                 }
+
+                // Auto-refresh session name on device change
+                refreshSessionName();
+            }
+
+            function refreshSessionName() {
+                const sessionInput = document.getElementById('sessionName');
+                const now = new Date();
+                const ts = 'session_' + now.getFullYear() +
+                    String(now.getMonth() + 1).padStart(2, '0') +
+                    String(now.getDate()).padStart(2, '0') + '_' +
+                    String(now.getHours()).padStart(2, '0') +
+                    String(now.getMinutes()).padStart(2, '0') +
+                    String(now.getSeconds()).padStart(2, '0');
+                if (sessionInput) sessionInput.value = ts;
             }
 
             document.getElementById('cameraSelect').addEventListener('change', updateResolutions);

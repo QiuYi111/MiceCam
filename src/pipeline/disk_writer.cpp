@@ -64,26 +64,40 @@ bool DiskWriter::start() {
         GENERIC_WRITE,
         0,
         NULL,
-        CREATE_ALWAYS,
+        config_.append ? OPEN_ALWAYS : CREATE_ALWAYS,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH,
         NULL
     );
 
     if (h_file_ == INVALID_HANDLE_VALUE) {
-        std::cerr << "Failed to open " << bin_path << " for unbuffered writing (Error: " << GetLastError() << ")\n";
+        std::cerr << "Failed to open " << bin_path << " (Error: " << GetLastError() << ")\n";
         return false;
     }
+
+    if (config_.append) {
+        // Move to end of file, aligned to 4096
+        LARGE_INTEGER li;
+        li.QuadPart = 0;
+        if (!SetFilePointerEx(h_file_, li, &li, FILE_END)) {
+            std::cerr << "Failed to seek to end of file\n";
+        }
+        total_bytes_on_disk_ = li.QuadPart;
+    }
 #else
-    bin_file_.open(bin_path, std::ios::binary | std::ios::trunc);
+    bin_file_.open(bin_path, std::ios::binary | (config_.append ? std::ios::app : std::ios::trunc));
     if (!bin_file_.is_open()) {
         std::cerr << "Failed to open " << bin_path << " for writing\n";
         return false;
+    }
+    if (config_.append) {
+        bin_file_.seekp(0, std::ios::end);
+        total_bytes_on_disk_ = bin_file_.tellp();
     }
 #endif
 
     // Open metadata file (.jsonl) for streaming
     metadata_path_ = (fs::path(config_.output_dir) / (config_.session_name + "_metadata.jsonl")).string();
-    metadata_file_.open(metadata_path_, std::ios::out | std::ios::trunc);
+    metadata_file_.open(metadata_path_, std::ios::out | (config_.append ? std::ios::app : std::ios::trunc));
     if (!metadata_file_.is_open()) {
         std::cerr << "Failed to open " << metadata_path_ << " for writing\n";
         return false;
@@ -112,7 +126,9 @@ bool DiskWriter::start() {
     writing_.store(true);
     frames_written_.store(0);
     bytes_written_.store(0);
-    total_bytes_on_disk_ = 0;
+    if (!config_.append) {
+        total_bytes_on_disk_ = 0;
+    }
     // frame_records_.clear(); removed
     current_buffer_pos_ = 0;
 

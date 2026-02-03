@@ -24,6 +24,7 @@ struct SessionConfig {
     std::string session_name = "session";
     bool enable_checksums = true;
     size_t ring_buffer_size = 10;  // Ring buffer capacity (default: 10 frames)
+    bool append = false;           // Append to existing file
 
     // Camera configuration (for metadata)
     std::string camera_backend_name = "unknown";

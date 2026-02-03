@@ -25,89 +25,105 @@ def main():
     width = int(sys.argv[4])
     height = int(sys.argv[5])
     fps = float(sys.argv[6])
-    dev_idx = int(sys.argv[7])
-
-    print(f"[Worker] Starting recording session: {session_name}")
+    dev_str = sys.argv[7]
+    append_mode = "--append" in sys.argv
     
-    # Setup stats file
+    # dev_idx is an int for USB, but irrelevant for OAK quad-sync master
+    dev_idx = 0
+    try: dev_idx = int(dev_str)
+    except: pass
+
+    print(f"[Worker] Starting recording session: {session_name} ({backend}) {'(Append Mode)' if append_mode else ''}")
+    
     status_file = "recorder_status.json"
+    pipelines = []
+    oak_master = None
     
     try:
-        pipeline = _micecam.Pipeline(output_dir, session_name, backend, width, height, fps, dev_idx)
-        pipeline.start()
-        print("[Worker] Pipeline started.")
+        # 1. Pipeline Initialization
+        if backend == "oak":
+            # Start 4 synchronized pipelines for OAK-4P using a single Master
+            print("[Worker] Initializing OAK-4P Master device...")
+            try:
+                oak_master = _micecam.OAKMaster()
+                if not oak_master.initialize(width, height, fps):
+                    raise RuntimeError("Failed to initialize OAK hardware")
+                
+                print("[Worker] Spawning synchronized proxy pipelines...")
+                for i, suffix in enumerate(['_A', '_B', '_C', '_D']):
+                    p = _micecam.Pipeline(output_dir, f"{session_name}{suffix}", 
+                                         oak_master, i, width, height, fps, append_mode)
+                    pipelines.append(p)
+                
+                # Start the actual hardware capture
+                oak_master.start()
+            except Exception as e:
+                print(f"[Worker] CRITICAL ERROR: Hardware sync failed: {e}")
+                raise
+        else:
+            # Standard single camera (USB/FFmpeg)
+            p = _micecam.Pipeline(output_dir, session_name, backend, width, height, fps, dev_idx, append_mode)
+            pipelines.append(p)
+        for p in pipelines:
+            p.start()
         
+        print(f"[Worker] {len(pipelines)} pipeline(s) started.")
         start_time = time.time()
         
+        # 3. Monitor Loop
         last_frames = 0
         last_ts = time.time()
         
-        # Main loop
-        while not stop_requested and pipeline.is_running():
+        while not stop_requested:
+            # Check if any pipeline stopped unexpectedly
+            if any(not p.is_running() for p in pipelines):
+                print("[Worker] Warning: One or more pipelines stopped unexpectedly")
+                break
+                
             now = time.time()
             dt = now - last_ts
             
-            # Update status file
-            stats = pipeline.get_stats()
+            # Aggregate stats
+            all_stats = [p.get_stats() for p in pipelines]
+            captured = sum(s.get("captured_frames", 0) for s in all_stats)
+            dropped = sum(s.get("dropped_frames", 0) for s in all_stats)
             
-            # Enrich stats
-            elapsed = now - start_time
-            stats["elapsed_seconds"] = elapsed
-            
-            curr_frames = stats.get("captured_frames", 0)
-            
-            # Key Mapping for UI
-            stats["captured"] = curr_frames
-            stats["dropped"] = stats.get("dropped_frames", 0)
-            # 'written' might not be returned by SDK, estimate it or map it
-            # If written_frames exists, use it. Else use captured.
-            stats["written"] = stats.get("written_frames", curr_frames)
-            
-            if dt >= 1.0:
-                # Calculate FPS manually over the last ~0.5-1s interval
-                manual_fps = (curr_frames - last_frames) / dt
-                stats["fps"] = round(manual_fps, 1)
-                last_frames = curr_frames
-                last_ts = now
-            else:
-                pass 
+            # Enrich for UI
+            summary_stats = {
+                "captured": captured,
+                "dropped": dropped,
+                "written": captured, # Approx
+                "elapsed_seconds": now - start_time,
+                "is_recording": True
+            }
 
-            manual_fps = (curr_frames - last_frames) / max(dt, 0.001)
-            stats["fps"] = round(manual_fps, 1)
-            
-            # Try to get file size
-            bin_path = os.path.join(output_dir, f"{session_name}.bin")
-            if os.path.exists(bin_path):
-                 stats["bytes"] = os.path.getsize(bin_path)
-            
-            # Write atomic
-            tmp_file = status_file + ".tmp"
-            with open(tmp_file, "w") as f:
-                json.dump(stats, f)
-            os.replace(tmp_file, status_file)
-            
-            last_frames = curr_frames
-            last_ts = now
-            
-            # Check for stop signal file (IPC)
+            if dt >= 1.0:
+                summary_stats["fps"] = round((captured - last_frames) / (dt * len(pipelines)), 1)
+                last_frames = captured
+                last_ts = now
+                
+                # Update status file atomically
+                with open(status_file + ".tmp", "w") as f:
+                    json.dump(summary_stats, f)
+                os.replace(status_file + ".tmp", status_file)
+
             if os.path.exists("stop_signal.txt"):
-                print("[Worker] Stop signal detected.")
                 stop_requested = True
-                try:
-                    os.remove("stop_signal.txt")
+                try: os.remove("stop_signal.txt")
                 except: pass
             
-            time.sleep(0.5)
+            time.sleep(0.2)
 
-        print("[Worker] Stopping pipeline...")
-        pipeline.stop()
-        print("[Worker] Pipeline stopped cleanly.")
+        print("[Worker] Stopping pipelines...")
+        for p in pipelines:
+            try: p.stop()
+            except: pass
+        print("[Worker] Exit success.")
 
     except Exception as e:
-        print(f"[Worker] Error: {e}")
-        # Write error to status
+        print(f"[Worker] CRITICAL ERROR: {e}")
         with open(status_file, "w") as f:
-            json.dump({"error": str(e)}, f)
+            json.dump({"error": str(e), "is_recording": False}, f)
         sys.exit(1)
 
 if __name__ == "__main__":

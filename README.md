@@ -91,7 +91,7 @@ uv run python tools/recover_index.py
 ### Windows 快速开始
 
 #### 📦 安装包 (推荐)
-直接运行项目根目录下的 `MiceCam.msi` 进行安装。安装向导将引导您完成部署，并在桌面和开始菜单创建快捷方式。
+直接运行 `release/MiceCam.msi` 进行安装。安装向导将引导您完成部署，并在桌面和开始菜单创建快捷方式。
 
 #### 🔧 源码运行
 ```powershell
@@ -241,18 +241,19 @@ Robust streaming JSON Lines format.
 
 ```
 MiceCam/
-├── scripts/       # 构建与辅助脚本 (Build scripts, helpers)
-│   ├── build_exe.ps1   # Windows 一键构建 (EXE + MSI)
-│   ├── check_env.ps1   # 环境检查
-│   └── setup.wxs       # WiX Installer 配置
-├── assets/        # 静态资源 (Icons, Images)
-├── docs/          # 文档 (Guides, Changelog)
-├── tests/         # 测试代码 (C++ & Python tests)
-├── examples/      # 示例代码 (Demos)
-├── tools/         # Python 工具 (Post-processing tools)
+├── app/           # Python 应用程序源码 (Application Source)
+│   ├── gui/       # UI Components
+│   ├── server/    # Gateway/Server components
+│   └── micecam_app.py  # Entry point
+├── release/       # 发布产物 (MSI Installer)
+├── scripts/       # 构建与辅助脚本
+├── assets/        # 静态资源 (Icons)
+├── docs/          # 文档
+├── tests/         # 测试代码
+├── examples/      # 示例代码
+├── tools/         # 辅助工具
 ├── src/           # C++ 源代码 (Core backend)
-├── micecam/       # Python 核心包 (Bindings & Logic)
-├── gui/           # Python UI 代码
+├── micecam/       # Python Bindings Package (Compiled Libs & DLLs)
 └── README.md
 ```
 

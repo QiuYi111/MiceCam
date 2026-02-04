@@ -1,0 +1,217 @@
+import sys
+import os
+import time
+import json
+import threading
+import signal
+import _micecam
+
+# Inject Debug Logger
+try:
+    import debug_utils
+    debug_utils.hook_exceptions()
+    debug_utils.log("WORKER", "Module Loaded")
+except ImportError:
+    # Fallback if debug_utils not found (should be there)
+    pass
+
+# Global flags
+stop_requested = False
+
+def signal_handler(sig, frame):
+    global stop_requested
+    if 'debug_utils' in globals(): debug_utils.log("WORKER", f"Signal Received: {sig}")
+    stop_requested = True
+
+def main():
+    global stop_requested
+    if len(sys.argv) < 7:
+        print("Usage: python recorder_worker.py <output_dir> <session_name> <backend> <width> <height> <fps> <dev_idx>")
+        return
+
+    output_dir = sys.argv[1]
+    session_name = sys.argv[2]
+    backend = sys.argv[3]
+    width = int(sys.argv[4])
+    height = int(sys.argv[5])
+    fps = float(sys.argv[6])
+    dev_str = sys.argv[7]
+    append_mode = "--append" in sys.argv
+    
+    # dev_idx is an int for USB, but irrelevant for OAK quad-sync master
+    dev_idx = 0
+    try: dev_idx = int(dev_str)
+    except: pass
+    
+    # Ensure output directory exists (Fix for Error 3: Path not found)
+    try:
+        if not os.path.exists(output_dir):
+            print(f"[Worker] Creating output directory: {output_dir}")
+            os.makedirs(output_dir, exist_ok=True)
+    except Exception as e:
+        print(f"[Worker] Error creating output directory: {e}")
+        # Continue and let C++ fail if it must, or return?
+        # Proceeding might result in the same error but let's hope it works.
+
+    if 'debug_utils' in globals():
+        debug_utils.log_environment()
+        debug_utils.log("WORKER", f"Args: {sys.argv}")
+
+    print(f"[Worker] Starting recording session: {session_name} ({backend}) {'(Append Mode)' if append_mode else ''}")
+    
+    status_file = "recorder_status.json"
+    pipelines = []
+    oak_master = None
+    
+    if 'debug_utils' in globals(): debug_utils.log("WORKER", "Configuring Pipelines...")
+    
+    try:
+        # 1. Pipeline Initialization
+        if backend == "oak":
+            # Start 4 synchronized pipelines for OAK-4P using a single Master
+            print("[Worker] Initializing OAK-4P Master device...")
+            try:
+                oak_master = _micecam.OAKMaster()
+                if not oak_master.initialize(width, height, fps):
+                    raise RuntimeError("Failed to initialize OAK hardware")
+                
+                print("[Worker] Spawning synchronized proxy pipelines...")
+                for i, suffix in enumerate(['_A', '_B', '_C', '_D']):
+                    p = _micecam.Pipeline(output_dir, f"{session_name}{suffix}", 
+                                         oak_master, i, width, height, fps, append_mode)
+                    pipelines.append(p)
+                
+                # Start the actual hardware capture
+                oak_master.start()
+            except Exception as e:
+                print(f"[Worker] CRITICAL ERROR: Hardware sync failed: {e}")
+                raise
+        else:
+            # Standard single camera (USB/FFmpeg)
+            p = _micecam.Pipeline(output_dir, session_name, backend, width, height, fps, dev_idx, append_mode)
+            pipelines.append(p)
+        for p in pipelines:
+            p.start()
+        
+        print(f"[Worker] {len(pipelines)} pipeline(s) started.")
+        start_time = time.time()
+        
+        # 3. Monitor Loop
+        last_frames = 0
+        last_ts = time.time()
+        
+        # Throughput tracking
+        last_total_bytes = 0
+        
+        while not stop_requested:
+            # Check if any pipeline stopped unexpectedly
+            if any(not p.is_running() for p in pipelines):
+                print("[Worker] Warning: One or more pipelines stopped unexpectedly")
+                break
+                
+            now = time.time()
+            dt = now - last_ts
+            
+            # Aggregate stats
+            all_stats = [p.get_stats() for p in pipelines]
+            captured = sum(s.get("captured_frames", 0) for s in all_stats)
+            dropped = sum(s.get("dropped_frames", 0) for s in all_stats)
+            
+            # Calculate Total Size & Throughput
+            current_total_bytes = 0
+            file_extensions = ['.bin', '.mp4', '.mkv', '.avi'] # Possible containers
+            # We know the specific filenames from pipeline creation
+            # Single: session_name + ext? pipeline adds extensions internally usually.
+            # OAK: session_name_A.bin ...
+            
+            # Robust Strategy: Check the expected filenames
+            expected_files = []
+            if backend == "oak":
+                suffixes = ['_A', '_B', '_C', '_D']
+                # The C++ pipeline appends .bin if raw, or .mp4 if encoded.
+                # Assuming .bin for now based on code history "Failed to open... .bin"
+                for s in suffixes:
+                    expected_files.append(os.path.join(output_dir, f"{session_name}{s}.bin"))
+            else:
+                 # Standard
+                 expected_files.append(os.path.join(output_dir, f"{session_name}.bin"))
+                 expected_files.append(os.path.join(output_dir, f"{session_name}.mp4"))
+            
+            for fpath in expected_files:
+                try:
+                    if os.path.exists(fpath):
+                        current_total_bytes += os.path.getsize(fpath)
+                except: pass
+            
+            total_mb = current_total_bytes / (1024 * 1024)
+            
+            # Enrich for UI
+            summary_stats = {
+                "captured": captured,
+                "dropped": dropped,
+                "written": captured, 
+                "elapsed_seconds": now - start_time,
+                "is_recording": True,
+                "mb": round(total_mb, 2)
+            }
+
+            if dt >= 1.0:
+                fps = round((captured - last_frames) / dt, 1) # Total FPS across all streams? Or avg?
+                # If 4 cameras running at 30fps, captured increases by 120 per second.
+                # User usually expects "per camera" or "system total"?
+                # UI label says "FPS". If it shows 120 for 30fps setup, that's fine.
+                # But let's average it for clarity if OAK? No, sum is better for "System Load".
+                # Actually, main_window passes fps arg as float.
+                if len(pipelines) > 1:
+                     summary_stats["fps"] = round((captured - last_frames) / (dt * len(pipelines)), 1)
+                else:
+                     summary_stats["fps"] = fps
+                     
+                stats_bytes = current_total_bytes - last_total_bytes
+                mbps = (stats_bytes * 8) / (1000 * 1000) / dt # Megabits per second
+                summary_stats["mbps"] = round(mbps, 2)
+                
+                last_frames = captured
+                last_ts = now
+                last_total_bytes = current_total_bytes
+                
+                # Update status file atomically
+                with open(status_file + ".tmp", "w") as f:
+                    json.dump(summary_stats, f)
+                os.replace(status_file + ".tmp", status_file)
+                
+                # IPC for Qt (Print to stdout)
+                print(f"STATUS_UPDATE:{json.dumps(summary_stats)}", flush=True)
+
+            if os.path.exists("stop_signal.txt"):
+                stop_requested = True
+                try: os.remove("stop_signal.txt")
+                except: pass
+            
+            time.sleep(0.2)
+
+        print("[Worker] Stopping pipelines...")
+        for p in pipelines:
+            try: p.stop()
+            except: pass
+        print("[Worker] Exit success.")
+
+    except Exception as e:
+        print(f"[Worker] CRITICAL ERROR: {e}", flush=True)
+        # Do NOT write "is_recording": False to the status file here.
+        # The Gateway (supervisor) is responsible for deciding if the session ends 
+        # or if we should restart. Writing False here causes the UI to flicker/reset.
+        # We only log the error.
+        sys.exit(1)
+
+if __name__ == "__main__":
+    # Force unbuffered output for better logging
+    if sys.version_info >= (3, 7):
+        if sys.stdout is not None:
+             sys.stdout.reconfigure(line_buffering=True)
+        if sys.stderr is not None:
+             sys.stderr.reconfigure(line_buffering=True)
+        
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    main()

@@ -31,7 +31,8 @@ uv run pyinstaller --noconsole `
     --hidden-import "debug_utils" `
     --exclude-module "PyQt6" `
     --icon "assets/app_icon.ico" `
-    recorder_worker.py
+    --paths "app" `
+    app/recorder_worker.py
 
 # --- 2. Build UI (The "Client") ---
 Write-Host "Building MiceCam.exe (UI)..."
@@ -50,7 +51,8 @@ uv run pyinstaller --noconsole `
     --exclude-module "numpy" `
     --exclude-module "recorder_worker" `
     --icon "assets/app_icon.ico" `
-    micecam_app.py
+    --paths "app" `
+    app/micecam_app.py
 
 Write-Host "Build Complete!"
 Write-Host " - UI:     dist/MiceCam/MiceCam.exe"
@@ -74,16 +76,20 @@ Copy-Item -Recurse -Force "dist/MiceCam/MiceCamWorker/*" $tools_dir
 Write-Host "Done! Distribution Ready at: $release_dir"
 
 # --- 4. Build MSI (Optional) ---
+# --- 4. Build MSI (Optional) ---
 if (Test-Path "scripts/setup.wxs") {
    Write-Host "Building MSI..."
    
+   # Ensure Release Directory
+   if (!(Test-Path "release")) { New-Item -ItemType Directory -Force -Path "release" | Out-Null }
+
    # Clean recordings from release before packing
    if (Test-Path "$release_dir\recordings") { Remove-Item -Recurse -Force "$release_dir\recordings" }
    
    & "C:\Program Files (x86)\WiX Toolset v3.14\bin\heat.exe" dir "$release_dir" -cg MiceCamGroup -dr INSTALLFOLDER -scom -sreg -sfrag -srd -gg -out files.wxs
    & "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe" scripts/setup.wxs files.wxs -ext WixUIExtension
-   & "C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe" -out MiceCam.msi setup.wixobj files.wixobj -b "$release_dir" -ext WixUIExtension
+   & "C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe" -out "release/MiceCam.msi" setup.wixobj files.wixobj -b "$release_dir" -ext WixUIExtension
    
-   Write-Host "MSI Created: MiceCam.msi"
+   Write-Host "MSI Created: release/MiceCam.msi"
 }
 

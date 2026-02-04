@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" Name="MiceCam Pro" Language="1033" Version="1.0.0.0" Manufacturer="DeepMind Agent" UpgradeCode="12345678-aaaa-bbbb-cccc-ddef00000001">
+        <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="ProductFeature" Title="MiceCam" Level="1">
+            <ComponentGroupRef Id="MiceCamGroup" />
+            <ComponentRef Id="ApplicationShortcut" />
+        </Feature>
+        <Icon Id="MiceCamIcon.exe" SourceFile="dist\MiceCam_Release\MiceCam.exe" />
+        <Property Id="ARPPRODUCTICON" Value="MiceCamIcon.exe" />
+        
+        <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+        <UIRef Id="WixUI_InstallDir" />
+    </Product>
+
+    <Fragment>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLFOLDER" Name="MiceCam" />
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="MiceCam Pro" />
+            </Directory>
+        </Directory>
+    </Fragment>
+
+    <Fragment>
+        <DirectoryRef Id="ApplicationProgramsFolder">
+            <Component Id="ApplicationShortcut" Guid="87654321-AAAA-BBBB-CCCC-000011112222">
+                <!-- Shortcut to the main EXE -->
+                <!-- Note: The Id of the EXE file in files.wxs is unpredictable (heat generates it). 
+                     But usually it is based on filename. 
+                     We need to know the File Id of MiceCam.exe to point the shortcut to it.
+                     Heat usually generates IDs like 'filABC...' 
+                     
+                     Strategy: We will rely on 'MiceCam.exe' being the KeyPath of its component if we could control it.
+                     Since we can't easily peek into files.wxs before it's done, we might need a post-processing step or a smarter shortcut.
+                     
+                     Hack for now: Use a separate component for the shortcut that *doesn't* reference the file directly as target,
+                     but uses the PROPERTY [INSTALLFOLDER]MiceCam.exe? No, checking standard WiX way.
+                     
+                     Better: We can define the Shortcut in the same component as the EXE if we wrote it manually.
+                     With Heat, we can use a Transformation (XSLT) to inject the shortcut, OR just put a shortcut to the path.
+                     
+                     Simplest working shortcut: 
+                     Target="[INSTALLFOLDER]MiceCam.exe"
+                     WorkingDirectory="INSTALLFOLDER"
+                -->
+                <Shortcut Id="ApplicationStartMenuShortcut" 
+                          Name="MiceCam Pro" 
+                          Description="Native Behavior Recording System"
+                          Target="[INSTALLFOLDER]MiceCam.exe"
+                          WorkingDirectory="INSTALLFOLDER"
+                          Icon="MiceCamIcon.exe"
+                          />
+                <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\MiceCam" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+    
+</Wix>

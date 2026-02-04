@@ -21,4 +21,11 @@ recordings/
 # PyInstaller
 build/
 dist/
+build_pyinstaller/
 *.spec
+
+# WiX / Installer
+*.wixobj
+*.wixpdb
+files.wxs
+*.msi

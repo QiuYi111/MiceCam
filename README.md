@@ -13,6 +13,7 @@
 ## 特性
 
 - ✅ **高速采集**: 302.5 MB/s RingBuffer 吞吐量, **241.0 MB/s** 真实磁盘 I/O (Windows Unbuffered)
+- ✅ **实时监控**: 实时显示写入速度 (MB/s) 与吞吐量 (Mbps)，精准掌握采集状态
 - ✅ **硬件加速**: **Native FFmpeg (libavdevice)** 直取 MJPEG 码流，20-30x 带宽节省
 - ✅ **4K/120fps**: 实测支持 4K @ 30fps 与 960p @ 120fps 持续录像，10分钟压力测试**零丢帧**
 - ✅ **硬件同步**: OAK-4P 四摄硬件级同步，抖动 **< 12us**
@@ -89,21 +90,19 @@ uv run python tools/recover_index.py
 
 ### Windows 快速开始
 
+#### 📦 安装包 (推荐)
+直接运行项目根目录下的 `MiceCam.msi` 进行安装。安装向导将引导您完成部署，并在桌面和开始菜单创建快捷方式。
+
+#### 🔧 源码运行
 ```powershell
 # 1. 检查环境（在 Developer PowerShell 中运行）
 .\check_env.ps1
 
-# 2. 一键构建
-.\build.ps1
+# 2. 一键构建 (自动生成 .exe 和 MSI)
+.\build_exe.ps1
 
-# 3. 运行测试
-.\build\Debug\micecam_tests.exe
-
-# 4. 运行演示
-.\build\Debug\micecam_demo.exe
-
-# 5. Release 构建
-.\build.ps1 -Release
+# 3. 运行构建后的程序
+.\dist\MiceCam_Release\MiceCam.exe
 ```
 
 ### 代码示例

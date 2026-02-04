@@ -228,19 +228,19 @@ class MainWindow(QMainWindow):
             l.addWidget(lbl)
             return w, val
             
-        _, self.lbl_fps = make_stat("FPS", "fps")
-        _, self.lbl_frames = make_stat("Frames", "frames")
-        _, self.lbl_drop = make_stat("Dropped", "drop")
-        _, self.lbl_time = make_stat("Duration", "time")
-        _, self.lbl_mb = make_stat("MB/s", "mb")
-        _, self.lbl_mbps = make_stat("Mbps", "mbps")
+        w_fps, self.lbl_fps = make_stat("FPS", "fps")
+        w_frames, self.lbl_frames = make_stat("Frames", "frames")
+        w_drop, self.lbl_drop = make_stat("Dropped", "drop")
+        w_time, self.lbl_time = make_stat("Duration", "time")
+        w_mb, self.lbl_mb = make_stat("MB/s", "mb")
+        w_mbps, self.lbl_mbps = make_stat("Mbps", "mbps")
         
-        stat_layout.addWidget(make_stat("FPS", "fps")[0], 0, 0)
-        stat_layout.addWidget(make_stat("Duration", "time")[0], 0, 1)
-        stat_layout.addWidget(make_stat("throughput", "mbps")[0], 0, 2)
-        stat_layout.addWidget(make_stat("Frames", "frames")[0], 1, 0)
-        stat_layout.addWidget(make_stat("Dropped", "drop")[0], 1, 1)
-        stat_layout.addWidget(make_stat("Storage", "mb")[0], 1, 2)
+        stat_layout.addWidget(w_fps, 0, 0)
+        stat_layout.addWidget(w_time, 0, 1)
+        stat_layout.addWidget(w_mbps, 0, 2)
+        stat_layout.addWidget(w_frames, 1, 0)
+        stat_layout.addWidget(w_drop, 1, 1)
+        stat_layout.addWidget(w_mb, 1, 2)
         
         content_layout.addWidget(stat_grp)
         
@@ -366,8 +366,8 @@ class MainWindow(QMainWindow):
         self.lbl_drop.setText(str(s['dropped']))
         self.lbl_fps.setText(str(s['fps']))
         self.lbl_time.setText(f"{s['elapsed']:.1f}s")
-        self.lbl_mbps.setText(str(s['mbps'])) # Actually throughput now
-        self.lbl_mb.setText("--")
+        self.lbl_mbps.setText(str(s['mbps'])) 
+        self.lbl_mb.setText(str(s.get('mb', '--')))
         
     def on_error(self, msg):
         self.log(f"ERROR: {msg}")

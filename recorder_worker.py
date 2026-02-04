@@ -6,11 +6,21 @@ import threading
 import signal
 import _micecam
 
+# Inject Debug Logger
+try:
+    import debug_utils
+    debug_utils.hook_exceptions()
+    debug_utils.log("WORKER", "Module Loaded")
+except ImportError:
+    # Fallback if debug_utils not found (should be there)
+    pass
+
 # Global flags
 stop_requested = False
 
 def signal_handler(sig, frame):
     global stop_requested
+    if 'debug_utils' in globals(): debug_utils.log("WORKER", f"Signal Received: {sig}")
     stop_requested = True
 
 def main():
@@ -32,12 +42,28 @@ def main():
     dev_idx = 0
     try: dev_idx = int(dev_str)
     except: pass
+    
+    # Ensure output directory exists (Fix for Error 3: Path not found)
+    try:
+        if not os.path.exists(output_dir):
+            print(f"[Worker] Creating output directory: {output_dir}")
+            os.makedirs(output_dir, exist_ok=True)
+    except Exception as e:
+        print(f"[Worker] Error creating output directory: {e}")
+        # Continue and let C++ fail if it must, or return?
+        # Proceeding might result in the same error but let's hope it works.
+
+    if 'debug_utils' in globals():
+        debug_utils.log_environment()
+        debug_utils.log("WORKER", f"Args: {sys.argv}")
 
     print(f"[Worker] Starting recording session: {session_name} ({backend}) {'(Append Mode)' if append_mode else ''}")
     
     status_file = "recorder_status.json"
     pipelines = []
     oak_master = None
+    
+    if 'debug_utils' in globals(): debug_utils.log("WORKER", "Configuring Pipelines...")
     
     try:
         # 1. Pipeline Initialization
@@ -74,6 +100,9 @@ def main():
         last_frames = 0
         last_ts = time.time()
         
+        # Throughput tracking
+        last_total_bytes = 0
+        
         while not stop_requested:
             # Check if any pipeline stopped unexpectedly
             if any(not p.is_running() for p in pipelines):
@@ -88,19 +117,63 @@ def main():
             captured = sum(s.get("captured_frames", 0) for s in all_stats)
             dropped = sum(s.get("dropped_frames", 0) for s in all_stats)
             
+            # Calculate Total Size & Throughput
+            current_total_bytes = 0
+            file_extensions = ['.bin', '.mp4', '.mkv', '.avi'] # Possible containers
+            # We know the specific filenames from pipeline creation
+            # Single: session_name + ext? pipeline adds extensions internally usually.
+            # OAK: session_name_A.bin ...
+            
+            # Robust Strategy: Check the expected filenames
+            expected_files = []
+            if backend == "oak":
+                suffixes = ['_A', '_B', '_C', '_D']
+                # The C++ pipeline appends .bin if raw, or .mp4 if encoded.
+                # Assuming .bin for now based on code history "Failed to open... .bin"
+                for s in suffixes:
+                    expected_files.append(os.path.join(output_dir, f"{session_name}{s}.bin"))
+            else:
+                 # Standard
+                 expected_files.append(os.path.join(output_dir, f"{session_name}.bin"))
+                 expected_files.append(os.path.join(output_dir, f"{session_name}.mp4"))
+            
+            for fpath in expected_files:
+                try:
+                    if os.path.exists(fpath):
+                        current_total_bytes += os.path.getsize(fpath)
+                except: pass
+            
+            total_mb = current_total_bytes / (1024 * 1024)
+            
             # Enrich for UI
             summary_stats = {
                 "captured": captured,
                 "dropped": dropped,
-                "written": captured, # Approx
+                "written": captured, 
                 "elapsed_seconds": now - start_time,
-                "is_recording": True
+                "is_recording": True,
+                "mb": round(total_mb, 2)
             }
 
             if dt >= 1.0:
-                summary_stats["fps"] = round((captured - last_frames) / (dt * len(pipelines)), 1)
+                fps = round((captured - last_frames) / dt, 1) # Total FPS across all streams? Or avg?
+                # If 4 cameras running at 30fps, captured increases by 120 per second.
+                # User usually expects "per camera" or "system total"?
+                # UI label says "FPS". If it shows 120 for 30fps setup, that's fine.
+                # But let's average it for clarity if OAK? No, sum is better for "System Load".
+                # Actually, main_window passes fps arg as float.
+                if len(pipelines) > 1:
+                     summary_stats["fps"] = round((captured - last_frames) / (dt * len(pipelines)), 1)
+                else:
+                     summary_stats["fps"] = fps
+                     
+                stats_bytes = current_total_bytes - last_total_bytes
+                mbps = (stats_bytes * 8) / (1000 * 1000) / dt # Megabits per second
+                summary_stats["mbps"] = round(mbps, 2)
+                
                 last_frames = captured
                 last_ts = now
+                last_total_bytes = current_total_bytes
                 
                 # Update status file atomically
                 with open(status_file + ".tmp", "w") as f:
@@ -134,8 +207,10 @@ def main():
 if __name__ == "__main__":
     # Force unbuffered output for better logging
     if sys.version_info >= (3, 7):
-        sys.stdout.reconfigure(line_buffering=True)
-        sys.stderr.reconfigure(line_buffering=True)
+        if sys.stdout is not None:
+             sys.stdout.reconfigure(line_buffering=True)
+        if sys.stderr is not None:
+             sys.stderr.reconfigure(line_buffering=True)
         
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)

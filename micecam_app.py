@@ -1,8 +1,19 @@
 import sys
 import os
 
+# --- DEBUGGING HOOK ---
+try:
+    import debug_utils
+    debug_utils.hook_exceptions()
+    debug_utils.log("APP", f"Startup - Argv: {sys.argv}")
+except ImportError:
+    pass
+# ----------------------
+
 # Dispatcher Pattern MUST be at the top to avoid unrelated imports in worker mode
 if len(sys.argv) > 1 and sys.argv[1] == "--worker":
+    if 'debug_utils' in globals(): debug_utils.log("APP", "Dispatching to Worker Mode")
+    
     # Run as Recorder Worker
     # We need to adjust sys.argv to allow argparse (if used) or just pass args manually
     # recorder_worker expects: script, out, name, backend, w, h, fps, dev
@@ -13,12 +24,16 @@ if len(sys.argv) > 1 and sys.argv[1] == "--worker":
     try:
          # Dynamically import ONLY what is needed
          import recorder_worker
+         if 'debug_utils' in globals(): debug_utils.log("APP", "Imported recorder_worker, calling main()")
          recorder_worker.main()
     except Exception as e:
+         if 'debug_utils' in globals(): debug_utils.log("APP", f"Worker Main Error: {e}")
          print(f"Worker Start Error: {e}")
          import traceback
          traceback.print_exc()
          sys.exit(1)
+    
+    if 'debug_utils' in globals(): debug_utils.log("APP", "Worker Exit 0")
     sys.exit(0)
 
 from PyQt6.QtWidgets import QApplication

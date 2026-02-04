@@ -1,21 +1,26 @@
 # Build MiceCam EXE
+# Run from root as: .\scripts\build_exe.ps1
+
+$ScriptRoot = $PSScriptRoot
+$ProjectRoot = "$PSScriptRoot\.."
+
 Write-Host "Installing PyInstaller..."
 uv pip install pyinstaller
 
 Write-Host "Cleaning previous builds..."
-if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
-if (Test-Path "build_pyinstaller") { Remove-Item -Recurse -Force "build_pyinstaller" }
+if (Test-Path "$ProjectRoot\dist") { Remove-Item -Recurse -Force "$ProjectRoot\dist" }
+if (Test-Path "$ProjectRoot\build_pyinstaller") { Remove-Item -Recurse -Force "$ProjectRoot\build_pyinstaller" }
 
 # Determine SDK Path (User specific)
-$sdk_path = "build/bindings/python/Release"
+$sdk_path = "$ProjectRoot\build\bindings\python\Release"
 if (!(Test-Path $sdk_path)) {
-    $sdk_path = "..\build\bindings\python\Release" # Try relative
+    $sdk_path = "$ProjectRoot\build\bindings\python\Release" # Try relative
 }
 
 # --- 1. Build Worker (The "Engine") ---
 Write-Host "Building MiceCamWorker.exe (Engine)..."
-# This contains the heavy libraries: _micecam, depthai, opencv
-# It does NOT use PyQt6
+Set-Location $ProjectRoot
+
 uv run pyinstaller --noconsole `
     --name "MiceCamWorker" `
     --workpath "build_pyinstaller/worker" `
@@ -25,13 +30,12 @@ uv run pyinstaller --noconsole `
     --hidden-import "_micecam" `
     --hidden-import "debug_utils" `
     --exclude-module "PyQt6" `
-    --icon "app_icon.ico" `
+    --icon "assets/app_icon.ico" `
     recorder_worker.py
 
 # --- 2. Build UI (The "Client") ---
 Write-Host "Building MiceCam.exe (UI)..."
-# This contains ONLY UI logic. 
-# EXPLICITLY EXCLUDE heavy libs to prevent DLL conflicts.
+
 uv run pyinstaller --noconsole `
     --name "MiceCam" `
     --workpath "build_pyinstaller/ui" `
@@ -45,7 +49,7 @@ uv run pyinstaller --noconsole `
     --exclude-module "cv2" `
     --exclude-module "numpy" `
     --exclude-module "recorder_worker" `
-    --icon "app_icon.ico" `
+    --icon "assets/app_icon.ico" `
     micecam_app.py
 
 Write-Host "Build Complete!"
@@ -60,14 +64,26 @@ New-Item -ItemType Directory -Force -Path $release_dir | Out-Null
 Write-Host "Organizing Release to $release_dir ..."
 
 # Copy UI (Root)
-# We copy contents of dist/MiceCam/MiceCam/* to dist/MiceCam_Release/*
 Copy-Item -Recurse -Force "dist/MiceCam/MiceCam/*" $release_dir
 
 # Copy Worker (Tools)
-# We copy contents of dist/MiceCam/MiceCamWorker to dist/MiceCam_Release/tools/MiceCamWorker
 $tools_dir = "$release_dir/tools/MiceCamWorker"
 New-Item -ItemType Directory -Force -Path $tools_dir | Out-Null
 Copy-Item -Recurse -Force "dist/MiceCam/MiceCamWorker/*" $tools_dir
 
 Write-Host "Done! Distribution Ready at: $release_dir"
-Write-Host "User should run: $release_dir/MiceCam.exe"
+
+# --- 4. Build MSI (Optional) ---
+if (Test-Path "scripts/setup.wxs") {
+   Write-Host "Building MSI..."
+   
+   # Clean recordings from release before packing
+   if (Test-Path "$release_dir\recordings") { Remove-Item -Recurse -Force "$release_dir\recordings" }
+   
+   & "C:\Program Files (x86)\WiX Toolset v3.14\bin\heat.exe" dir "$release_dir" -cg MiceCamGroup -dr INSTALLFOLDER -scom -sreg -sfrag -srd -gg -out files.wxs
+   & "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe" scripts/setup.wxs files.wxs -ext WixUIExtension
+   & "C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe" -out MiceCam.msi setup.wixobj files.wixobj -b "$release_dir" -ext WixUIExtension
+   
+   Write-Host "MSI Created: MiceCam.msi"
+}
+

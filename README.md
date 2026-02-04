@@ -96,10 +96,10 @@ uv run python tools/recover_index.py
 #### 🔧 源码运行
 ```powershell
 # 1. 检查环境（在 Developer PowerShell 中运行）
-.\check_env.ps1
+.\scripts\check_env.ps1
 
 # 2. 一键构建 (自动生成 .exe 和 MSI)
-.\build_exe.ps1
+.\scripts\build_exe.ps1
 
 # 3. 运行构建后的程序
 .\dist\MiceCam_Release\MiceCam.exe
@@ -232,6 +232,29 @@ Robust streaming JSON Lines format.
 - line End: `session_end` (Summary)
 
 **添加新相机**: 见 [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+
+---
+
+## 目录结构 (Directory Structure)
+
+整理后的项目结构如下：
+
+```
+MiceCam/
+├── scripts/       # 构建与辅助脚本 (Build scripts, helpers)
+│   ├── build_exe.ps1   # Windows 一键构建 (EXE + MSI)
+│   ├── check_env.ps1   # 环境检查
+│   └── setup.wxs       # WiX Installer 配置
+├── assets/        # 静态资源 (Icons, Images)
+├── docs/          # 文档 (Guides, Changelog)
+├── tests/         # 测试代码 (C++ & Python tests)
+├── examples/      # 示例代码 (Demos)
+├── tools/         # Python 工具 (Post-processing tools)
+├── src/           # C++ 源代码 (Core backend)
+├── micecam/       # Python 核心包 (Bindings & Logic)
+├── gui/           # Python UI 代码
+└── README.md
+```
 
 ---
 

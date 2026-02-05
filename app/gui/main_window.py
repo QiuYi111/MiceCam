@@ -7,11 +7,21 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QGridLayout, QScrollArea, QSizePolicy, QCheckBox, QProgressBar)
 from PyQt6.QtCore import Qt, QTimer, QSize
 from PyQt6.QtGui import QFont, QIcon, QColor, QTextCursor
+from PyQt6.QtMultimedia import QMediaDevices, QCameraDevice
 
-from gui.recorder_thread import RecorderThread, SDK_AVAILABLE
-from gui.decoder_thread import DecoderThread
+# ...
+# (lines 11-307 unchanged)
 
-# --- STYLESHEET (WebUI Replica) ---
+    def refresh_cameras(self):
+        self.cb_camera.clear()
+        self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
+        
+        # Real Enumeration via QtMultimedia
+        cameras = QMediaDevices.videoInputs()
+        for i, cam in enumerate(cameras):
+            # i is likely the dshow index if order is preserved
+            name = cam.description()
+            self.cb_camera.addItem(f"{name} (Index {i})", str(i))
 STYLESHEET = """
 QMainWindow {
     background-color: #f0f2f5;
@@ -307,11 +317,14 @@ class MainWindow(QMainWindow):
 
     def refresh_cameras(self):
         self.cb_camera.clear()
-        # Probe OAK (Simple check if module exists/worker exists)
-        # We assume OAK is always an option in Pro app
         self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
-        for i in range(2):
-            self.cb_camera.addItem(f"USB Camera Device {i}", str(i))
+        
+        # Real Enumeration via QtMultimedia
+        cameras = QMediaDevices.videoInputs()
+        for i, cam in enumerate(cameras):
+            # i is likely the dshow index if order is preserved
+            name = cam.description()
+            self.cb_camera.addItem(f"{name} (Index {i})", str(i))
 
     def on_camera_changed(self):
         data = self.cb_camera.currentData()

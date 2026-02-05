@@ -42,6 +42,7 @@ uv run pyinstaller --noconsole `
     --workpath "build_pyinstaller/ui" `
     --distpath "dist/MiceCam" `
     --hidden-import "PyQt6" `
+    --hidden-import "PyQt6.QtMultimedia" `
     --hidden-import "micecam_utils" `
     --hidden-import "debug_utils" `
     --exclude-module "micecam" `

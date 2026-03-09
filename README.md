@@ -9,9 +9,9 @@
 This project follows the **Neural-Grid Standard**. The only valid interface to the project is the `Makefile`.
 
 ### 1. Prerequisites (macOS)
-If you are on macOS, you must install the following tools via Homebrew to allow `vcpkg` to build native dependencies (like FFmpeg):
+If you are on macOS, you must install the following tools via Homebrew to allow `vcpkg` to build native dependencies (like FFmpeg and libb2):
 ```bash
-brew install autoconf automake libtool pkg-config
+brew install autoconf autoconf-archive automake libtool pkg-config
 ```
 
 ### 2. Initialize

@@ -15,9 +15,9 @@ CMAKE_MAKE_PROGRAM := $(shell which make)
 
 define check_macos_deps
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		for dep in autoconf automake libtool pkg-config; do \
+		for dep in autoconf autoconf-archive automake libtool pkg-config; do \
 			if ! command -v $$dep >/dev/null 2>&1; then \
-				echo "❌ Error: $$dep not found. Please run: brew install autoconf automake libtool pkg-config"; \
+				echo "❌ Error: $$dep not found. Please run: brew install autoconf autoconf-archive automake libtool pkg-config"; \
 				exit 1; \
 			fi; \
 		done; \

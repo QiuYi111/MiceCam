@@ -1,3 +1,6 @@
 [submodule "3rdParty/depthai-core"]
 	path = 3rdParty/depthai-core
 	url = https://github.com/luxonis/depthai-core.git
+[submodule "3rdParty/engineering_framework"]
+	path = 3rdParty/engineering_framework
+	url = https://github.com/QiuYi111/engineering_framework.git

@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: micecam
+Version: 1.0.0
+Summary: MiceCam SDK - High-speed camera acquisition library
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: numpy>=1.24.0
+Provides-Extra: gui
+Requires-Dist: PyQt6>=6.5.0; extra == "gui"
+Requires-Dist: pyqtgraph>=0.13.0; extra == "gui"
+Requires-Dist: pyqtdarktheme>=2.1.0; extra == "gui"
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: pre-commit>=3.0.0; extra == "dev"
+Dynamic: license-file

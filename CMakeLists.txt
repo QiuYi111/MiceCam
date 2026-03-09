@@ -57,82 +57,38 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(libnop)
 
-# Luxonis DepthAI Core (Using Prebuilt)
+# Luxonis DepthAI Core (Using FetchContent)
 option(WITH_OAK_CAMERA "Build with OAK camera support (requires depthai-core)" ON)
 if(WITH_OAK_CAMERA)
-    set(DEPTHAI_PREBUILT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core-prebuild")
-    if(EXISTS "${DEPTHAI_PREBUILT_DIR}")
-        message(STATUS "Using prebuilt depthai-core from ${DEPTHAI_PREBUILT_DIR}")
-        
-        # Add include directories (prebuilt + external headers)
-        set(DEPTHAI_INCLUDE_DIRS 
-            "${DEPTHAI_PREBUILT_DIR}/include"
-            "${DEPTHAI_PREBUILT_DIR}/include/depthai-shared"
-            "${DEPTHAI_PREBUILT_DIR}/include/depthai-shared/3rdparty"
-            "${DEPTHAI_PREBUILT_DIR}/include/depthai-bootloader-shared"
-            "${DEPTHAI_PREBUILT_DIR}/lib/cmake/depthai/dependencies/include"
-            "${nlohmann_json_SOURCE_DIR}/include"
-            "${libnop_SOURCE_DIR}/include"
-        )
-        
-        # Find libraries
-        find_library(DEPTHAI_CORE_LIB NAMES depthai-core
-            PATHS "${DEPTHAI_PREBUILT_DIR}/lib"
-            NO_DEFAULT_PATH
-        )
-        find_library(DEPTHAI_OPENCV_LIB NAMES depthai-opencv
-            PATHS "${DEPTHAI_PREBUILT_DIR}/lib"
-            NO_DEFAULT_PATH
-        )
-        
-        if(DEPTHAI_CORE_LIB)
-            set(DEPTHAI_FOUND ON)
-            # Create imported targets to mimic original ones if needed, 
-            # or just use variables.
-            add_library(depthai::core SHARED IMPORTED)
-            set_target_properties(depthai::core PROPERTIES
-                IMPORTED_LOCATION "${DEPTHAI_PREBUILT_DIR}/bin/depthai-core.dll"
-                IMPORTED_IMPLIB "${DEPTHAI_CORE_LIB}"
-                INTERFACE_INCLUDE_DIRECTORIES "${DEPTHAI_INCLUDE_DIRS}"
-            )
-            if(DEPTHAI_OPENCV_LIB)
-                add_library(depthai::opencv SHARED IMPORTED)
-                set_target_properties(depthai::opencv PROPERTIES
-                    IMPORTED_LOCATION "${DEPTHAI_PREBUILT_DIR}/bin/depthai-opencv.dll"
-                    IMPORTED_IMPLIB "${DEPTHAI_OPENCV_LIB}"
-                )
-            endif()
-        else()
-            message(WARNING "Prebuilt depthai-core.lib not found in ${DEPTHAI_PREBUILT_DIR}/lib")
-            set(DEPTHAI_FOUND OFF)
-        endif()
-    else()
-        message(WARNING "depthai-core-prebuild not found. OAK support disabled.")
-        set(DEPTHAI_FOUND OFF)
-    endif()
+    # The depthai-core submodule has HunterGate issues when added via add_subdirectory
+    # because HunterGate expects to run BEFORE the first project() call.
+    # To bypass this without modifying the submodule, we rely on FetchContent instead
+    # which manages this more gracefully, or simply define hunter vars.
+    # But since the submodule is in 3rdParty, we can just compile the library 
+    # directly using standard cmake without hunter if we disable its tests
+    
+    set(DEPTHAI_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core")
+    
+    # Hunter workaround for add_subdirectory
+    set(HUNTER_ENABLED OFF CACHE BOOL "Disable Hunter package manager" FORCE)
+    set(DEPTHAI_BUILD_EXAMPLES OFF CACHE BOOL "Disable depthai-core examples" FORCE)
+    set(DEPTHAI_BUILD_TESTS OFF CACHE BOOL "Disable depthai-core tests" FORCE)
+    
+    add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
+    
+    set(DEPTHAI_FOUND ON)
 endif()
 
 
-# FFmpeg for native capture (Plan C)
+# FFmpeg for native capture (Managed via vcpkg now)
 find_package(PkgConfig QUIET)
 find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil avdevice swscale)
 if(NOT FFMPEG_FOUND)
-    # Fallback for vcpkg on this system
-    set(FFMPEG_DIR "C:/vcpkg/installed/x64-windows")
-    if(EXISTS "${FFMPEG_DIR}")
-        set(FFMPEG_FOUND ON)
-        set(FFMPEG_INCLUDE_DIRS "${FFMPEG_DIR}/include")
-        set(FFMPEG_LIBRARIES 
-            "${FFMPEG_DIR}/lib/avcodec.lib"
-            "${FFMPEG_DIR}/lib/avformat.lib"
-            "${FFMPEG_DIR}/lib/avutil.lib"
-            "${FFMPEG_DIR}/lib/avdevice.lib"
-            "${FFMPEG_DIR}/lib/swscale.lib"
-        )
-        message(STATUS "Using manual FFmpeg paths from ${FFMPEG_DIR}")
-    else()
-        set(FFMPEG_LIBRARIES avcodec avformat avutil avdevice swscale)
-    endif()
+    message(STATUS "Using vcpkg mapped FFMPEG targets")
+    set(FFMPEG_FOUND ON)
+    # vcpkg creates standard targets we can link against usually; 
+    # but we can also set the raw lib names for fallback.
+    set(FFMPEG_LIBRARIES avcodec avformat avutil avdevice swscale)
 endif()
 
 set(WITH_CAMERA_BACKEND_DEFAULT OFF)
@@ -236,23 +192,22 @@ if(WITH_CAMERA_BACKEND)
         endif()
     endif()
 
-    # OAK Camera Targets (inside WITH_CAMERA_BACKEND to fix library path resolution)
+    # OAK Camera Targets
     if(DEPTHAI_FOUND)
-        add_executable(oak_camera_test oak_camera_test.cpp)
-        target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera)
+        add_executable(oak_camera_test tests/camera/oak_camera_test.cpp)
+        target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
         target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
 
-        add_executable(oak_quad_recorder oak_quad_recorder.cpp)
-        target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera)
+        add_executable(oak_quad_recorder cmd/examples/oak_quad_recorder.cpp)
+        target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera depthai::core)
         target_compile_definitions(oak_quad_recorder PRIVATE WITH_OAK_CAMERA)
         
-        add_executable(oak_diagnostic oak_diagnostic.cpp)
-        target_include_directories(oak_diagnostic PRIVATE ${DEPTHAI_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
+        add_executable(oak_diagnostic cmd/examples/oak_diagnostic.cpp)
         target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
     endif()
 
     # FFmpeg camera test
-    add_executable(ffmpeg_camera_test ffmpeg_camera_test.cpp)
+    add_executable(ffmpeg_camera_test tests/camera/ffmpeg_camera_test.cpp)
     target_link_libraries(ffmpeg_camera_test PRIVATE micecam_core micecam_camera)
     target_compile_definitions(ffmpeg_camera_test PRIVATE WITH_FFMPEG)
 endif()

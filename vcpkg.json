@@ -1,0 +1,13 @@
+{
+  "name": "micecam",
+  "version": "1.0.0",
+  "dependencies": [
+    "ffmpeg",
+    "opencv4",
+    "nlohmann-json",
+    "gtest",
+    "pybind11",
+    "bzip2",
+    "liblzma"
+  ]
+}

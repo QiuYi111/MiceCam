@@ -5,14 +5,18 @@ description = "MiceCam SDK - High-speed camera acquisition library"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24.0",
-    "pybind11>=2.11.0",
 ]
 
 [project.optional-dependencies]
+gui = [
+    "PyQt6>=6.5.0",
+    "pyqtgraph>=0.13.0",
+]
 dev = [
     "pytest>=7.0.0",
-    "black>=23.0.0",
+    "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
 ]
 
 [build-system]

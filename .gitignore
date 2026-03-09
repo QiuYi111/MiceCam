@@ -9,6 +9,8 @@ test_output/
 .vscode/
 .idea/
 3rdParty/*
+!3rdParty/depthai-core
+!3rdParty/engineering_framework
 *.log
 recordings/
 *_images/

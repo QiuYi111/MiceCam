@@ -168,16 +168,17 @@ endif()
 
 # Core library (always built)
 add_library(micecam_core
-    src/core/frame.cpp
-    src/core/ring_buffer.cpp
-    src/pipeline/disk_writer.cpp
-    src/pipeline/ingestion_pipeline.cpp
-    src/pipeline/frame_dispatcher.cpp
-    src/pipeline/hdf5_converter.cpp
+    internal/domain/frame.cpp
+    internal/domain/ring_buffer.cpp
+    internal/infrastructure/disk_writer.cpp
+    internal/infrastructure/ingestion_pipeline.cpp
+    internal/infrastructure/frame_dispatcher.cpp
+    internal/infrastructure/hdf5_converter.cpp
 )
 
 target_include_directories(micecam_core PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/api
+    ${CMAKE_CURRENT_SOURCE_DIR}/internal
 )
 
 target_link_libraries(micecam_core PUBLIC
@@ -187,14 +188,14 @@ target_link_libraries(micecam_core PUBLIC
 
 # Camera backend (optional)
 if(WITH_CAMERA_BACKEND)
-    set(CAMERA_SOURCES src/camera/camera_backend.cpp)
+    set(CAMERA_SOURCES internal/infrastructure/camera_backend.cpp)
     
     if(FFMPEG_FOUND)
-        list(APPEND CAMERA_SOURCES src/camera/ffmpeg_camera_backend.cpp)
+        list(APPEND CAMERA_SOURCES internal/infrastructure/ffmpeg_camera_backend.cpp)
     endif()
     
     if(DEPTHAI_FOUND)
-        list(APPEND CAMERA_SOURCES src/camera/oak_camera_backend.cpp)
+        list(APPEND CAMERA_SOURCES internal/infrastructure/oak_camera_backend.cpp)
     endif()
 
     add_library(micecam_camera ${CAMERA_SOURCES})
@@ -211,7 +212,8 @@ if(WITH_CAMERA_BACKEND)
 
 
     target_include_directories(micecam_camera PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
     )
 
     target_link_libraries(micecam_camera PUBLIC micecam_core)
@@ -271,7 +273,8 @@ if(BUILD_TESTS)
     )
 
     target_include_directories(micecam_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
 
@@ -286,7 +289,7 @@ endif()
 
 # Main executable
 add_executable(micecam
-    src/main.cpp
+    cmd/micecam/main.cpp
 )
 
 target_link_libraries(micecam PRIVATE micecam_core)
@@ -319,7 +322,7 @@ install(TARGETS micecam_core
     LIBRARY DESTINATION lib
 )
 
-install(DIRECTORY include/micecam DESTINATION include)
+install(DIRECTORY api/micecam DESTINATION include)
 
 if(WITH_CAMERA_BACKEND)
     install(TARGETS micecam_camera

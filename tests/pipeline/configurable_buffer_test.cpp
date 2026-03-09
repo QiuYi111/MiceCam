@@ -1,4 +1,4 @@
-#include "micecam/pipeline/ingestion_pipeline.h"
+#include "infrastructure/ingestion_pipeline.h"
 #include "camera/fake_camera.h"
 #include <gtest/gtest.h>
 

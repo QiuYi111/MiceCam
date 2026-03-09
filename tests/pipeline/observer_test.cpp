@@ -1,4 +1,4 @@
-#include "micecam/pipeline/frame_dispatcher.h"
+#include "infrastructure/frame_dispatcher.h"
 #include "micecam/observer.h"
 #include "micecam/types.h"
 #include <gtest/gtest.h>

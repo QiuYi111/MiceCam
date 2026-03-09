@@ -63,7 +63,8 @@ if(WITH_CAMERA_BACKEND)
 endif()
 
 target_include_directories(_micecam PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/api
+    ${CMAKE_SOURCE_DIR}/internal
 )
 
 # Set the output name without lib prefix

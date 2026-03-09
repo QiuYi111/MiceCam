@@ -1,17 +1,18 @@
+#ifdef WITH_USB_CAMERA
 #pragma once
 
 #include "infrastructure/camera_backend.h"
 #include <atomic>
-#include <memory>
+#include <mutex>
 #include <vector>
 
 namespace micecam {
 
-// Fake camera for testing - generates synthetic frames
-class FakeCamera : public ICameraBackend {
+// USB Webcam backend using OpenCV
+class USBCameraBackend : public ICameraBackend {
 public:
-    explicit FakeCamera(size_t frame_size = 640 * 480 * 3);
-    ~FakeCamera() override = default;
+    USBCameraBackend();
+    ~USBCameraBackend() override;
 
     bool initialize(const CameraConfig& config) override;
     bool start() override;
@@ -28,20 +29,23 @@ public:
     }
 
     [[nodiscard]] std::string get_backend_name() const override {
-        return "FakeCamera";
+        return "USBCameraBackend";
     }
 
-    // Test controls
-    void set_max_frames(uint64_t max) { max_frames_ = max; }
-    void inject_delay_ms(int ms) { delay_ms_ = ms; }
+    // Static utility to enumerate available cameras
+    // Returns a vector of device IDs that can be opened
+    [[nodiscard]] static std::vector<int> enumerate_cameras(int max_devices = 10);
 
 private:
     CameraConfig config_;
-    size_t frame_size_;
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> frame_count_{0};
-    uint64_t max_frames_ = UINT64_MAX;  // Unlimited by default
-    int delay_ms_ = 0;  // For simulating slow cameras
+    std::mutex capture_mutex_;
+
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace micecam
+#endif
+

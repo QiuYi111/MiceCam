@@ -1,4 +1,4 @@
-#include "micecam/core/ring_buffer.h"
+#include "domain/ring_buffer.h"
 #include <iostream>
 #include <chrono>
 #include <vector>

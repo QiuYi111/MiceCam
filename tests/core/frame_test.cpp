@@ -1,4 +1,4 @@
-#include "micecam/core/frame.h"
+#include "domain/frame.h"
 #include <gtest/gtest.h>
 
 namespace micecam {

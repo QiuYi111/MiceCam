@@ -61,7 +61,7 @@ public:
                const std::string& backend_name = "oak",
                int width = 1920, int height = 1080, double fps = 30.0,
                int device_id = 0, bool append = false) {
-        
+
         CameraConfig cam_config;
         cam_config.width = width;
         cam_config.height = height;
@@ -85,7 +85,7 @@ public:
         if (!camera_->initialize(cam_config)) {
             throw std::runtime_error("Failed to initialize camera backend");
         }
-        
+
         setup(output_dir, session_name, backend_name, width, height, fps, append);
     }
 
@@ -94,14 +94,14 @@ public:
     PyPipeline(const std::string& output_dir, const std::string& session_name,
                std::shared_ptr<PyOAKMaster> master, int socket_index,
                int width, int height, double fps, bool append = false) {
-        
+
         camera_ = master->get_ptr()->create_proxy(socket_index);
         setup(output_dir, session_name, "oak_proxy", width, height, fps, append);
     }
 #endif
 
 private:
-    void setup(const std::string& output_dir, const std::string& session_name, 
+    void setup(const std::string& output_dir, const std::string& session_name,
                const std::string& backend, int w, int h, double fps, bool append) {
         SessionConfig config;
         config.output_dir = output_dir;
@@ -114,7 +114,7 @@ private:
         pipeline_ = std::make_unique<IngestionPipeline>(std::move(camera_), config);
     }
 public:
-    
+
     void start() {
         py::gil_scoped_release release;
         if (!pipeline_->start()) {
@@ -122,13 +122,13 @@ public:
         }
         std::cout << "[PyPipeline] Started\n";
     }
-    
+
     void stop() {
         py::gil_scoped_release release;
         pipeline_->stop();
         std::cout << "[PyPipeline] Stopped\n";
     }
-    
+
     void attach_callback(std::function<void(py::bytes, uint64_t, double)> callback) {
         class PyCallback : public IFrameObserver {
         public:
@@ -144,12 +144,12 @@ public:
                 }
             }
         };
-        
+
         auto observer = std::make_shared<PyCallback>(std::move(callback));
         observers_.push_back(observer);
         pipeline_->attach_observer(observer);
     }
-    
+
     py::dict get_stats() const {
         auto stats = pipeline_->get_stats();
         py::dict result;
@@ -160,9 +160,9 @@ public:
         result["pending_buffer"] = stats.pending_buffer_size;
         return result;
     }
-    
+
     bool is_running() const { return pipeline_->is_running(); }
-    
+
 private:
     std::unique_ptr<ICameraBackend> camera_;
     std::unique_ptr<IngestionPipeline> pipeline_;
@@ -174,7 +174,7 @@ private:
 PYBIND11_MODULE(_micecam, m) {
     m.doc() = "MiceCam SDK Python bindings";
     m.attr("__version__") = "1.0.0";
-    
+
     // PixelFormat enum
     py::enum_<micecam::PixelFormat>(m, "PixelFormat")
         .value("MJPEG", micecam::PixelFormat::MJPEG)
@@ -183,7 +183,7 @@ PYBIND11_MODULE(_micecam, m) {
         .value("MONO16", micecam::PixelFormat::MONO16)
         .value("NV12", micecam::PixelFormat::NV12)
         .export_values();
-    
+
     // Pipeline class
 #ifdef WITH_OAK_CAMERA
     py::class_<micecam::PyOAKMaster, std::shared_ptr<micecam::PyOAKMaster>>(m, "OAKMaster")
@@ -231,7 +231,7 @@ PYBIND11_MODULE(_micecam, m) {
         .def("__exit__", [](micecam::PyPipeline& self, py::object, py::object, py::object) {
             self.stop();
         });
-    
+
     m.def("has_oak_support", []() {
 #ifdef WITH_OAK_CAMERA
         return true;

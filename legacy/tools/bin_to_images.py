@@ -36,7 +36,7 @@ def bin_to_images(session_path: str, output_dir: str = None):
         raw_data = reader.get_raw_frame_bytes(i)
         if raw_data is None:
             continue
-        
+
         # 获取该帧的时间戳 (纳秒)
         timestamp = reader.get_frame_timestamp(i)
         # 如果获取失败，回退到 sequence_id
@@ -48,7 +48,7 @@ def bin_to_images(session_path: str, output_dir: str = None):
         # 检查是否是 JPEG 格式 (MJPEG 的帧通常以 FF D8 开头)
         # 精确检查前两个字节
         is_jpeg = len(raw_data) > 2 and raw_data[0] == 0xFF and raw_data[1] == 0xD8
-        
+
         if is_jpeg:
             # 直接保存为 .jpg，不经过重新编码，速度最快且无损
             filename = f"{basename}.jpg"
@@ -89,7 +89,7 @@ def main():
 
     session_path = sys.argv[1]
     output_dir = sys.argv[2] if len(sys.argv) > 2 else None
-    
+
     bin_to_images(session_path, output_dir)
 
 if __name__ == "__main__":

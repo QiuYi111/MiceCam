@@ -9,13 +9,13 @@ def main():
     if len(sys.argv) < 3:
         print("Usage: python decoder.py <output_dir> <session_name> [target_dir]")
         sys.exit(1)
-        
+
     output_dir = sys.argv[1]
     session_name = sys.argv[2]
     target_dir = sys.argv[3] if len(sys.argv) > 3 else None
-    
+
     print(f"Starting background decode job for: {session_name}")
-    
+
     def on_progress(pct):
         try:
             status = {
@@ -31,7 +31,7 @@ def main():
             pass
 
     on_progress(0.0)
-    
+
     try:
         micecam_utils.decode_micecam_session(output_dir, session_name, target_dir, on_progress)
         print("Decode job finished successfully.")

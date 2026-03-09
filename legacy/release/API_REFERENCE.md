@@ -1,6 +1,6 @@
 # MiceCam Python API Reference
 
-The MiceCam Python bindings are provided via the `_micecam` module. 
+The MiceCam Python bindings are provided via the `_micecam` module.
 
 ## 🏗 Pipeline Class
 

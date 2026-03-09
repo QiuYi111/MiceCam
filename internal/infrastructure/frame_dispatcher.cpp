@@ -6,9 +6,9 @@ namespace micecam {
 
 void FrameDispatcher::attach(std::shared_ptr<IFrameObserver> observer) {
     if (!observer) return;
-    
+
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     // Check if already attached
     for (const auto& weak_obs : observers_) {
         if (auto existing = weak_obs.lock()) {
@@ -17,15 +17,15 @@ void FrameDispatcher::attach(std::shared_ptr<IFrameObserver> observer) {
             }
         }
     }
-    
+
     observers_.push_back(observer);
 }
 
 void FrameDispatcher::detach(std::shared_ptr<IFrameObserver> observer) {
     if (!observer) return;
-    
+
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     observers_.erase(
         std::remove_if(observers_.begin(), observers_.end(),
             [&observer](const std::weak_ptr<IFrameObserver>& weak_obs) {
@@ -38,10 +38,10 @@ void FrameDispatcher::detach(std::shared_ptr<IFrameObserver> observer) {
 
 void FrameDispatcher::dispatch(const FrameView& frame) {
     std::vector<std::shared_ptr<IFrameObserver>> active_observers;
-    
+
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         // Collect active observers and clean up expired ones
         observers_.erase(
             std::remove_if(observers_.begin(), observers_.end(),
@@ -55,7 +55,7 @@ void FrameDispatcher::dispatch(const FrameView& frame) {
             observers_.end()
         );
     }
-    
+
     // Dispatch outside of lock to avoid holding mutex during callbacks
     for (const auto& observer : active_observers) {
         try {
@@ -70,7 +70,7 @@ void FrameDispatcher::dispatch(const FrameView& frame) {
 
 size_t FrameDispatcher::observer_count() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     size_t count = 0;
     for (const auto& weak_obs : observers_) {
         if (weak_obs.lock()) {

@@ -1,7 +1,7 @@
 /**
  * @file gl_texture_pool.cpp
  * @brief OpenGL texture pool for efficient frame rendering
- * 
+ *
  * This file provides utilities for managing OpenGL textures used
  * in the GPU preview pipeline.
  */
@@ -22,23 +22,23 @@ namespace micecam {
 
 /**
  * @brief Pool of OpenGL textures for double/triple buffering.
- * 
+ *
  * Pre-allocates textures to avoid allocation during rendering.
  */
 class GLTexturePool {
 public:
     /**
      * @brief Create a texture pool.
-     * 
+     *
      * @param width Texture width
      * @param height Texture height
      * @param pool_size Number of textures to pre-allocate
      */
     GLTexturePool(int width, int height, int pool_size = 3)
         : width_(width), height_(height) {
-        
+
         textures_.resize(pool_size, 0);
-        
+
         // In a real implementation:
         // glGenTextures(pool_size, textures_.data());
         // for (auto tex : textures_) {
@@ -47,15 +47,15 @@ public:
         //     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         //     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         // }
-        
-        std::cout << "[GLTexturePool] Created pool with " << pool_size 
+
+        std::cout << "[GLTexturePool] Created pool with " << pool_size
                   << " textures @ " << width << "x" << height << "\n";
     }
-    
+
     ~GLTexturePool() {
         // glDeleteTextures(textures_.size(), textures_.data());
     }
-    
+
     /**
      * @brief Get the next available texture for writing.
      */
@@ -63,21 +63,21 @@ public:
         write_index_ = (write_index_ + 1) % textures_.size();
         return textures_[write_index_];
     }
-    
+
     /**
      * @brief Get the current read texture (most recently written).
      */
     GLuint get_read_texture() const {
         return textures_[read_index_];
     }
-    
+
     /**
      * @brief Swap read and write textures after a frame is complete.
      */
     void swap_buffers() {
         read_index_ = write_index_;
     }
-    
+
 private:
     int width_;
     int height_;

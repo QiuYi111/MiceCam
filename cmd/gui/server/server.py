@@ -57,7 +57,7 @@ def index():
 @app.route('/api/cameras', methods=['GET'])
 def get_cameras():
     cameras = []
-    
+
     # Check SDK capabilities
     if SDK_AVAILABLE:
         # 1. Check for OAK
@@ -95,7 +95,7 @@ def start_recording():
     device_id = data.get('device_index', 0)
     backend = "oak" if device_id == "oak" else "ffmpeg"
     auto_decode = data.get('auto_decode', False)
-    
+
     # ... (resolution parsing omitted)
     width, height = 1920, 1080
     if data.get('resolution'):
@@ -104,17 +104,17 @@ def start_recording():
             width, height = int(w), int(h)
         except:
              logger.warning(f"Invalid resolution format: {data.get('resolution')}")
-            
+
     fps = float(data.get('fps', 30))
     output_dir = data.get('output_dir') or 'recordings'
-    
+
     # Ensure raw output dir
     if not os.path.exists(output_dir):
         try:
             os.makedirs(output_dir)
         except:
             pass
-            
+
     # Track the binary file path for stats
     current_bin_path = os.path.join(output_dir, f"{session_name}.bin")
     current_session_config = {
@@ -122,7 +122,7 @@ def start_recording():
         "session_name": session_name,
         "auto_decode": auto_decode
     }
-    
+
     # Save pending job to disk (for Supervisor to pick up if we crash)
     try:
         with open("pending_decode.json", "w") as f:
@@ -133,7 +133,7 @@ def start_recording():
     with pipeline_lock:
         if pipeline and pipeline.is_running():
             return jsonify({"success": False, "error": "Already recording"}), 400
-        
+
         try:
             # Handle pure integer index for USB
             dev_idx_int = 0
@@ -145,10 +145,10 @@ def start_recording():
 
             logger.info(f"Starting pipeline: {backend} {width}x{height}@{fps}")
             pipeline = _micecam.Pipeline(
-                output_dir, 
-                session_name, 
-                backend, 
-                width, height, fps, 
+                output_dir,
+                session_name,
+                backend,
+                width, height, fps,
                 dev_idx_int
             )
             pipeline.start()
@@ -168,7 +168,7 @@ def stop_recording():
                 pipeline.stop()
                 logger.info("Pipeline stopped.")
                 pipeline = None
-                
+
                 # Try to spawn decoder immediately (if we don't crash)
                 if current_session_config.get("auto_decode"):
                     cfg = current_session_config
@@ -177,7 +177,7 @@ def stop_recording():
                     # Log output to file for debugging
                     with open("decoder_debug.log", "a") as log_file:
                         subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
-                
+
                 return jsonify({"success": True})
             except Exception as e:
                 logger.error(f"Stop failed: {e}")
@@ -193,14 +193,14 @@ def get_status():
             stats['is_recording'] = True
             elapsed = time.time() - start_time
             if elapsed < 0.001: elapsed = 1.0 # avoid div/0
-            
+
             captured = stats['captured_frames']
             dropped = stats['dropped_frames']
             written = captured - dropped # Approximate
-            
+
             # FPS
             fps_val = captured / elapsed
-            
+
             # Real file size
             file_size_mb = 0.0
             try:
@@ -208,14 +208,14 @@ def get_status():
                     file_size_mb = os.path.getsize(current_bin_path) / (1024 * 1024)
             except:
                 pass
-            
+
             return jsonify({
                 "is_recording": True,
                 "captured": captured,
                 "dropped": dropped,
                 "written": written,
                 "bytes": file_size_mb * 1000000, # UI divides by 1M to get MB
-                "fps": fps_val, 
+                "fps": fps_val,
                 "elapsed_seconds": elapsed
             })
         except Exception as e:

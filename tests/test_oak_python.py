@@ -25,7 +25,7 @@ def on_frame(data, seq, timestamp):
         start_time = time.time()
     frame_count += 1
     bytes_received += len(data)
-    
+
     # Print status every 30 frames
     if frame_count % 30 == 0:
         elapsed = time.time() - start_time
@@ -46,18 +46,18 @@ try:
         height=1080,
         fps=30.0
     )
-    
+
     # Attach callback
     pipeline.attach_callback(on_frame)
-    
+
     # Run for 5 seconds
     print("Starting capture for 5 seconds...")
     pipeline.start()
-    
+
     time.sleep(5)
-    
+
     pipeline.stop()
-    
+
     # Print final stats
     if start_time:
         elapsed = time.time() - start_time
@@ -66,7 +66,7 @@ try:
         print(f"Duration: {elapsed:.1f}s")
         print(f"Average FPS: {frame_count/elapsed:.1f}")
         print(f"Total data: {bytes_received/1_000_000:.1f} MB")
-        
+
 except Exception as e:
     print(f"Error: {e}")
     import traceback

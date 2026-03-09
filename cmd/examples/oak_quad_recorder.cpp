@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
         char cam_id = 'A' + i;
         // Construct session name: prefix + "_A"
         std::string session_name = session_prefix + "_" + std::string(1, cam_id);
-        
+
         micecam::SessionConfig session_config{
             .output_dir = output_base,
             .session_name = session_name,
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
 
         auto proxy = master_backend->create_proxy(i);
         pipelines.push_back(std::make_unique<micecam::IngestionPipeline>(
-            std::move(proxy), 
+            std::move(proxy),
             session_config
         ));
     }

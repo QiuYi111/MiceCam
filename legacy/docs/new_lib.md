@@ -101,10 +101,10 @@ struct FrameView {
     PixelFormat format;        // 像素格式
     uint32_t width;            // 宽
     uint32_t height;           // 高
-  
+
     // 扩展元数据 (JSON String)
     // 内容示例: {"gain": 100, "temp": 37.5, "trigger_idx": 5}
-    const char* metadata_json; 
+    const char* metadata_json;
 };
 
 // 系统配置
@@ -112,18 +112,18 @@ struct SystemConfig {
     // 硬件选择
     std::string backend_name;  // "ffmpeg", "oak", "flir"
     int device_id = 0;
-  
+
     // 采集参数
     int width = 3840;
     int height = 2160;
     double fps = 30.0;
-  
+
     // 存储参数
     std::string session_name;
     std::string output_dir;
     size_t ring_buffer_size = 200; // 增大缓冲以应对抖动
     bool enable_disk_write = true; // 设为 false 可仅预览
-  
+
     // 后端特有参数 (灵活扩展)
     std::map<std::string, std::string> backend_options;
 };
@@ -151,9 +151,9 @@ namespace micecam {
 class IFrameObserver {
 public:
     virtual ~IFrameObserver() = default;
-  
+
     // 核心回调：当 RingBuffer 中有新帧可用时触发
-    // [Performance Warning]: 
+    // [Performance Warning]:
     // 实现必须在 <1ms 内返回。耗时操作（如深度学习推理）必须
     // 在实现内部自行拷贝数据并分发到独立线程。
     virtual void on_frame(const FrameView& frame) = 0;
@@ -186,7 +186,7 @@ public:
     // 生命周期控制
     void start();
     void stop(); // 阻塞直到所有数据落盘
-  
+
     // 动态挂载观察者 (线程安全)
     // 允许在运行时添加/移除预览窗口或分析脚本
     void attach_observer(std::shared_ptr<IFrameObserver> observer);
@@ -222,19 +222,19 @@ public:
     void on_frame(const FrameView& frame) override {
         // 1. 快速检查：如果 GPU 队列已满，直接丢弃，不阻塞 Pipeline
         if (gpu_queue_.is_full()) return;
-      
+
         // 2. 异步上传 (H2D)
         // 使用 pinned memory 作为中转，或者直接 memcpy 到预分配的 GPU buffer
         void* gpu_ptr = gpu_queue_.next_free_slot();
         cudaMemcpyAsync(gpu_ptr, frame.data, frame.size, cudaMemcpyHostToDevice, stream_);
-      
+
         // 3. 提交解码任务
         // cuvidDecodePicture 会读取 GPU 上的 MJPEG 数据并解码到显存 Surface
         CUVIDPICPARAMS params = {0};
         params.pBitstreamData = gpu_ptr;
         params.nBitstreamDataLen = frame.size;
         cuvidDecodePicture(decoder_handle_, &params);
-      
+
         // 4. 映射到 OpenGL (Interop)
         // 将解码后的 NV12 Surface 映射为 OpenGL Texture
         map_surface_to_texture();
@@ -277,13 +277,13 @@ namespace py = pybind11;
 class PyObserverTrampoline : public micecam::IFrameObserver {
 public:
     using Callback = std::function<void(py::array_t<uint8_t>, uint64_t)>;
-  
+
     explicit PyObserverTrampoline(Callback cb) : cb_(cb) {}
 
     void on_frame(const micecam::FrameView& frame) override {
         // 获取 GIL
         py::gil_scoped_acquire acquire;
-      
+
         // 创建 numpy array view (零拷贝)
         // 注意：这个 array 在回调结束后失效，如果 Python 端需要保留，必须 copy()
         auto array = py::array_t<uint8_t>(
@@ -292,7 +292,7 @@ public:
             frame.data,                   // data pointer
             py::capsule(frame.data, [](void*){}) // dummy deleter (we don't own data)
         );
-      
+
         cb_(array, frame.sequence_id);
     }
 private:

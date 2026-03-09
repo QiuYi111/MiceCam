@@ -40,14 +40,14 @@ private:
     CameraConfig config_;
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> frame_count_{0};
-    
+
     // FFmpeg internal state
     AVFormatContext* fmt_ctx_{nullptr};
     AVPacket* pkt_{nullptr};
     int video_stream_index_{-1};
 
     std::mutex capture_mutex_;
-    
+
     bool open_device();
     void close_device();
 };

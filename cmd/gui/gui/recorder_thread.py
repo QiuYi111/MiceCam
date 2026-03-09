@@ -6,7 +6,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, QProcess, QByteArray, QStandardPat
 
 # Check if worker script exists to define "Availability"
 # In a process-isolated architecture, "SDK Available" means "Can launch worker"
-SDK_AVAILABLE = True 
+SDK_AVAILABLE = True
 if not os.path.exists("recorder_worker.py") and not getattr(sys, 'frozen', False):
     # Try one level up?
     if not os.path.exists(os.path.join("..", "recorder_worker.py")):
@@ -19,11 +19,11 @@ class RecorderThread(QObject):
     This provides Process Isolation: If C++ crashes, the UI stays alive.
     """
     # Signals (Same Interface as before)
-    stats_updated = pyqtSignal(dict) 
+    stats_updated = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
     log_message = pyqtSignal(str)
     finished_recording = pyqtSignal()
-    
+
     def __init__(self, config):
         """
         config dict:
@@ -41,14 +41,14 @@ class RecorderThread(QObject):
     def start(self):
         if self._is_running: return
         self._is_running = True
-        
+
         cfg = self.config
-        
+
         # 1. Resolve Execution Strategy
         # DUAL BINARY MODE:
         # If frozen, we look for 'MiceCamWorker.exe' in the same directory.
         # If not frozen (source), we run 'python recorder_worker.py'.
-        
+
         exe_path = sys.executable
         script_arg = []
         is_frozen = getattr(sys, 'frozen', False)
@@ -57,13 +57,13 @@ class RecorderThread(QObject):
             # We are in frozen mode.
             # Strategy: Look for worker in 'tools' subdirectory (Distribution Mode)
             # or parallel directories (Dev/Build Mode)
-            
-            base_dir = os.path.dirname(exe_path) 
-            
+
+            base_dir = os.path.dirname(exe_path)
+
             # 1. Distribution Mode: base/tools/MiceCamWorker/MiceCamWorker.exe
             # (Assuming we put the whole worker dir inside 'tools')
             p1 = os.path.join(base_dir, "tools", "MiceCamWorker", "MiceCamWorker.exe")
-            
+
             # 2. Parallel Build Mode: base/../MiceCamWorker/MiceCamWorker.exe
             p2 = os.path.join(base_dir, "..", "MiceCamWorker", "MiceCamWorker.exe")
             p2 = os.path.abspath(p2)
@@ -74,7 +74,7 @@ class RecorderThread(QObject):
                 exe_path = p2
             else:
                 self.log_message.emit(f"Critial: Worker not found at {p1} or {p2}")
-                script_arg = ["--worker"] 
+                script_arg = ["--worker"]
         else:
              # In source mode, sys.executable is python.exe
              # We need to pass the script name 'recorder_worker.py' direclty
@@ -84,18 +84,18 @@ class RecorderThread(QObject):
              worker_script = os.path.join(base_dir, "..", "recorder_worker.py")
              if not os.path.exists(worker_script):
                  worker_script = os.path.join(base_dir, "recorder_worker.py")
-             
+
              exe_path = sys.executable
              script_arg = [worker_script]
-             
+
         # 2. Build Arguments
         # If using MiceCamWorker.exe, we just pass the args it expects (no --worker flag if it was built from recorder_worker.py directly)
-        
+
         # Check if we are running the Worker EXE directly or dispatching
         # If exe_path ends with MiceCamWorker.exe, it is the direct entry point.
-        
+
         # recorder_worker.py args: <output_dir> <session_name> <backend> <width> <height> <fps> <dev_idx>
-        
+
         real_args = [
             cfg['output_dir'],
             cfg['session_name'],
@@ -105,7 +105,7 @@ class RecorderThread(QObject):
             str(cfg['fps']),
             str(cfg['device_id'])
         ]
-        
+
         # If we are dispatching via micecam_app.py (fallback), we need --worker
         if "MiceCamWorker" not in exe_path and not is_frozen:
              # Source mode using recorder_worker.py directly -> No --worker needed
@@ -115,37 +115,37 @@ class RecorderThread(QObject):
              real_args = ["--worker"] + real_args
 
         args = script_arg + real_args
-        
+
         self.log_message.emit(f"Spawning Worker: {exe_path} {args}")
         self.process = QProcess()
-        
+
         # Environmental Cleaning (Still good practice)
         # Environmental Cleaning (Still good practice)
         # Fix: Use QProcessEnvironment for PyQt6 compliance
         env = QProcessEnvironment.systemEnvironment()
-        
-        # We want to filter out python vars. 
-        # QProcessEnvironment doesn't support easy filtering (it's a map), 
+
+        # We want to filter out python vars.
+        # QProcessEnvironment doesn't support easy filtering (it's a map),
         # but we can remove specific keys if they exist.
         env.remove("PYTHONHOME")
         env.remove("PYTHONPATH")
-        
-        # If we wanted to copy from a clean dict, we'd iterate and insert, 
-        # but systemEnvironment() gives us everything. 
+
+        # If we wanted to copy from a clean dict, we'd iterate and insert,
+        # but systemEnvironment() gives us everything.
         # Strict isolation is achieved by the separate executable anyway.
-            
+
         self.process.setProcessEnvironment(env)
-        
+
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.readyReadStandardError.connect(self.handle_stderr)
         self.process.finished.connect(self.handle_finished)
-        
+
         self.process.start(exe_path, args)
-        
+
     def stop(self):
         if self.process and self.process.state() == QProcess.ProcessState.Running:
             self.log_message.emit("Sending Stop Signal...")
-            
+
             # Method A: Create stop_signal.txt (Universal)
             try:
                 with open("stop_signal.txt", "w") as f:
@@ -160,27 +160,27 @@ class RecorderThread(QObject):
     def handle_stdout(self):
         data_bytes = self.process.readAllStandardOutput().data()
         if not data_bytes: return
-        
+
         try:
              # Use errors='replace' to avoid crashing on split multi-byte characters
              chunk = data_bytes.decode('utf-8', errors='replace')
         except:
-             return 
+             return
 
         # Initialize buffer if missing (legacy safety)
         if not hasattr(self, '_buffer'): self._buffer = ""
         self._buffer += chunk
-        
+
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             line = line.strip()
             if not line: continue
-            
+
             if line.startswith("STATUS_UPDATE:"):
                 try:
                     json_str = line[len("STATUS_UPDATE:"):]
                     stats = json.loads(json_str)
-                    
+
                     # Transform to UI Format if needed
                     # worker sends: captured, dropped, written, elapsed_seconds, is_recording, fps, mbps, mb
                     ui_stats = {
@@ -211,5 +211,5 @@ class RecorderThread(QObject):
             self.log_message.emit(f"CRASH: Worker process died (Exit {exit_code})")
         else:
             self.log_message.emit("Worker finished normally.")
-            
+
         self.finished_recording.emit()

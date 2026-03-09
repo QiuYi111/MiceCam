@@ -14,9 +14,9 @@ def log(tag, message):
     """
     ts = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
     pid = os.getpid()
-    
+
     entry = f"[{ts}] [{pid}] [{tag}] {message}\n"
-    
+
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(entry)
@@ -32,7 +32,7 @@ def log_environment():
     log("ENV", f"CWD: {os.getcwd()}")
     log("ENV", f"Frozen: {getattr(sys, 'frozen', False)}")
     log("ENV", f"Path: {sys.path}")
-    
+
     # Log specific variables that might affect loading
     for key in ['PYTHONPATH', 'PYTHONHOME', 'PATH', 'QT_PLUGIN_PATH', 'QML2_IMPORT_PATH']:
         if key in os.environ:
@@ -44,10 +44,10 @@ def hook_exceptions():
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
-        
+
         import traceback
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         log("CRASH", "".join(lines))
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
-        
+
     sys.excepthook = handle_exception

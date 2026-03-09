@@ -39,6 +39,7 @@ help: ## Show this help message
 init: ## Initialize development environment (Tools, Hooks)
 	$(check_macos_deps)
 	@echo "🛠️  Initializing Development Environment..."
+	@git submodule update --init --recursive
 	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
 		echo "📦 vcpkg not found. Cloning vcpkg..."; \
 		git clone https://github.com/microsoft/vcpkg.git $(VCPKG_ROOT); \
@@ -88,7 +89,13 @@ test: ## Run Unit & Integration Tests
 	@cd $(BUILD_DIR) && ctest --output-on-failure
 	@echo "✅ Tests passed."
 
-# --- 4. The Gatekeeper ---
+# --- 4. Distribution ---
+package: ## Build Python Package (Wheel/Sdist)
+	@echo "📦 Building Python Package..."
+	@uv build
+	@echo "✅ Package built in dist/."
+
+# --- 5. The Gatekeeper ---
 
 verify: build lint test ## Run full verification (Pre-Push Gate)
 	@echo "🛡️  Full System Verification Passed."

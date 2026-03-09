@@ -10,7 +10,7 @@ namespace micecam {
 
 /**
  * @brief Multi-Camera Backend for OAK-4P-New
- * 
+ *
  * Supports CAM_A, CAM_B, CAM_C, CAM_D with hardware synchronization and device-side MJPEG encoding.
  */
 class OAKCameraBackend : public ICameraBackend, public std::enable_shared_from_this<OAKCameraBackend> {
@@ -36,7 +36,7 @@ public:
 
     /**
      * @brief Create a proxy backend for a specific camera socket
-     * 
+     *
      * Allows multiple IngestionPipelines to share a single physical device.
      */
     static std::shared_ptr<OAKCameraBackend> create_master();

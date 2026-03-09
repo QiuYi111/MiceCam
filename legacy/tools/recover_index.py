@@ -23,10 +23,10 @@ def recover_mjpeg_index(bin_path, metadata_path_out):
                 soi = mm.find(b"\xff\xd8", pos)
                 if soi == -1:
                     break
-                
+
                 if frames:
                     frames[-1]["size"] = soi - frames[-1]["offset"]
-                
+
                 frames.append({
                     "sequence_id": len(frames),
                     "timestamp_ns": 0,
@@ -34,17 +34,17 @@ def recover_mjpeg_index(bin_path, metadata_path_out):
                     "size": 0,
                     "checksum": 0
                 })
-                
+
                 if len(frames) % 1000 == 0:
                     print(f"Found {len(frames)} frames... ({(soi/file_size)*100:.1f}%)", end="\r")
-                
+
                 pos = soi + 2
 
     if frames:
         frames[-1]["size"] = file_size - frames[-1]["offset"]
 
     print(f"\nScan complete. Total frames found: {len(frames)}")
-    
+
     metadata = {
         "session": {
             "session_name": bin_path.stem + "_recovered",

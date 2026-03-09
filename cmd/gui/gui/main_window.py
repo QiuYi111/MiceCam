@@ -1,8 +1,8 @@
 import sys
 import os
 import time
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QLabel, QPushButton, QComboBox, QLineEdit, 
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                             QLabel, QPushButton, QComboBox, QLineEdit,
                              QGroupBox, QPlainTextEdit, QMessageBox, QFrame,
                              QGridLayout, QScrollArea, QSizePolicy, QCheckBox, QProgressBar)
 from PyQt6.QtCore import Qt, QTimer, QSize
@@ -120,15 +120,15 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MiceCam Pro")
         self.resize(500, 800)
         self.setStyleSheet(STYLESHEET)
-        
+
         # State
         self.recorder = None
         self.decoder = None
         self.is_recording = False
-        
+
         # Setup UI
         self.init_ui()
-        
+
         # Populate Cameras (Logic check)
         self.refresh_cameras()
 
@@ -138,17 +138,17 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
+
         # 1. Header
         header = QFrame()
         header.setObjectName("Header")
         header.setFixedHeight(80)
         h_layout = QHBoxLayout(header)
         h_layout.setContentsMargins(20, 10, 20, 10)
-         
+
         icon_lbl = QLabel("🐭")
         icon_lbl.setStyleSheet("font-size: 32px; background: rgba(255,255,255,0.1); border-radius: 20px; padding: 5px;")
-        
+
         title_box = QWidget()
         tb_layout = QVBoxLayout(title_box)
         tb_layout.setSpacing(2)
@@ -159,13 +159,13 @@ class MainWindow(QMainWindow):
         s_lbl.setObjectName("HeaderSub")
         tb_layout.addWidget(t_lbl)
         tb_layout.addWidget(s_lbl)
-        
+
         h_layout.addWidget(icon_lbl)
         h_layout.addWidget(title_box)
         h_layout.addStretch()
-        
+
         layout.addWidget(header)
-        
+
         # 2. Controls Scroll Area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -173,48 +173,48 @@ class MainWindow(QMainWindow):
         content_layout = QVBoxLayout(scroll_content)
         content_layout.setContentsMargins(20, 20, 20, 20)
         content_layout.setSpacing(15)
-        
+
         # -- Source & Output Group --
         src_grp = QGroupBox("📹 Source & Output")
         src_layout = QVBoxLayout(src_grp)
-        
+
         self.cb_camera = QComboBox()
         self.cb_camera.addItems(["Scanning cameras..."])
         self.cb_camera.currentIndexChanged.connect(self.on_camera_changed)
-        
+
         self.edt_session = QLineEdit()
         self.edt_session.setPlaceholderText("Session Name")
-        self.refresh_session_name() 
-        
+        self.refresh_session_name()
+
         self.cb_res = QComboBox()
         self.cb_res.addItems(["1920x1080", "1280x720", "640x480"])
-        
+
         self.edt_fps = QLineEdit("30")
-        
+
         self.edt_output = QLineEdit("recordings")
         self.edt_output.setPlaceholderText("Output Directory")
-        
+
         src_layout.addWidget(QLabel("Camera Device"))
         src_layout.addWidget(self.cb_camera)
         src_layout.addWidget(QLabel("Session Name"))
         src_layout.addWidget(self.edt_session)
-        
+
         h_res = QHBoxLayout()
         v_res = QVBoxLayout(); v_res.addWidget(QLabel("Resolution")); v_res.addWidget(self.cb_res)
         v_fps = QVBoxLayout(); v_fps.addWidget(QLabel("FPS")); v_fps.addWidget(self.edt_fps)
         h_res.addLayout(v_res, 3)
         h_res.addLayout(v_fps, 1)
         src_layout.addLayout(h_res)
-        
+
         src_layout.addWidget(QLabel("Output Directory"))
         src_layout.addWidget(self.edt_output)
-        
+
         content_layout.addWidget(src_grp)
-        
+
         # -- Stats Group --
         stat_grp = QGroupBox("📊 Statistics")
         stat_layout = QGridLayout(stat_grp)
-        
+
         def make_stat(label, val_id):
             w = QWidget()
             l = QVBoxLayout(w); l.setContentsMargins(5,5,5,5); l.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -226,57 +226,57 @@ class MainWindow(QMainWindow):
             l.addWidget(val)
             l.addWidget(lbl)
             return w, val
-            
+
         w_fps, self.lbl_fps = make_stat("FPS", "fps")
         w_frames, self.lbl_frames = make_stat("Frames", "frames")
         w_drop, self.lbl_drop = make_stat("Dropped", "drop")
         w_time, self.lbl_time = make_stat("Duration", "time")
         w_mb, self.lbl_mb = make_stat("MB/s", "mb")
         w_mbps, self.lbl_mbps = make_stat("Mbps", "mbps")
-        
+
         stat_layout.addWidget(w_fps, 0, 0)
         stat_layout.addWidget(w_time, 0, 1)
         stat_layout.addWidget(w_mbps, 0, 2)
         stat_layout.addWidget(w_frames, 1, 0)
         stat_layout.addWidget(w_drop, 1, 1)
         stat_layout.addWidget(w_mb, 1, 2)
-        
+
         content_layout.addWidget(stat_grp)
-        
+
         # -- Controls Group --
         ctl_grp = QGroupBox("⚡ Controls")
         ctl_layout = QVBoxLayout(ctl_grp)
-        
+
         h_btns = QHBoxLayout()
         self.btn_start = QPushButton("▶ Start Recording")
         self.btn_start.setObjectName("StartBtn")
         self.btn_start.clicked.connect(self.start_recording)
-        
+
         self.btn_stop = QPushButton("⏹ Stop")
         self.btn_stop.setObjectName("StopBtn")
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_recording)
-        
+
         h_btns.addWidget(self.btn_start)
         h_btns.addWidget(self.btn_stop)
-        
+
         # Auto Decode Checkbox
         self.chk_decode = QCheckBox("Auto-Decode Session after finished")
         self.chk_decode.setChecked(True)
-        
+
         # Decode Progress
         self.lbl_decode = QLabel("Decoding Progress:")
         self.lbl_decode.setVisible(False)
         self.prog_decode = QProgressBar()
         self.prog_decode.setVisible(False)
-        
+
         ctl_layout.addLayout(h_btns)
         ctl_layout.addWidget(self.chk_decode)
         ctl_layout.addWidget(self.lbl_decode)
         ctl_layout.addWidget(self.prog_decode)
-        
+
         content_layout.addWidget(ctl_grp)
-        
+
         # -- Log Widget --
         log_grp = QGroupBox("📜 System Log")
         log_layout = QVBoxLayout(log_grp)
@@ -284,12 +284,12 @@ class MainWindow(QMainWindow):
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumHeight(150)
         log_layout.addWidget(self.log_view)
-        
+
         content_layout.addWidget(log_grp)
-        
+
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
-        
+
         self.log("System Ready. SDK Available: " + str(SDK_AVAILABLE))
         if not SDK_AVAILABLE:
             self.log("WARNING: Worker script not found. Recording will fail.")
@@ -307,7 +307,7 @@ class MainWindow(QMainWindow):
     def refresh_cameras(self):
         self.cb_camera.clear()
         self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
-        
+
         # Real Enumeration via QtMultimedia
         cameras = QMediaDevices.videoInputs()
         for i, cam in enumerate(cameras):
@@ -326,15 +326,15 @@ class MainWindow(QMainWindow):
 
     def start_recording(self):
         if self.is_recording: return
-        
+
         self.lbl_decode.setVisible(False)
         self.prog_decode.setVisible(False)
         self.prog_decode.setValue(0)
-        
+
         dev_id = self.cb_camera.currentData()
         backend = "oak" if dev_id == "oak" else "ffmpeg"
         w, h = self.cb_res.currentText().split('x')
-        
+
         cfg = {
             "output_dir": self.edt_output.text(),
             "session_name": self.edt_session.text(),
@@ -344,43 +344,43 @@ class MainWindow(QMainWindow):
             "height": int(h),
             "fps": float(self.edt_fps.text())
         }
-        
+
         self.recorder = RecorderThread(cfg)
         self.recorder.log_message.connect(self.log)
         self.recorder.error_occurred.connect(self.on_error)
         self.recorder.stats_updated.connect(self.on_stats)
         self.recorder.finished_recording.connect(self.on_finished)
-        
+
         self.recorder.start()
-        
+
         self.is_recording = True
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.cb_camera.setEnabled(False)
-        
+
     def stop_recording(self):
         if self.recorder and self.is_recording:
             self.recorder.stop()
             self.btn_stop.setEnabled(False) # Prevent double click
-            
+
     def on_stats(self, s):
         self.lbl_frames.setText(str(s['captured']))
         self.lbl_drop.setText(str(s['dropped']))
         self.lbl_fps.setText(str(s['fps']))
         self.lbl_time.setText(f"{s['elapsed']:.1f}s")
-        self.lbl_mbps.setText(str(s['mbps'])) 
+        self.lbl_mbps.setText(str(s['mbps']))
         self.lbl_mb.setText(str(s.get('mb', '--')))
-        
+
     def on_error(self, msg):
         self.log(f"ERROR: {msg}")
         QMessageBox.critical(self, "Error", msg)
-        
+
     def on_finished(self):
         self.is_recording = False
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.cb_camera.setEnabled(True)
-        
+
         # Auto Decode Trigger
         if self.chk_decode.isChecked():
             self.start_decoding()
@@ -392,17 +392,17 @@ class MainWindow(QMainWindow):
         self.lbl_decode.setVisible(True)
         self.prog_decode.setVisible(True)
         self.log("Starting Auto-Decode...")
-        
+
         out_dir = self.edt_output.text()
         sess = self.edt_session.text()
-        
+
         self.decoder = DecoderThread(out_dir, sess)
         self.decoder.progress_updated.connect(self.prog_decode.setValue)
         self.decoder.status_message.connect(self.log)
         self.decoder.finished_decoding.connect(self.on_decode_finished)
         self.decoder.start()
-        
-        # Disable start while decoding? 
+
+        # Disable start while decoding?
         self.btn_start.setEnabled(False)
 
     def on_decode_finished(self):

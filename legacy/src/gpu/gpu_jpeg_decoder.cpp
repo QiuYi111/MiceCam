@@ -36,9 +36,9 @@ class GpuJpegDecoder::Impl {
 public:
     Impl(int width, int height, int queue_depth)
         : width_(width), height_(height), queue_depth_(queue_depth) {
-        
+
         std::cout << "[GpuJpegDecoder] Initializing " << width << "x" << height << "\n";
-        
+
 #ifdef HAVE_NVDEC
         if (initNvdec()) {
             use_nvdec_ = true;
@@ -51,36 +51,36 @@ public:
 #endif
         initialized_ = true;
     }
-    
+
     ~Impl() {
 #ifdef HAVE_NVDEC
         cleanupNvdec();
 #endif
     }
-    
+
     void onFrame(const FrameView& frame) {
         if (!initialized_ || !use_nvdec_) return;
-        
+
         // Push to queue for async processing
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (pending_frames_.size() >= static_cast<size_t>(queue_depth_)) {
             dropped_frames_++;
             return;
         }
-        
+
         std::vector<uint8_t> data(frame.data, frame.data + frame.size);
         pending_frames_.push({frame.sequence_id, std::move(data)});
-        
+
         // In a real implementation, a separate thread would consume this
         // and call cuvidDecodePicture.
         current_frame_id_.store(frame.sequence_id);
     }
-    
+
     GLuint getTexture() const { return texture_id_; }
     uint64_t getCurrentFrameId() const { return current_frame_id_.load(); }
     uint64_t getDroppedFrames() const { return dropped_frames_.load(); }
     bool isHealthy() const { return initialized_ && !error_state_; }
-    
+
 private:
 #ifdef HAVE_NVDEC
     bool initNvdec() {
@@ -88,7 +88,7 @@ private:
         if (cuInit(0) != CUDA_SUCCESS) return false;
         if (cuDeviceGet(&cuda_device_, 0) != CUDA_SUCCESS) return false;
         if (cuCtxCreate(&cuda_context_, CU_CTX_SCHED_BLOCKING_SYNC, cuda_device_) != CUDA_SUCCESS) return false;
-        
+
         // 2. Create Decoder
         CUVIDDECODECREATEINFO decodeInfo = {};
         decodeInfo.CodecType = cudaVideoCodec_JPEG;
@@ -103,30 +103,30 @@ private:
         decodeInfo.ulMaxHeight = height_;
         decodeInfo.ulTargetWidth = width_;
         decodeInfo.ulTargetHeight = height_;
-        
+
         if (cuvidCreateDecoder(&decoder_, &decodeInfo) != CUDA_SUCCESS) {
             std::cerr << "[GpuJpegDecoder] Failed to create NVDEC decoder\n";
             return false;
         }
-        
+
         return true;
     }
-    
+
     void cleanupNvdec() {
         if (decoder_) cuvidDestroyDecoder(decoder_);
         if (cuda_context_) cuCtxDestroy(cuda_context_);
     }
-    
+
     CUdevice cuda_device_ = 0;
     CUcontext cuda_context_ = nullptr;
     CUvideodecoder decoder_ = nullptr;
 #endif
-    
+
     struct PendingFrame {
         uint64_t sequence_id;
         std::vector<uint8_t> data;
     };
-    
+
     int width_, height_, queue_depth_;
     bool initialized_ = false;
     bool use_nvdec_ = false;
@@ -134,7 +134,7 @@ private:
     GLuint texture_id_ = 0;
     std::atomic<uint64_t> current_frame_id_{0};
     std::atomic<uint64_t> dropped_frames_{0};
-    
+
     std::mutex queue_mutex_;
     std::queue<PendingFrame> pending_frames_;
 };

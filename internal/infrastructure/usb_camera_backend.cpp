@@ -31,7 +31,7 @@ bool USBCameraBackend::initialize(const CameraConfig& config) {
     // MSMF (Media Foundation) typically performs better for high frame rates
     // DSHOW (DirectShow) is more compatible but may have lower FPS
     bool opened = false;
-    
+
 #ifdef _WIN32
     // Prioritize MSMF for MSMF-specific raw formats (like NV12/YUY2)
     // which are more compact than DirectShow's forced BGR.
@@ -67,12 +67,12 @@ bool USBCameraBackend::initialize(const CameraConfig& config) {
     // Set MJPEG format first - this typically allows higher frame rates
     // FourCC code for MJPEG
     impl_->cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    
+
     // Set capture properties
     if (opened) {
         // Force MJPEG format for hardware-level compression
         impl_->cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-        
+
         // Disable automatic BGR conversion to get raw bytes
         impl_->cap.set(cv::CAP_PROP_CONVERT_RGB, 0);
 
@@ -80,19 +80,19 @@ bool USBCameraBackend::initialize(const CameraConfig& config) {
         impl_->cap.set(cv::CAP_PROP_FRAME_HEIGHT, config.height);
         impl_->cap.set(cv::CAP_PROP_FPS, config.fps);
     }
-    
+
     // Reduce buffer size for lower latency (1 frame buffer)
     impl_->cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
-    
+
     // Disable auto exposure if possible (can cause frame rate drops)
     impl_->cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.25);  // 0.25 = manual mode on some cameras
-    
+
     // Read back actual values
     impl_->actual_width = static_cast<int>(impl_->cap.get(cv::CAP_PROP_FRAME_WIDTH));
     impl_->actual_height = static_cast<int>(impl_->cap.get(cv::CAP_PROP_FRAME_HEIGHT));
     impl_->actual_fps = impl_->cap.get(cv::CAP_PROP_FPS);
     bool convert_rgb = impl_->cap.get(cv::CAP_PROP_CONVERT_RGB);
-    
+
     // Get actual FourCC
     int fourcc = static_cast<int>(impl_->cap.get(cv::CAP_PROP_FOURCC));
     char fourcc_str[5] = {
@@ -105,7 +105,7 @@ bool USBCameraBackend::initialize(const CameraConfig& config) {
 
     std::cout << "Camera initialized:\n"
               << "  Requested:   " << config.width << "x" << config.height << " @ " << config.fps << " fps\n"
-              << "  Actual:      " << impl_->actual_width << "x" << impl_->actual_height 
+              << "  Actual:      " << impl_->actual_width << "x" << impl_->actual_height
               << " @ " << impl_->actual_fps << " fps\n"
               << "  Format:      " << fourcc_str << "\n"
               << "  Convert RGB: " << (convert_rgb ? "Yes" : "No (Raw Mode)") << "\n";
@@ -178,7 +178,7 @@ std::unique_ptr<Frame> USBCameraBackend::get_frame() {
 // Static function to enumerate available cameras
 std::vector<int> USBCameraBackend::enumerate_cameras(int max_devices) {
     std::vector<int> available_ids;
-    
+
 #ifdef _WIN32
     // Use MSMF for enumeration on Windows (more reliable than DirectShow)
     int apiPreference = cv::CAP_MSMF;
@@ -194,11 +194,9 @@ std::vector<int> USBCameraBackend::enumerate_cameras(int max_devices) {
             test_cap.release();
         }
     }
-    
+
     return available_ids;
 }
 
 }  // namespace micecam
 #endif
-
-

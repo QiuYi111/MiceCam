@@ -9,7 +9,7 @@ namespace micecam {
 
 /**
  * @brief Thread-safe dispatcher for frame observers.
- * 
+ *
  * Manages a list of observers and dispatches FrameView to each.
  * Exceptions from individual observers are caught and logged to prevent
  * one failing observer from affecting others or the critical recording path.
@@ -37,10 +37,10 @@ public:
 
     /**
      * @brief Dispatch a frame to all attached observers.
-     * 
+     *
      * This method is non-blocking and best-effort. If an observer throws,
      * the exception is caught and logged, but other observers continue to receive.
-     * 
+     *
      * @param frame The frame view to dispatch.
      */
     void dispatch(const FrameView& frame);

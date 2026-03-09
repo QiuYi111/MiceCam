@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--duration", type=int, default=5, help="Recording duration in seconds")
     parser.add_argument("--device", type=int, default=0, help="Camera device ID")
     parser.add_argument("--decode", action="store_true", default=True, help="Decode to images after recording")
-    
+
     args = parser.parse_args()
 
     output_dir = os.path.abspath(args.out)
@@ -59,12 +59,12 @@ def main():
 
         print("\nStarting recording...")
         pipeline.start()
-        
+
         time.sleep(args.duration)
-        
+
         print("\nStopping recording...")
         pipeline.stop()
-        
+
         stats = pipeline.get_stats()
         print(f"Done. Captured {stats['captured_frames']} frames, dropped {stats['dropped_frames']}.")
 

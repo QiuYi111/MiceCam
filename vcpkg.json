@@ -8,6 +8,14 @@
     "gtest",
     "pybind11",
     "bzip2",
-    "liblzma"
+    "liblzma",
+    "zlib",
+    "fp16",
+    "libarchive",
+    "spdlog",
+    "ghc-filesystem",
+    "backward-cpp",
+    "libusb",
+    "libnop"
   ]
 }

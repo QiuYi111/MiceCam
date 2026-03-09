@@ -11,11 +11,11 @@ def api_call(endpoint, method="GET", data=None):
     url = f"{API_URL}{endpoint}"
     req = urllib.request.Request(url, method=method)
     req.add_header('Content-Type', 'application/json')
-    
+
     if data:
         body = json.dumps(data).encode('utf-8')
         req.data = body
-        
+
     try:
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read().decode('utf-8'))
@@ -33,11 +33,11 @@ def find_worker_pid():
 
 def test_happy_path():
     print("\n--- Test 1: Happy Path (Start/Stop) ---")
-    
+
     # 1. Stop if running
     api_call("/stop", "POST")
     time.sleep(1)
-    
+
     # 2. Start
     print("Starting recording...")
     res = api_call("/start", "POST", {
@@ -49,7 +49,7 @@ def test_happy_path():
     if not res or not res.get("success"):
         print("FAIL: Could not start recording")
         return False
-        
+
     # 3. Wait and check status
     time.sleep(3)
     status = api_call("/status")
@@ -57,7 +57,7 @@ def test_happy_path():
         print(f"FAIL: Status is not recording: {status}")
         return False
     print(f"Status OK: Captured {status.get('captured')} frames")
-    
+
     # 4. Stop
     print("Stopping...")
     api_call("/stop", "POST")
@@ -66,31 +66,31 @@ def test_happy_path():
     if status.get("is_recording"):
         print("FAIL: Failed to stop")
         return False
-        
+
     print("PASS: Happy Path")
     return True
 
 def test_chaos_recovery():
     print("\n--- Test 2: Chaos Recovery (Worker Kill) ---")
-    
+
     # 1. Start
     api_call("/start", "POST", {
         "device_index": 0,
-        "session_name": "test_chaos", 
+        "session_name": "test_chaos",
         "output_dir": "test_output",
         "fps": 30
     })
     time.sleep(3)
-    
+
     # 2. Kill Worker
     worker_pid = find_worker_pid()
     if not worker_pid:
         print("FAIL: Could not find worker process to kill")
         return False
-        
+
     print(f"killing worker process {worker_pid}...")
     psutil.Process(worker_pid).kill()
-    
+
     # 3. Check Status immediately (Should be recovering or True, NOT False)
     print("Checking status immediately after kill...")
     for i in range(5):
@@ -109,13 +109,13 @@ def test_chaos_recovery():
     # 4. Wait for recovery
     print("Waiting for worker to respawn...")
     time.sleep(3)
-    
+
     new_pid = find_worker_pid()
     if not new_pid or new_pid == worker_pid:
         print("FAIL: Worker did not respawn")
         return False
     print(f"Worker respawned with PID {new_pid}")
-    
+
     # 5. Stop
     api_call("/stop", "POST")
     print("PASS: Chaos Recovery")

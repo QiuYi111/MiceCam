@@ -64,18 +64,31 @@ if(WITH_OAK_CAMERA)
     # because HunterGate expects to run BEFORE the first project() call.
     # To bypass this without modifying the submodule, we rely on FetchContent instead
     # which manages this more gracefully, or simply define hunter vars.
-    # But since the submodule is in 3rdParty, we can just compile the library 
+    # But since the submodule is in 3rdParty, we can just compile the library
     # directly using standard cmake without hunter if we disable its tests
-    
+
     set(DEPTHAI_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core")
-    
+
     # Hunter workaround for add_subdirectory
     set(HUNTER_ENABLED OFF CACHE BOOL "Disable Hunter package manager" FORCE)
     set(DEPTHAI_BUILD_EXAMPLES OFF CACHE BOOL "Disable depthai-core examples" FORCE)
     set(DEPTHAI_BUILD_TESTS OFF CACHE BOOL "Disable depthai-core tests" FORCE)
-    
+
+    # Bypass CURL support to avoid cpr download issues
+    set(DEPTHAI_ENABLE_CURL OFF CACHE BOOL "Disable depthai-core CURL support" FORCE)
+
+    # Add XLink dependency (missing in depthai-core submodule without Hunter)
+    set(XLINK_LIBUSB_SYSTEM ON CACHE BOOL "Use system libusb via vcpkg" FORCE)
+    FetchContent_Declare(
+        xlink
+        GIT_REPOSITORY https://github.com/luxonis/XLink.git
+        GIT_TAG master
+    )
+    FetchContent_Populate(xlink)
+    set(DEPTHAI_XLINK_LOCAL "${xlink_SOURCE_DIR}" CACHE STRING "Path to local XLink source" FORCE)
+
     add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
-    
+
     set(DEPTHAI_FOUND ON)
 endif()
 
@@ -86,7 +99,7 @@ find_package(FFMPEG QUIET COMPONENTS avcodec avformat avutil avdevice swscale)
 if(NOT FFMPEG_FOUND)
     message(STATUS "Using vcpkg mapped FFMPEG targets")
     set(FFMPEG_FOUND ON)
-    # vcpkg creates standard targets we can link against usually; 
+    # vcpkg creates standard targets we can link against usually;
     # but we can also set the raw lib names for fallback.
     set(FFMPEG_LIBRARIES avcodec avformat avutil avdevice swscale)
 endif()
@@ -145,11 +158,11 @@ target_link_libraries(micecam_core PUBLIC
 # Camera backend (optional)
 if(WITH_CAMERA_BACKEND)
     set(CAMERA_SOURCES internal/infrastructure/camera_backend.cpp)
-    
+
     if(FFMPEG_FOUND)
         list(APPEND CAMERA_SOURCES internal/infrastructure/ffmpeg_camera_backend.cpp)
     endif()
-    
+
     if(DEPTHAI_FOUND)
         list(APPEND CAMERA_SOURCES internal/infrastructure/oak_camera_backend.cpp)
     endif()
@@ -194,20 +207,20 @@ if(WITH_CAMERA_BACKEND)
 
     # OAK Camera Targets
     if(DEPTHAI_FOUND)
-        add_executable(oak_camera_test tests/camera/oak_camera_test.cpp)
+        add_executable(oak_camera_test tests/oak_camera_test.cpp)
         target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
         target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
 
         add_executable(oak_quad_recorder cmd/examples/oak_quad_recorder.cpp)
         target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera depthai::core)
         target_compile_definitions(oak_quad_recorder PRIVATE WITH_OAK_CAMERA)
-        
+
         add_executable(oak_diagnostic cmd/examples/oak_diagnostic.cpp)
         target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
     endif()
 
     # FFmpeg camera test
-    add_executable(ffmpeg_camera_test tests/camera/ffmpeg_camera_test.cpp)
+    add_executable(ffmpeg_camera_test tests/ffmpeg_camera_test.cpp)
     target_link_libraries(ffmpeg_camera_test PRIVATE micecam_core micecam_camera)
     target_compile_definitions(ffmpeg_camera_test PRIVATE WITH_FFMPEG)
 endif()

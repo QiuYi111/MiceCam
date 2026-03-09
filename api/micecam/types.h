@@ -19,7 +19,7 @@ enum class PixelFormat {
 
 /**
  * @brief Read-only view of a frame for observer callbacks.
- * 
+ *
  * This is a lightweight, non-owning view. The data pointer is only valid
  * during the callback invocation. Observers that need to retain data
  * must copy it.

@@ -1,16 +1,16 @@
 /**
  * @file imgui_preview.cpp
  * @brief ImGui-based preview window for MiceCam
- * 
+ *
  * This example demonstrates how to create a real-time preview window
  * using the GpuJpegDecoder and ImGui.
- * 
+ *
  * **Build Requirements:**
  * - GLFW3
  * - ImGui (Dear ImGui)
  * - OpenGL 3.3+
  * - CUDA (optional, for hardware decoding)
- * 
+ *
  * **Usage:**
  *   imgui_preview.exe --device 0 --width 1920 --height 1080 --fps 30
  */
@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
     int height = 1080;
     double fps = 30.0;
     bool record = true;
-    
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--help") {
@@ -69,13 +69,13 @@ int main(int argc, char* argv[]) {
             record = false;
         }
     }
-    
+
     std::cout << "=== MiceCam ImGui Preview ===\n";
     std::cout << "Device: " << device_id << "\n";
     std::cout << "Resolution: " << width << "x" << height << " @ " << fps << " fps\n";
     std::cout << "Recording: " << (record ? "enabled" : "disabled") << "\n";
     std::cout << "==============================\n\n";
-    
+
     // NOTE: This is a skeleton implementation.
     // A full implementation would:
     // 1. Initialize GLFW window
@@ -85,11 +85,11 @@ int main(int argc, char* argv[]) {
     // 5. Start pipeline with decoder attached
     // 6. Main loop: poll events, render ImGui with decoder texture
     // 7. Cleanup
-    
+
     std::cout << "[INFO] This is a skeleton example.\n";
     std::cout << "[INFO] Full ImGui integration requires GLFW and ImGui libraries.\n";
     std::cout << "[INFO] See examples/imgui_preview.cpp for implementation details.\n";
-    
+
     // Demonstrate observer attachment
     try {
         // Create camera backend
@@ -98,28 +98,28 @@ int main(int argc, char* argv[]) {
         cam_config.width = width;
         cam_config.height = height;
         cam_config.fps = fps;
-        
+
         auto camera = std::make_unique<micecam::USBCameraBackend>();
-        
+
         std::cout << "[INFO] Camera backend created (not started in skeleton mode)\n";
-        
+
         // Create GPU decoder
         auto decoder = std::make_shared<micecam::GpuJpegDecoder>(width, height);
         std::cout << "[INFO] GPU decoder created\n";
-        
+
         // In a full implementation, we would:
         // pipeline.attach_observer(decoder);
         // pipeline.start();
         // ... render loop ...
         // pipeline.stop();
-        
+
         std::cout << "\n[SUCCESS] Preview skeleton initialized.\n";
         std::cout << "To build a full preview, add GLFW and ImGui dependencies.\n";
-        
+
     } catch (const std::exception& e) {
         std::cerr << "[ERROR] " << e.what() << "\n";
         return 1;
     }
-    
+
     return 0;
 }

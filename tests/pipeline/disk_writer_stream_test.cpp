@@ -14,14 +14,14 @@ protected:
     void SetUp() override {
         test_dir_ = "test_stream_output";
         std::filesystem::create_directories(test_dir_);
-        
+
         // Clean previous
         fs::remove_all(test_dir_);
         fs::create_directories(test_dir_);
     }
 
     void TearDown() override {
-        // fs::remove_all(test_dir_); 
+        // fs::remove_all(test_dir_);
     }
 
     std::string test_dir_;
@@ -40,7 +40,7 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
 
     DiskWriter writer(config);
     RingBuffer buffer(10);
-    
+
     // 1. Initial Start -> Should create file and write header
     ASSERT_TRUE(writer.start());
 
@@ -80,10 +80,10 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
     {
         std::ifstream f(jsonl_path);
         std::string line;
-        
+
         // Header
-        std::getline(f, line); 
-        
+        std::getline(f, line);
+
         // Frames
         int count = 0;
         while(std::getline(f, line)) {

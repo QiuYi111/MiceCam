@@ -43,25 +43,25 @@ def main():
     parser.add_argument('--session', default='python_demo',
                         help='Session name')
     args = parser.parse_args()
-    
+
     print(f"MiceCam Python SDK v{micecam.__version__}")
     print(f"Starting {args.backend} camera @ {args.width}x{args.height} {args.fps}fps")
     print(f"Recording to: {args.output}/{args.session}")
     print("-" * 50)
-    
+
     # Frame counter for callback
     frame_count = [0]
     total_bytes = [0]
     start_time = [None]
-    
+
     def on_frame(data, seq_id, timestamp):
         """Callback invoked for each captured frame."""
         if start_time[0] is None:
             start_time[0] = timestamp
-        
+
         frame_count[0] += 1
         total_bytes[0] += len(data)
-        
+
         # Print stats every 30 frames
         if frame_count[0] % 30 == 0:
             elapsed = timestamp - start_time[0]
@@ -71,7 +71,7 @@ def main():
                   f"FPS: {fps:6.1f} | "
                   f"Throughput: {mbps:6.1f} MB/s | "
                   f"Frame size: {len(data)/1024:.1f} KB", end='')
-    
+
     try:
         # Create and start pipeline using context manager
         with micecam.Pipeline(
@@ -83,28 +83,28 @@ def main():
             output_dir=args.output,
             session_name=args.session
         ) as pipeline:
-            
+
             # Attach our callback
             pipeline.attach_callback(on_frame)
-            
+
             # Record for specified duration
             print(f"Recording for {args.duration} seconds...")
             time.sleep(args.duration)
-            
+
             # Get final stats
             stats = pipeline.get_stats()
-        
+
         print("\n" + "-" * 50)
         print("Recording complete!")
         print(f"  Captured frames: {stats['captured_frames']}")
         print(f"  Dropped frames:  {stats['dropped_frames']}")
         print(f"  Drop rate:       {stats['drop_rate']*100:.2f}%")
         print(f"  Total data:      {total_bytes[0]/1e6:.1f} MB")
-        
+
     except Exception as e:
         print(f"\nError: {e}")
         return 1
-    
+
     return 0
 
 

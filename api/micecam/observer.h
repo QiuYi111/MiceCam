@@ -6,10 +6,10 @@ namespace micecam {
 
 /**
  * @brief Interface for frame observers.
- * 
+ *
  * Observers are notified whenever a new frame is available from the camera.
  * This is the "best-effort" path - observers may miss frames if they are slow.
- * 
+ *
  * @warning Implementations MUST return within <1ms. Long-running operations
  * (e.g., deep learning inference) must copy data internally and dispatch
  * to a separate thread.

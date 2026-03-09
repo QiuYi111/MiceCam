@@ -41,7 +41,7 @@ struct SessionConfig {
     std::string session_name;       // Filename prefix
     size_t ring_buffer_size = 100;  // Number of frames to buffer
     bool enable_checksums = true;   // Enable CRC32 integrity check
-    
+
     // Metadata Header Info
     std::string camera_backend_name;
     int width = 0;
@@ -76,20 +76,20 @@ int main() {
     // 1. Create Backend
     auto camera = std::make_unique<micecam::USBCameraBackend>(0);
     micecam::CameraConfig cam_config{.width=1920, .height=1080, .fps=30.0};
-    
+
     if (!camera->initialize(cam_config)) return -1;
 
     // 2. Configure Session
     micecam::SessionConfig session_config;
     session_config.output_dir = "C:/Data";
     session_config.session_name = "recording_01";
-    
+
     // 3. Run Pipeline
     micecam::IngestionPipeline pipeline(std::move(camera), session_config);
     pipeline.start();
-    
+
     // ... wait or handle user input ...
-    
+
     pipeline.stop();
     return 0;
 }

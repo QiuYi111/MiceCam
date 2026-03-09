@@ -30,7 +30,7 @@ DiskWriter::DiskWriter(const SessionConfig& config)
     session_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::high_resolution_clock::now().time_since_epoch()
     ).count();
-    
+
 #ifdef _WIN32
     // Allocate sector-aligned memory for unbuffered I/O
     aggregation_buffer_ = static_cast<uint8_t*>(VirtualAlloc(NULL, AGGREGATION_THRESHOLD, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
@@ -57,7 +57,7 @@ bool DiskWriter::start() {
     }
 
     const fs::path bin_path = fs::path(config_.output_dir) / (config_.session_name + ".bin");
-    
+
 #ifdef _WIN32
     h_file_ = CreateFileA(
         bin_path.string().c_str(),
@@ -184,8 +184,8 @@ void DiskWriter::write_loop() {
         }
 
         // 2. Memory aggregation (Memory Copy)
-        std::memcpy(aggregation_buffer_ + current_buffer_pos_, 
-                   frame.data->data(), 
+        std::memcpy(aggregation_buffer_ + current_buffer_pos_,
+                   frame.data->data(),
                    frame.data->size());
         current_buffer_pos_ += frame.size();
 
@@ -218,7 +218,7 @@ void DiskWriter::write_loop() {
         // Stream metadata to disk
         nlohmann::json j_record = record.to_json();
         j_record["type"] = "frame";
-        
+
         // No mutex needed for stream (single writer thread)
         if (metadata_file_.is_open()) {
             metadata_file_ << j_record.dump() << std::endl; // std::endl flushes
@@ -242,7 +242,7 @@ void DiskWriter::flush_aggregation_buffer() {
         // We round up the write size to the next 4KB boundary if it's the final flush,
         // but for intermediate flushes, we should ideally stay aligned.
         // However, our threshold is 128MB (aligned).
-        
+
         DWORD bytesToWrite = static_cast<DWORD>(current_buffer_pos_);
         // If not aligned to 4096, unbuffered WriteFile will fail.
         // So we PAD the buffer to 4096 alignment if needed.
@@ -261,7 +261,7 @@ void DiskWriter::flush_aggregation_buffer() {
     }
 #else
     if (bin_file_.is_open()) {
-        bin_file_.write(reinterpret_cast<const char*>(aggregation_buffer_), 
+        bin_file_.write(reinterpret_cast<const char*>(aggregation_buffer_),
                        current_buffer_pos_);
         if (!bin_file_.good()) {
             std::cerr << "Error flushing aggregation buffer to disk\n";
@@ -299,7 +299,7 @@ bool DiskWriter::finalize() {
     // Write Session Footer
     nlohmann::json footer = session_metadata_.to_json();
     footer["type"] = "session_end";
-    
+
     if (metadata_file_.is_open()) {
         metadata_file_ << footer.dump() << "\n";
         metadata_file_.close();

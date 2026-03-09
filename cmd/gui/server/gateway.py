@@ -43,13 +43,13 @@ def index():
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory('ui', 'favicon.ico') # Assuming favicon.ico exists in ui/ or handle 404 gracefully
-    
+
 def get_sdk_env():
     env = os.environ.copy()
     sdk_path = os.path.abspath("build/bindings/python/Release")
     if not os.path.exists(sdk_path):
          sdk_path = r"D:\MiceCam\build\bindings\python\Release"
-    
+
     if "PYTHONPATH" in env:
         env["PYTHONPATH"] = sdk_path + os.pathsep + env["PYTHONPATH"]
     else:
@@ -59,12 +59,12 @@ def get_sdk_env():
 @app.route('/api/status', methods=['GET'])
 def get_status():
     global last_status
-    
+
     # 1. Check if we are in "Recovery Mode" (Crash detected, restarting worker)
     if current_session and current_session.get("is_recovering"):
         # We pretend everything is fine to the UI to avoid reset
         return jsonify({
-            "is_recording": True, 
+            "is_recording": True,
             "status": "recovering",
             "fps": 0,
             "session": current_session["session_name"]
@@ -100,11 +100,11 @@ def get_decode_progress():
 @app.route('/api/cameras', methods=['GET'])
 def get_cameras():
     cameras = []
-    
+
     # Try to probe capabilities via SDK
     oak_resolutions = ["1280x800", "1280x720"]
     usb_resolutions = ["1920x1080", "1280x720", "640x480"]
-    
+
     if SDK_AVAILABLE:
         try:
             # Create a temp pipeline to probe (optimized)
@@ -116,41 +116,41 @@ def get_cameras():
 
     # Always offer OAK
     cameras.append({
-         "index": "oak", 
-         "name": "Luxonis OAK-4P (Quad Sync)", 
-         "type": "oak", 
+         "index": "oak",
+         "name": "Luxonis OAK-4P (Quad Sync)",
+         "type": "oak",
          "resolutions": oak_resolutions
     })
-    
+
     if SDK_AVAILABLE and _micecam.has_webcam_support():
         for i in range(2):
             cameras.append({
-                "index": i, 
-                "name": f"USB Camera {i}", 
-                "type": "usb", 
+                "index": i,
+                "name": f"USB Camera {i}",
+                "type": "usb",
                 "resolutions": usb_resolutions
             })
-            
+
     return jsonify(cameras)
 
 @app.route('/api/start', methods=['POST'])
 def start_recording():
     global recorder_process, current_session, last_status
-    
+
     if recorder_process and recorder_process.poll() is None:
         return jsonify({"success": False, "error": "Already recording"}), 400
-        
+
     data = request.json
     session_name = data.get('session_name') or f"session_{int(time.time())}"
     output_dir = data.get('output_dir') or 'recordings'
-    
-    if not os.path.exists(output_dir): 
+
+    if not os.path.exists(output_dir):
         try: os.makedirs(output_dir)
         except: pass
-        
+
     device_id = data.get('device_index', 0)
     backend = "oak" if device_id == "oak" else "ffmpeg"
-    
+
     if backend == "oak":
         width, height = 1280, 800
     else:
@@ -161,7 +161,7 @@ def start_recording():
         except: pass
     fps = float(data.get('fps', 30))
     # Pass 'oak' or integer string to worker
-    worker_dev_idx = str(device_id) 
+    worker_dev_idx = str(device_id)
 
     current_session = {
         "session_name": session_name,
@@ -174,7 +174,7 @@ def start_recording():
         "restart_count": 0,
         "is_recovering": False
     }
-    
+
     launch_worker()
     return jsonify({"success": True})
 
@@ -186,12 +186,12 @@ def launch_worker():
         cfg['output_dir'], cfg['session_name'], cfg['backend'],
         str(cfg['width']), str(cfg['height']), str(cfg['fps']), str(cfg['dev_idx'])
     ]
-    
+
     if cfg['restart_count'] > 0:
         cmd.append("--append") # Logic for worker to resume bin file
 
     if os.path.exists("stop_signal.txt"): os.remove("stop_signal.txt")
-    
+
     env = get_sdk_env()
     log_file = open(f"worker_{cfg['session_name']}.log", "a")
     recorder_process = subprocess.Popen(cmd, env=env, stdout=log_file, stderr=subprocess.STDOUT)
@@ -213,19 +213,19 @@ def monitor_loop():
             ret = recorder_process.poll()
             if ret is not None:
                 logger.info(f"Worker exited with code {ret}")
-                
+
                 # Check if it was a crash or intentional
                 if current_session and not current_session.get("user_stop_intent") and ret != 0:
                     if current_session["restart_count"] < 5: # Increased limit
                         logger.warning(f"CRASH DETECTED. Restarting session {current_session['session_name']}...")
                         current_session["restart_count"] += 1
                         current_session["is_recovering"] = True # ENTER RECOVERY MODE
-                        
+
                         launch_worker()
-                        
+
                         # Give it a moment to spin up before clearing recovery flag
                         # Ideally, we should check if process is stable, but a sleep helps for now
-                        time.sleep(1.0) 
+                        time.sleep(1.0)
                         current_session["is_recovering"] = False
                         continue # Skip cleanup
                     else:
@@ -237,10 +237,10 @@ def monitor_loop():
                     cfg = current_session
                     cmd_dec = [sys.executable, "decoder.py", cfg['output_dir'], cfg['session_name']]
                     start_decoder(cmd_dec)
-                
+
                 recorder_process = None
                 current_session = None
-        
+
         time.sleep(1)
 
 def start_decoder(cmd):

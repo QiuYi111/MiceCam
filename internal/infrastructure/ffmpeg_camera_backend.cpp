@@ -46,7 +46,7 @@ bool FFmpegCameraBackend::open_device() {
     // Set buffer size to avoid drops
     av_dict_set(&options, "rtbufsize", "1024M", 0);
 
-    // Device string for Windows dshow. 
+    // Device string for Windows dshow.
     // We'll use the robust PNP ID verified in previous logs.
     std::string device_name = "video=@device_pnp_\\\\?\\usb#vid_1bcf&pid_2cd1&mi_00#6&197ce02b&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global";
 
@@ -121,9 +121,9 @@ std::unique_ptr<Frame> FFmpegCameraBackend::get_frame() {
             // We have an MJPEG packet. Wrap it into a Frame.
             auto frame_data = std::make_unique<std::vector<uint8_t>>(pkt_->size);
             std::memcpy(frame_data->data(), pkt_->data, pkt_->size);
-            
+
             auto frame = std::make_unique<Frame>(frame_count_.fetch_add(1), std::move(frame_data));
-            
+
             av_packet_unref(pkt_);
             return frame;
         }

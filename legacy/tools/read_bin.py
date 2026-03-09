@@ -48,7 +48,7 @@ class MiceCamReader:
                 self.metadata_path = matches[0]
             else:
                 raise FileNotFoundError(f"Metadata file not found: {self.metadata_path}")
-        
+
         # 加载元数据
         with open(self.metadata_path, 'r') as f:
             try:
@@ -74,10 +74,10 @@ class MiceCamReader:
             if alt_name.endswith('_recovered'):
                 alt_name = alt_name.replace('_recovered', '')
             candidate_bin = self.metadata_path.parent / (alt_name + '.bin')
-            
+
         if not candidate_bin.exists():
             raise FileNotFoundError(f"Binary file not found. Checked: {self.bin_path} and {candidate_bin}")
-        
+
         self.bin_path = candidate_bin
 
         # 相机参数 (provide defaults for recovered sessions)
@@ -134,7 +134,7 @@ class MiceCamReader:
                 print("Error: opencv-python is not installed, cannot decode compressed frames.")
             except Exception as e:
                 print(f"Error during decoding frame {frame_id}: {e}")
-            
+
             print(f"Warning: Unexpected frame size {frame.size} and failed to decode as image.")
             frame = frame.reshape(-1)
 

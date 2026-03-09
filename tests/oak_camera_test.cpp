@@ -41,7 +41,7 @@ int main() {
                 if (i == 0 && frames_seen % 30 == 0) {
                     std::cout << "Captured Group " << frame->sequence_id << "...\n";
                 }
-                if (i == 3) frames_seen++; 
+                if (i == 3) frames_seen++;
             }
         }
     }

@@ -1,6 +1,6 @@
 # MiceCam Windows Build Script
 # Requires: CMake, Visual Studio 2019+ or Build Tools
-# 
+#
 # Usage:
 #   .\build.ps1              # Debug build
 #   .\build.ps1 -Release     # Release build
@@ -40,37 +40,37 @@ try {
     # Configure with CMake
     Write-Host ""
     Write-Host "[1/3] Configuring CMake..." -ForegroundColor Yellow
-    
+
     $cmakeArgs = @("..")
-    
+
     # Add generator if not using default
     # Uncomment the following line to use Ninja if available
     # $cmakeArgs += "-G", "Ninja"
-    
+
     cmake @cmakeArgs
-    
+
     if ($LASTEXITCODE -ne 0) {
         throw "CMake configuration failed"
     }
-    
+
     # Build
     Write-Host ""
     Write-Host "[2/3] Building..." -ForegroundColor Yellow
-    
+
     cmake --build . --config $BuildType --parallel
-    
+
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed"
     }
-    
+
     Write-Host ""
     Write-Host "Build successful!" -ForegroundColor Green
-    
+
     # Run tests unless skipped
     if (-not $NoTests) {
         Write-Host ""
         Write-Host "[3/3] Running tests..." -ForegroundColor Yellow
-        
+
         $testExe = ".\$BuildType\micecam_tests.exe"
         if (Test-Path $testExe) {
             & $testExe --gtest_color=yes
@@ -86,7 +86,7 @@ try {
     } else {
         Write-Host "[3/3] Skipping tests (--NoTests specified)" -ForegroundColor Yellow
     }
-    
+
     Write-Host ""
     Write-Host "=====================================" -ForegroundColor Green
     Write-Host "         Build Complete!             " -ForegroundColor Green

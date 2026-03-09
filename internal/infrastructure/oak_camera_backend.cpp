@@ -38,10 +38,10 @@ struct OAKCameraBackend::Impl {
     std::shared_ptr<dai::Device> device;
     dai::Pipeline pipeline;
     std::shared_ptr<dai::DataOutputQueue> syncQueue;
-    
+
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> total_groups_{0};
-    
+
     std::mutex mtx;
     std::condition_variable cv;
     std::queue<std::shared_ptr<dai::MessageGroup>> proxy_queues[4];
@@ -82,15 +82,15 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
     try {
         auto boardConfig = dai::BoardConfig();
         boardConfig.gpio[42] = dai::BoardConfig::GPIO(
-            dai::BoardConfig::GPIO::Direction::INPUT, 
-            dai::BoardConfig::GPIO::Level::HIGH, 
+            dai::BoardConfig::GPIO::Direction::INPUT,
+            dai::BoardConfig::GPIO::Level::HIGH,
             dai::BoardConfig::GPIO::Pull::PULL_DOWN
         );
         impl_->pipeline.setBoardConfig(boardConfig);
 
         auto sync = impl_->pipeline.create<dai::node::Sync>();
         sync->setSyncThreshold(std::chrono::milliseconds(50));
-        
+
         auto xout = impl_->pipeline.create<dai::node::XLinkOut>();
         xout->setStreamName("quad_sync");
         sync->out.link(xout->input);
@@ -107,16 +107,16 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             cam->setBoardSocket(socket);
             cam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
             cam->setFps(config.fps);
-            
+
             if (socket == dai::CameraBoardSocket::CAM_A) {
                 cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::OUTPUT);
             } else {
                 cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::INPUT);
             }
-            
+
             auto encoder = impl_->pipeline.create<dai::node::VideoEncoder>();
             encoder->setDefaultProfilePreset(config.fps, dai::VideoEncoderProperties::Profile::MJPEG);
-            
+
             cam->video.link(encoder->input);
             encoder->bitstream.link(sync->inputs[name]);
         }
@@ -131,7 +131,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
                 std::this_thread::sleep_for(std::chrono::seconds(2));
             }
         }
-        
+
         impl_->syncQueue = impl_->device->getOutputQueue("quad_sync", 8, false);
         return true;
     } catch (const std::exception& e) {
@@ -181,12 +181,12 @@ std::unique_ptr<ICameraBackend> OAKCameraBackend::create_proxy(int socket_index)
 std::unique_ptr<Frame> VirtualOAKBackend::get_frame() {
     if (!master_ || !master_->impl_->running_) return nullptr;
     auto& impl = *master_->impl_;
-    
+
     std::unique_lock<std::mutex> lock(impl.mtx);
     impl.cv.wait(lock, [&]{ return !impl.running_ || !impl.proxy_queues[socket_index_].empty(); });
-    
+
     if (!impl.running_ || impl.proxy_queues[socket_index_].empty()) return nullptr;
-    
+
     auto group = impl.proxy_queues[socket_index_].front();
     impl.proxy_queues[socket_index_].pop();
     lock.unlock();

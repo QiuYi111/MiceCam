@@ -31,3 +31,5 @@ build_pyinstaller/
 *.wixpdb
 files.wxs
 *.msi
+build_test/
+build_test/*

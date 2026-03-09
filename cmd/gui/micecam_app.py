@@ -1,6 +1,10 @@
 import sys
 import os
 
+# Add the directory containing this script to sys.path
+# This allows running from the project root while maintaining internal module resolution
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 # --- DEBUGGING HOOK ---
 try:
     import debug_utils

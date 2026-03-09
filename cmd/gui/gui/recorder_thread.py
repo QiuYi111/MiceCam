@@ -78,10 +78,13 @@ class RecorderThread(QObject):
         else:
              # In source mode, sys.executable is python.exe
              # We need to pass the script name 'recorder_worker.py' direclty
-             # (Bypassing micecam_app.py --worker dispatch to be closer to production)
-             worker_script = os.path.join(os.getcwd(), "recorder_worker.py")
+             # In source mode, sys.executable is python.exe
+             # Use the same directory as this script to find recorder_worker.py
+             base_dir = os.path.dirname(os.path.abspath(__file__))
+             worker_script = os.path.join(base_dir, "..", "recorder_worker.py")
              if not os.path.exists(worker_script):
-                 worker_script = "recorder_worker.py"
+                 worker_script = os.path.join(base_dir, "recorder_worker.py")
+             
              exe_path = sys.executable
              script_arg = [worker_script]
              

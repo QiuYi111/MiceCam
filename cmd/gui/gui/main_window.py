@@ -9,19 +9,8 @@ from PyQt6.QtCore import Qt, QTimer, QSize
 from PyQt6.QtGui import QFont, QIcon, QColor, QTextCursor
 from PyQt6.QtMultimedia import QMediaDevices, QCameraDevice
 
-# ...
-# (lines 11-307 unchanged)
 
-    def refresh_cameras(self):
-        self.cb_camera.clear()
-        self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
-        
-        # Real Enumeration via QtMultimedia
-        cameras = QMediaDevices.videoInputs()
-        for i, cam in enumerate(cameras):
-            # i is likely the dshow index if order is preserved
-            name = cam.description()
-            self.cb_camera.addItem(f"{name} (Index {i})", str(i))
+SDK_AVAILABLE = True
 STYLESHEET = """
 QMainWindow {
     background-color: #f0f2f5;

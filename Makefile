@@ -1,7 +1,7 @@
 # Neural-Grid Standard Makefile
 # "The only valid interface to the project"
 
-.PHONY: init up down proto test lint verify clean help
+.PHONY: init up down proto test lint verify clean help build
 
 # --- Configuration ---
 PROJECT_NAME := micecam
@@ -15,19 +15,20 @@ CMAKE_MAKE_PROGRAM := $(shell which make)
 
 define check_macos_deps
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		for dep in autoconf automake pkg-config; do \
+		echo "🍎 Checking macOS dependencies..."; \
+		for dep in autoconf automake pkg-config nasm; do \
 			if ! command -v $$dep >/dev/null 2>&1; then \
-				echo "❌ Error: $$dep not found. Please run: brew install autoconf autoconf-archive automake libtool pkg-config"; \
-				exit 1; \
+				echo "📦 Missing $$dep. Attempting to install via Homebrew..."; \
+				brew install $$dep || { echo "❌ Failed to install $$dep."; exit 1; }; \
 			fi; \
 		done; \
 		if ! command -v glibtoolize >/dev/null 2>&1; then \
-			echo "❌ Error: libtoolize (glibtoolize) not found. Please run: brew install libtool"; \
-			exit 1; \
+			echo "📦 Missing libtool. Attempting to install via Homebrew..."; \
+			brew install libtool || { echo "❌ Failed to install libtool."; exit 1; }; \
 		fi; \
 		if ! brew list autoconf-archive >/dev/null 2>&1; then \
-			echo "❌ Error: autoconf-archive not found. Please run: brew install autoconf-archive"; \
-			exit 1; \
+			echo "📦 Missing autoconf-archive. Attempting to install via Homebrew..."; \
+			brew install autoconf-archive || { echo "❌ Failed to install autoconf-archive."; exit 1; }; \
 		fi; \
 	fi
 endef

@@ -7,6 +7,8 @@
 PROJECT_NAME := micecam
 BUILD_DIR := build
 PYTHON_ENV := .venv
+VCPKG_ROOT := $(CURDIR)/vcpkg
+VCPKG_TOOLCHAIN := $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
 
 # --- 1. Environment & Setup ---
 
@@ -15,6 +17,11 @@ help: ## Show this help message
 
 init: ## Initialize development environment (Tools, Hooks)
 	@echo "🛠️  Initializing Development Environment..."
+	@if [ ! -d "$(VCPKG_ROOT)" ]; then \
+		echo "📦 vcpkg not found. Cloning vcpkg..."; \
+		git clone https://github.com/microsoft/vcpkg.git $(VCPKG_ROOT); \
+		$(VCPKG_ROOT)/bootstrap-vcpkg.sh; \
+	fi
 	@uv venv $(PYTHON_ENV)
 	@uv pip install pre-commit pytest ruff mypy pybind11
 	@pre-commit install
@@ -34,7 +41,12 @@ down: ## Stop infrastructure
 
 build: ## Build CMake project
 	@echo "🔨 Building MiceCam SDK..."
-	@cmake -B $(BUILD_DIR) -S . -DCMAKE_TOOLCHAIN_FILE="$$(vcpkg get toolchain)" -DCMAKE_EXPORT_COMPILE_COMMANDS=1
+	@if [ ! -f "$(VCPKG_TOOLCHAIN)" ]; then \
+		echo "📦 vcpkg toolchain not found. Initializing vcpkg..."; \
+		if [ ! -d "$(VCPKG_ROOT)" ]; then git clone https://github.com/microsoft/vcpkg.git $(VCPKG_ROOT); fi; \
+		$(VCPKG_ROOT)/bootstrap-vcpkg.sh; \
+	fi
+	@cmake -B $(BUILD_DIR) -S . -DCMAKE_TOOLCHAIN_FILE="$(VCPKG_TOOLCHAIN)" -DCMAKE_EXPORT_COMPILE_COMMANDS=1
 	@cmake --build $(BUILD_DIR) -j
 	@echo "✅ Build complete."
 

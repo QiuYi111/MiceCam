@@ -1,4 +1,4 @@
-#include "infrastructure/hdf5_converter.h"
+#include "micecam/pipeline/hdf5_converter.h"
 #include <iostream>
 #include <fstream>
 

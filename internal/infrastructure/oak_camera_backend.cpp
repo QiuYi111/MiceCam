@@ -1,4 +1,4 @@
-#include "infrastructure/oak_camera_backend.h"
+#include "micecam/camera/oak_camera_backend.h"
 #include <depthai/depthai.hpp>
 #include <iostream>
 #include <vector>
@@ -35,9 +35,8 @@ private:
 };
 
 struct OAKCameraBackend::Impl {
-    std::shared_ptr<dai::Device> device;
     dai::Pipeline pipeline;
-    std::shared_ptr<dai::DataOutputQueue> syncQueue;
+    std::shared_ptr<dai::MessageQueue> syncQueue;
 
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> total_groups_{0};
@@ -91,10 +90,6 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
         auto sync = impl_->pipeline.create<dai::node::Sync>();
         sync->setSyncThreshold(std::chrono::milliseconds(50));
 
-        auto xout = impl_->pipeline.create<dai::node::XLinkOut>();
-        xout->setStreamName("quad_sync");
-        sync->out.link(xout->input);
-
         std::vector<std::pair<dai::CameraBoardSocket, std::string>> sockets = {
             {dai::CameraBoardSocket::CAM_A, "CAM_A"},
             {dai::CameraBoardSocket::CAM_B, "CAM_B"},
@@ -124,7 +119,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
         int retries = 3;
         while (retries > 0) {
             try {
-                impl_->device = std::make_shared<dai::Device>(impl_->pipeline);
+                impl_->pipeline.start();
                 break;
             } catch (const std::exception& e) {
                 if (--retries == 0) throw;
@@ -132,7 +127,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             }
         }
 
-        impl_->syncQueue = impl_->device->getOutputQueue("quad_sync", 8, false);
+        impl_->syncQueue = sync->out.createOutputQueue(8, false);
         return true;
     } catch (const std::exception& e) {
         std::cerr << "OAK Init Error: " << e.what() << "\n";
@@ -154,7 +149,7 @@ void OAKCameraBackend::stop() {
     if (impl_->distributor_thread.joinable()) {
         impl_->distributor_thread.join();
     }
-    if (impl_->device) impl_->device->close();
+    impl_->pipeline.stop();
 }
 
 std::unique_ptr<Frame> OAKCameraBackend::get_frame() {
@@ -196,7 +191,8 @@ std::unique_ptr<Frame> VirtualOAKBackend::get_frame() {
     if (!imgFrame) return nullptr;
 
     frame_count_++;
-    auto data = std::make_unique<std::vector<uint8_t>>(imgFrame->getData());
+    auto data_span = imgFrame->getData();
+    auto data = std::make_unique<std::vector<uint8_t>>(data_span.begin(), data_span.end());
     return std::make_unique<Frame>(frame_count_, std::move(data));
 }
 

@@ -12,7 +12,6 @@ bool test_socket(dai::CameraBoardSocket socket, std::string socket_name) {
 
     dai::Pipeline pipeline;
     auto cam = pipeline.create<dai::node::ColorCamera>();
-    auto xout = pipeline.create<dai::node::XLinkOut>();
 
     cam->setBoardSocket(socket);
     cam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
@@ -21,12 +20,9 @@ bool test_socket(dai::CameraBoardSocket socket, std::string socket_name) {
     // IMPORTANT: Set to AUTO first to ensure it generates frames without waiting for triggering
     cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::OFF);
 
-    xout->setStreamName("preview");
-    cam->isp.link(xout->input);
-
     try {
-        dai::Device device(pipeline);
-        auto q = device.getOutputQueue("preview", 8, false);
+        pipeline.start();
+        auto q = cam->isp.createOutputQueue(8, false);
 
         std::cout << "Waiting for frames (timeout 3s)...\n";
         bool received = false;
@@ -84,18 +80,10 @@ bool test_sync_pair(dai::CameraBoardSocket master, dai::CameraBoardSocket slave)
     );
     pipeline.setBoardConfig(boardConfig);
 
-    auto xoutA = pipeline.create<dai::node::XLinkOut>();
-    xoutA->setStreamName("previewA");
-    camA->isp.link(xoutA->input);
-
-    auto xoutB = pipeline.create<dai::node::XLinkOut>();
-    xoutB->setStreamName("previewB");
-    camB->isp.link(xoutB->input);
-
     try {
-        dai::Device device(pipeline);
-        auto qA = device.getOutputQueue("previewA", 4, false);
-        auto qB = device.getOutputQueue("previewB", 4, false);
+        pipeline.start();
+        auto qA = camA->isp.createOutputQueue(4, false);
+        auto qB = camB->isp.createOutputQueue(4, false);
 
         std::cout << "Waiting for synchronized frames (timeout 3s)...\n";
         bool received = false;
@@ -145,10 +133,6 @@ bool test_quad_sync() {
     auto sync = pipeline.create<dai::node::Sync>();
     sync->setSyncThreshold(std::chrono::milliseconds(50));
 
-    auto xout = pipeline.create<dai::node::XLinkOut>();
-    xout->setStreamName("quad_sync");
-    sync->out.link(xout->input);
-
     std::vector<dai::CameraBoardSocket> sockets = {
         dai::CameraBoardSocket::CAM_A, dai::CameraBoardSocket::CAM_B,
         dai::CameraBoardSocket::CAM_C, dai::CameraBoardSocket::CAM_D
@@ -185,8 +169,8 @@ bool test_quad_sync() {
     }
 
     try {
-        dai::Device device(pipeline);
-        auto q = device.getOutputQueue("quad_sync", 4, false);
+        pipeline.start();
+        auto q = sync->out.createOutputQueue(4, false);
 
         std::cout << "Waiting for quad-synchronized MJPEG frames (timeout 3s)...\n";
         bool received = false;

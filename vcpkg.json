@@ -11,11 +11,23 @@
     "liblzma",
     "zlib",
     "fp16",
-    "libarchive",
+    {
+      "name": "libarchive",
+      "default-features": false
+    },
     "spdlog",
     "ghc-filesystem",
     "backward-cpp",
     "libusb",
-    "libnop"
+    "libnop",
+    "lz4",
+    "neargye-semver",
+    "magic-enum",
+    "eigen3",
+    "argparse",
+    "yaml-cpp",
+    "fmt",
+    "xtensor",
+    "xtl"
   ]
 }

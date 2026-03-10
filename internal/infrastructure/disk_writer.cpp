@@ -1,4 +1,4 @@
-#include "infrastructure/disk_writer.h"
+#include "micecam/pipeline/disk_writer.h"
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <cstring>

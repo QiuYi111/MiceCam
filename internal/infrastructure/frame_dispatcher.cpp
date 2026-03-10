@@ -1,4 +1,4 @@
-#include "infrastructure/frame_dispatcher.h"
+#include "micecam/pipeline/frame_dispatcher.h"
 #include <iostream>
 #include <algorithm>
 

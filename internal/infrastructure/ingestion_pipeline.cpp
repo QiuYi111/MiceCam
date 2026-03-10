@@ -1,4 +1,4 @@
-#include "infrastructure/ingestion_pipeline.h"
+#include "micecam/pipeline/ingestion_pipeline.h"
 #include <iostream>
 
 namespace micecam {

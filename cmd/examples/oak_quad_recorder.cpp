@@ -1,5 +1,5 @@
-#include "infrastructure/ingestion_pipeline.h"
-#include "infrastructure/oak_camera_backend.h"
+#include "micecam/pipeline/ingestion_pipeline.h"
+#include "micecam/camera/oak_camera_backend.h"
 #include <iostream>
 #include <vector>
 #include <thread>

@@ -1,4 +1,4 @@
-#include "infrastructure/camera_backend.h"
+#include "micecam/camera/camera_backend.h"
 
 namespace micecam {
 

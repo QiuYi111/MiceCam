@@ -1,6 +1,6 @@
 #pragma once
 
-#include "infrastructure/camera_backend.h"
+#include "micecam/camera/camera_backend.h"
 #include <atomic>
 #include <memory>
 #include <string>

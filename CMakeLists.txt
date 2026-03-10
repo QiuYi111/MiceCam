@@ -29,7 +29,7 @@ else()
 endif()
 
 # Build options
-option(BUILD_TESTS "Build test suite" ON)
+option(BUILD_TESTS "Build test suite" OFF)
 option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings (requires pybind11)" OFF)
 option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
@@ -41,21 +41,10 @@ find_package(OpenCV QUIET)
 # Standard CMake discovery
 include(FetchContent)
 
-# JSON library (header-only)
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-)
-FetchContent_MakeAvailable(nlohmann_json)
+# nlohmann_json - provided by vcpkg
+find_package(nlohmann_json CONFIG REQUIRED)
 
-# libnop (header-only, required by depthai-core headers)
-FetchContent_Declare(
-    libnop
-    GIT_REPOSITORY https://github.com/luxonis/libnop.git
-    GIT_TAG ab842f51dc2eb13916dc98417c2186b78320ed10
-)
-FetchContent_MakeAvailable(libnop)
+# libnop (header-only, required by depthai-core headers) - handled by depthai-core internally
 
 # Luxonis DepthAI Core (Using FetchContent)
 option(WITH_OAK_CAMERA "Build with OAK camera support (requires depthai-core)" ON)
@@ -69,23 +58,42 @@ if(WITH_OAK_CAMERA)
 
     set(DEPTHAI_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core")
 
-    # Hunter workaround for add_subdirectory
+    # Disable Hunter and examples/tests
     set(HUNTER_ENABLED OFF CACHE BOOL "Disable Hunter package manager" FORCE)
     set(DEPTHAI_BUILD_EXAMPLES OFF CACHE BOOL "Disable depthai-core examples" FORCE)
     set(DEPTHAI_BUILD_TESTS OFF CACHE BOOL "Disable depthai-core tests" FORCE)
 
-    # Bypass CURL support to avoid cpr download issues
-    set(DEPTHAI_ENABLE_CURL OFF CACHE BOOL "Disable depthai-core CURL support" FORCE)
+    # Disable depthai-core's internal vcpkg bootstrap (we use our own project-level vcpkg)
+    set(DEPTHAI_BOOTSTRAP_VCPKG OFF CACHE BOOL "Disable depthai-core internal vcpkg" FORCE)
 
-    # Add XLink dependency (missing in depthai-core submodule without Hunter)
+    # Use external dependencies (vcpkg)
+    set(DEPTHAI_JSON_EXTERNAL ON CACHE BOOL "" FORCE)
+    # Let depthai-core fetch libnop internally since the vcpkg port lacks CMake configs
+    set(DEPTHAI_LIBNOP_EXTERNAL OFF CACHE BOOL "" FORCE)
+
+    # Disable unused features to reduce dependency bloat
+    set(DEPTHAI_ENABLE_CURL OFF CACHE BOOL "Disable depthai-core CURL support" FORCE)
+    set(DEPTHAI_ENABLE_MP4V2 OFF CACHE BOOL "Disable depthai-core MP4V2 support" FORCE)
+    set(DEPTHAI_ENABLE_APRIL_TAG OFF CACHE BOOL "Disable depthai-core AprilTag support" FORCE)
+    set(DEPTHAI_ENABLE_PROTOBUF OFF CACHE BOOL "Disable depthai-core Protobuf support" FORCE)
+    set(DEPTHAI_XTENSOR_SUPPORT ON CACHE BOOL "Enable depthai-core xtensor support" FORCE)
+    set(DEPTHAI_ENABLE_REMOTE_CONNECTION OFF CACHE BOOL "Disable depthai-core remote connection" FORCE)
+
+    # Ensure libusb for XLink
+    set(XLINK_ENABLE_LIBUSB ON CACHE BOOL "" FORCE)
     set(XLINK_LIBUSB_SYSTEM ON CACHE BOOL "Use system libusb via vcpkg" FORCE)
+
+    # Provide cpp-httplib via FetchContent (vcpkg download has hash mismatch)
     FetchContent_Declare(
-        xlink
-        GIT_REPOSITORY https://github.com/luxonis/XLink.git
-        GIT_TAG master
+        httplib
+        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+        GIT_TAG v0.18.3
+        GIT_SHALLOW TRUE
+        OVERRIDE_FIND_PACKAGE
     )
-    FetchContent_Populate(xlink)
-    set(DEPTHAI_XLINK_LOCAL "${xlink_SOURCE_DIR}" CACHE STRING "Path to local XLink source" FORCE)
+    FetchContent_MakeAvailable(httplib)
+    # Required for depthai-core's target export
+    install(TARGETS httplib EXPORT depthaiDependencies)
 
     add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
 
@@ -207,22 +215,39 @@ if(WITH_CAMERA_BACKEND)
 
     # OAK Camera Targets
     if(DEPTHAI_FOUND)
-        add_executable(oak_camera_test tests/oak_camera_test.cpp)
-        target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
-        target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
+        if(APPLE)
+            set(MAC_FRAMEWORKS "-framework CoreFoundation" "-framework IOKit")
+            target_link_libraries(micecam_camera PUBLIC ${MAC_FRAMEWORKS})
+        endif()
+        if(BUILD_TESTS)
+            add_executable(oak_camera_test tests/oak_camera_test.cpp)
+            target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
+            target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
+            if(APPLE)
+                target_link_libraries(oak_camera_test PRIVATE ${MAC_FRAMEWORKS})
+            endif()
+        endif()
 
         add_executable(oak_quad_recorder cmd/examples/oak_quad_recorder.cpp)
         target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera depthai::core)
         target_compile_definitions(oak_quad_recorder PRIVATE WITH_OAK_CAMERA)
+        if(APPLE)
+            target_link_libraries(oak_quad_recorder PRIVATE ${MAC_FRAMEWORKS})
+        endif()
 
         add_executable(oak_diagnostic cmd/examples/oak_diagnostic.cpp)
         target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
+        if(APPLE)
+            target_link_libraries(oak_diagnostic PRIVATE ${MAC_FRAMEWORKS})
+        endif()
     endif()
 
     # FFmpeg camera test
-    add_executable(ffmpeg_camera_test tests/ffmpeg_camera_test.cpp)
-    target_link_libraries(ffmpeg_camera_test PRIVATE micecam_core micecam_camera)
-    target_compile_definitions(ffmpeg_camera_test PRIVATE WITH_FFMPEG)
+    if(BUILD_TESTS)
+        add_executable(ffmpeg_camera_test tests/ffmpeg_camera_test.cpp)
+        target_link_libraries(ffmpeg_camera_test PRIVATE micecam_core micecam_camera)
+        target_compile_definitions(ffmpeg_camera_test PRIVATE WITH_FFMPEG)
+    endif()
 endif()
 
 # Tests
@@ -265,11 +290,6 @@ if(WITH_CAMERA_BACKEND)
     target_link_libraries(micecam PRIVATE micecam_camera)
 endif()
 
-# Demo executable
-add_executable(micecam_demo
-    demo_simple.cpp
-)
-target_link_libraries(micecam_demo PRIVATE micecam_core)
 
 # Installation
 

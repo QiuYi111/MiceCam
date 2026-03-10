@@ -1,5 +1,5 @@
 #ifdef WITH_USB_CAMERA
-#include "infrastructure/usb_camera_backend.h"
+#include "micecam/camera/usb_camera_backend.h"
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <stdexcept>

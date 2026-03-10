@@ -1,9 +1,9 @@
 #pragma once
 
-#include "infrastructure/camera_backend.h"
+#include "micecam/camera/camera_backend.h"
 #include "domain/ring_buffer.h"
-#include "infrastructure/disk_writer.h"
-#include "infrastructure/frame_dispatcher.h"
+#include "micecam/pipeline/disk_writer.h"
+#include "micecam/pipeline/frame_dispatcher.h"
 #include "micecam/types.h"
 #include <atomic>
 #include <memory>

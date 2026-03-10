@@ -9,6 +9,8 @@
 #include <thread>
 #include "micecam/pipeline/ingestion_pipeline.h"
 #include "micecam/camera/camera_backend.h"
+#include "micecam/pipeline/decoder.h"
+#include <QtConcurrent/QtConcurrent>
 
 #ifdef WITH_OAK_CAMERA
 #include "micecam/camera/oak_camera_backend.h"
@@ -21,6 +23,7 @@
 PipelineController::PipelineController(QObject *parent)
     : QObject(parent)
 {
+    m_decoder = std::make_unique<micecam::Decoder>();
     // Auto-generate a fallback session name
     m_sessionName = "session_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
 }
@@ -217,32 +220,30 @@ void PipelineController::stopRecording() {
     log("Recording stopped. Session saved.");
 
     if (m_autoDecode) {
-        log("Auto-decode enabled. Launching decoder...");
+        log("Auto-decode enabled. Launching native C++ decoder...");
 
-        if (!m_decoderProcess) {
-            m_decoderProcess = new QProcess(this);
-            connect(m_decoderProcess, &QProcess::readyReadStandardOutput, this, [this]() {
-                QString out = m_decoderProcess->readAllStandardOutput();
-                log("Decoder: " + out.trimmed());
-            });
-            connect(m_decoderProcess, &QProcess::finished, this, [this](int exitCode) {
-                if (exitCode == 0) {
-                    log("Decoding finished successfully.");
-                    m_decodeProgress = 100.0;
-                } else {
-                    log("Decoding failed with code " + QString::number(exitCode));
-                    m_decodeProgress = 0.0;
-                }
+        std::string outputDir = m_outputDir.toStdString();
+        std::string sessionName = m_sessionName.toStdString();
+        std::string targetParentDir = (QDir(m_outputDir).filePath(m_sessionName + "_decoded")).toStdString();
+
+        QtConcurrent::run([this, outputDir, sessionName, targetParentDir]() {
+            m_decodeProgress = 5.0;
+            emit decodeProgressChanged(m_decodeProgress);
+
+            auto cb = [this](float p) {
+                m_decodeProgress = p;
                 emit decodeProgressChanged(m_decodeProgress);
-            });
-        }
+            };
 
-        QStringList args;
-        // Adjust path to find decoder.py relative to the likely project structure
-        args << "/Users/qiujingyi.7/MiceCam/cmd/gui/decoder.py" << m_outputDir << m_sessionName;
-        m_decoderProcess->start("python3", args);
-        m_decodeProgress = 10.0; // Started
-        emit decodeProgressChanged(m_decodeProgress);
+            if (m_decoder->decode_micecam_project(outputDir, sessionName, targetParentDir, cb)) {
+                log("Native decoding finished successfully. Exported to: " + QString::fromStdString(targetParentDir));
+                m_decodeProgress = 100.0;
+            } else {
+                log("Native decoding failed. Check project files.");
+                m_decodeProgress = 0.0;
+            }
+            emit decodeProgressChanged(m_decodeProgress);
+        });
     }
 
     // Refresh session name immediately for next recording

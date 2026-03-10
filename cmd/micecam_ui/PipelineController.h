@@ -14,6 +14,7 @@ class VideoFrameProvider; // Forward declare
 namespace micecam {
     class IngestionPipeline;
     class ICameraBackend;
+    class Decoder;
 }
 
 class PipelineController : public QObject {
@@ -101,7 +102,7 @@ private:
     bool m_autoDecode = true;
     QStringList m_logMessages;
     double m_decodeProgress = 0.0;
-    QProcess* m_decoderProcess = nullptr;
+    std::unique_ptr<micecam::Decoder> m_decoder;
 
     std::unique_ptr<micecam::ICameraBackend> m_cameraBackend;
     std::unique_ptr<micecam::IngestionPipeline> m_pipeline;

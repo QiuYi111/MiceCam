@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
+#include <QCommandLineParser>
 #include <iostream>
 #include "PipelineController.h"
 #include "VideoFrameProvider.h"
@@ -16,6 +17,23 @@ int main(int argc, char *argv[]) {
     app.setOrganizationName("MiceCam");
     app.setOrganizationDomain("micecam.local");
     app.setApplicationName("MiceCam");
+    app.setApplicationVersion("1.0.0");
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription("MiceCam High Performance Camera Suite");
+    parser.addHelpOption();
+    parser.addVersionOption();
+
+    QCommandLineOption workerOption("worker", "Run as a headless recording worker process.");
+    parser.addOption(workerOption);
+
+    parser.process(app);
+
+    if (parser.isSet(workerOption)) {
+        // TODO: Implement headless worker entry point if process isolation is required
+        std::cout << "MiceCam: Running in worker mode (Headless)" << std::endl;
+        return 0; // Worker logic would go here
+    }
 
     QQmlApplicationEngine engine;
 

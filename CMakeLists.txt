@@ -36,7 +36,7 @@ option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
 
 # Dependencies
 find_package(Threads REQUIRED)
-find_package(OpenCV QUIET)
+find_package(OpenCV REQUIRED)
 
 # Standard CMake discovery
 include(FetchContent)
@@ -161,16 +161,19 @@ add_library(micecam_core
     internal/infrastructure/ingestion_pipeline.cpp
     internal/infrastructure/frame_dispatcher.cpp
     internal/infrastructure/hdf5_converter.cpp
+    internal/infrastructure/decoder.cpp
 )
 
 target_include_directories(micecam_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/api
     ${CMAKE_CURRENT_SOURCE_DIR}/internal
+    ${OpenCV_INCLUDE_DIRS}
 )
 
 target_link_libraries(micecam_core PUBLIC
     Threads::Threads
     nlohmann_json::nlohmann_json
+    ${OpenCV_LIBS}
 )
 
 # Camera backend (optional)

@@ -58,6 +58,9 @@ public:
     // RFC-001: Get pipeline stats
     [[nodiscard]] PipelineStats get_stats() const;
 
+    // Zero-Drop: Get latest frame for preview (non-blocking)
+    [[nodiscard]] std::unique_ptr<Frame> get_preview_frame();
+
 private:
     void camera_thread_func();
 
@@ -72,6 +75,10 @@ private:
 
     std::thread camera_thread_;
     std::thread writer_thread_;
+
+    // Preview buffer (Zero-Drop)
+    std::mutex preview_mtx_;
+    std::unique_ptr<Frame> latest_preview_frame_;
 
     // For stats calculation
     SessionConfig config_;

@@ -14,8 +14,21 @@ enum class PixelFormat {
     RGB24,      ///< Raw RGB 24-bit
     MONO8,      ///< 8-bit grayscale
     MONO16,     ///< 16-bit grayscale (FLIR/Scientific cameras)
-    NV12        ///< YUV 4:2:0 (GPU Decode Output)
+    NV12,       ///< YUV 4:2:0 (GPU Decode Output)
+    UYVY422     ///< YUV 4:2:2 Packed (Mac Camera Default)
 };
+
+inline std::string PixelFormatToString(PixelFormat fmt) {
+    switch (fmt) {
+        case PixelFormat::MJPEG:   return "mjpeg";
+        case PixelFormat::RGB24:   return "rgb24";
+        case PixelFormat::MONO8:   return "mono8";
+        case PixelFormat::MONO16:  return "mono16";
+        case PixelFormat::NV12:    return "nv12";
+        case PixelFormat::UYVY422: return "uyvy422";
+        default: return "unknown";
+    }
+}
 
 /**
  * @brief Read-only view of a frame for observer callbacks.

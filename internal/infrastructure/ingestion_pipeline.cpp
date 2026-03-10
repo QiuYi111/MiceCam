@@ -7,7 +7,7 @@ IngestionPipeline::IngestionPipeline(
     std::unique_ptr<ICameraBackend> camera,
     const SessionConfig& session_config)
     : camera_(std::move(camera)),
-      buffer_(session_config.ring_buffer_size),
+      buffer_(200), // Zero-Drop: Optimized buffer for high-bandwidth capture
       writer_(session_config),
       config_(session_config) {
 }
@@ -27,7 +27,9 @@ bool IngestionPipeline::start() {
         return false;
     }
 
-    // Start disk writer
+    // Start disk writer (with format from backend)
+    config_.pixel_format = PixelFormatToString(camera_->get_current_format());
+
     if (!writer_.start()) {
         std::cerr << "Failed to start disk writer\n";
         camera_->stop();
@@ -96,6 +98,14 @@ PipelineStats IngestionPipeline::get_stats() const {
     return stats;
 }
 
+std::unique_ptr<Frame> IngestionPipeline::get_preview_frame() {
+    std::lock_guard<std::mutex> lock(preview_mtx_);
+    if (!latest_preview_frame_) return nullptr;
+
+    // Ownership transfer to UI, clear for next frame
+    return std::move(latest_preview_frame_);
+}
+
 void IngestionPipeline::camera_thread_func() {
     std::cout << "Camera thread started\n";
 
@@ -112,19 +122,12 @@ void IngestionPipeline::camera_thread_func() {
             break;
         }
 
-        // RFC-001: Dispatch to observers (best-effort, non-blocking)
-        // Create a FrameView for observers before moving the frame
-        FrameView view;
-        view.data = frame->data ? frame->data->data() : nullptr;
-        view.size = frame->size();
-        view.sequence_id = frame->sequence_id;
-        view.timestamp = std::chrono::duration<double>(frame->timestamp.time_since_epoch()).count();
-        view.format = PixelFormat::MJPEG;  // Assuming MJPEG; could be dynamic
-        view.width = config_.width;
-        view.height = config_.height;
-        view.metadata_json = nullptr;
-
-        dispatcher_.dispatch(view);
+        // Zero-Drop: Populate latest preview frame (non-blocking pull model)
+        {
+            std::lock_guard<std::mutex> lock(preview_mtx_);
+            // Use clone() to allow UI to process independently without affecting capture
+            latest_preview_frame_ = frame->clone();
+        }
 
         // Critical path: push to ring buffer for disk write
         if (!buffer_.try_push(std::move(*frame))) {

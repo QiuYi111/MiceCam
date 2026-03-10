@@ -26,6 +26,7 @@ public:
     [[nodiscard]] uint64_t get_frame_count() const override;
     [[nodiscard]] bool is_running() const override;
     [[nodiscard]] std::string get_backend_name() const override { return "OAKCameraBackend"; }
+    [[nodiscard]] PixelFormat get_current_format() const override { return PixelFormat::MJPEG; }
 
     [[nodiscard]] std::vector<std::string> get_supported_resolutions() const override {
         return {"1280x800", "1280x720", "640x400"};

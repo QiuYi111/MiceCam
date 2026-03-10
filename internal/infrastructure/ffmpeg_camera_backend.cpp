@@ -126,11 +126,24 @@ std::unique_ptr<Frame> FFmpegCameraBackend::get_frame() {
         }
 
         if (pkt_->stream_index == video_stream_index_) {
-            // We have an MJPEG packet. Wrap it into a Frame.
             auto frame_data = std::make_unique<std::vector<uint8_t>>(pkt_->size);
             std::memcpy(frame_data->data(), pkt_->data, pkt_->size);
 
             auto frame = std::make_unique<Frame>(frame_count_.fetch_add(1), std::move(frame_data));
+
+            auto codec_id = fmt_ctx_->streams[video_stream_index_]->codecpar->codec_id;
+            auto pix_fmt = static_cast<AVPixelFormat>(fmt_ctx_->streams[video_stream_index_]->codecpar->format);
+
+            if (codec_id == AV_CODEC_ID_MJPEG) {
+                frame->format = PixelFormat::MJPEG;
+            } else if (pix_fmt == AV_PIX_FMT_UYVY422) {
+                frame->format = PixelFormat::UYVY422;
+            } else if (pix_fmt == AV_PIX_FMT_GRAY8) {
+                frame->format = PixelFormat::MONO8;
+            }
+
+            frame->width = config_.width;
+            frame->height = config_.height;
 
             av_packet_unref(pkt_);
             return frame;
@@ -139,6 +152,19 @@ std::unique_ptr<Frame> FFmpegCameraBackend::get_frame() {
     }
 
     return nullptr;
+}
+
+PixelFormat FFmpegCameraBackend::get_current_format() const {
+    if (!fmt_ctx_ || video_stream_index_ == -1) return PixelFormat::MJPEG;
+
+    auto codec_id = fmt_ctx_->streams[video_stream_index_]->codecpar->codec_id;
+    auto pix_fmt = static_cast<AVPixelFormat>(fmt_ctx_->streams[video_stream_index_]->codecpar->format);
+
+    if (codec_id == AV_CODEC_ID_MJPEG) return PixelFormat::MJPEG;
+    if (pix_fmt == AV_PIX_FMT_UYVY422) return PixelFormat::UYVY422;
+    if (pix_fmt == AV_PIX_FMT_GRAY8)   return PixelFormat::MONO8;
+
+    return PixelFormat::MJPEG;
 }
 
 } // namespace micecam

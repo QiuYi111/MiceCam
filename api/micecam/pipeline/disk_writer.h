@@ -28,6 +28,7 @@ struct SessionConfig {
 
     // Camera configuration (for metadata)
     std::string camera_backend_name = "unknown";
+    std::string pixel_format = "mjpeg";
     int width = 0;
     int height = 0;
     double fps = 0.0;
@@ -55,6 +56,7 @@ struct FrameMetadataRecord {
 struct SessionMetadata {
     std::string session_name;
     std::string camera_backend;
+    std::string pixel_format;
     int width;
     int height;
     double fps;
@@ -68,6 +70,7 @@ struct SessionMetadata {
         return {
             {"session_name", session_name},
             {"camera_backend", camera_backend},
+            {"pixel_format", pixel_format},
             {"width", width},
             {"height", height},
             {"fps", fps},

@@ -39,6 +39,7 @@ public:
     [[nodiscard]] virtual uint64_t get_frame_count() const = 0;
     [[nodiscard]] virtual bool is_running() const = 0;
     [[nodiscard]] virtual std::string get_backend_name() const = 0;
+    [[nodiscard]] virtual PixelFormat get_current_format() const = 0;
 
     // Capability discovery (optional default implementation)
     [[nodiscard]] virtual std::vector<std::string> get_supported_resolutions() const {

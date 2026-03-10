@@ -50,6 +50,25 @@ def decode_micecam_session(output_dir, session_name, target_dir=None, progress_c
 def decode_single_file(bin_path, jsonl_path, target_dir, progress_cb):
     total_bytes = os.path.getsize(bin_path)
     frame_count = 0
+
+    # 1. Detect pixel format from session_start metadata
+    pixel_format = "mjpeg"
+    width, height = 1920, 1080 # Defaults
+    try:
+        with open(jsonl_path, 'r') as f_meta:
+            for line in f_meta:
+                msg = json.loads(line)
+                if msg.get("type") == "session_start":
+                    pixel_format = msg.get("pixel_format", "mjpeg")
+                    width = msg.get("width", width)
+                    height = msg.get("height", height)
+                    break
+    except:
+        pass
+
+    import cv2
+    import numpy as np
+
     with open(jsonl_path, 'r') as f_jsonl, open(bin_path, 'rb') as f_bin:
         for line in f_jsonl:
             try:
@@ -65,11 +84,21 @@ def decode_single_file(bin_path, jsonl_path, target_dir, progress_cb):
                 if len(frame_data) < size: continue
 
                 img_path = os.path.join(target_dir, f"{ts_ns}.jpg")
-                with open(img_path, 'wb') as f_img:
-                    f_img.write(frame_data)
+
+                if pixel_format == "uyvy422":
+                    # Convert raw UYVY buffer to BGR then save as JPG
+                    # Optimization: using frombuffer to avoid copy
+                    yuv = np.frombuffer(frame_data, dtype=np.uint8).reshape((height, width, 2))
+                    bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_UYVY)
+                    cv2.imwrite(img_path, bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+                else:
+                    # Default: Assume MJPEG/JPEG bitstream
+                    with open(img_path, 'wb') as f_img:
+                        f_img.write(frame_data)
 
                 frame_count += 1
                 if frame_count % 20 == 0 and progress_cb:
                     progress_cb((offset + size) / total_bytes * 100.0)
-            except:
+            except Exception as e:
+                # Silently skip corrupt frames but continue
                 pass

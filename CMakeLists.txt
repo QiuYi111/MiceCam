@@ -142,6 +142,16 @@ if(BUILD_TESTS)
     enable_testing()
 endif()
 
+# ----- Qt6 configuration -----
+# Hint to find Qt6 installed via Homebrew when using vcpkg toolchain
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
+
+find_package(Qt6 COMPONENTS Core Gui Qml Quick Multimedia REQUIRED)
+# Require C++17 or C++20 for Qt6 usually
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+# -----------------------------
 
 # Core library (always built)
 add_library(micecam_core
@@ -289,6 +299,28 @@ target_link_libraries(micecam PRIVATE micecam_core)
 if(WITH_CAMERA_BACKEND)
     target_link_libraries(micecam PRIVATE micecam_camera)
 endif()
+
+# Qt QML UI executable
+add_executable(micecam_ui
+    cmd/micecam_ui/main.cpp
+    cmd/micecam_ui/PipelineController.cpp
+    cmd/micecam_ui/VideoFrameProvider.cpp
+    cmd/micecam_ui/qml/qml.qrc
+)
+
+target_link_libraries(micecam_ui PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::Multimedia
+    micecam_core
+)
+
+if(WITH_CAMERA_BACKEND)
+    target_link_libraries(micecam_ui PRIVATE micecam_camera)
+endif()
+
 
 
 # Installation

@@ -26,6 +26,7 @@ public:
     std::string get_backend_name() const override {
         return "OAK_CAM_" + std::string(1, 'A' + socket_index_);
     }
+    PixelFormat get_current_format() const override { return PixelFormat::MJPEG; }
 
 private:
     std::shared_ptr<OAKCameraBackend> master_;
@@ -194,7 +195,11 @@ std::unique_ptr<Frame> VirtualOAKBackend::get_frame() {
     frame_count_++;
     auto data_span = imgFrame->getData();
     auto data = std::make_unique<std::vector<uint8_t>>(data_span.begin(), data_span.end());
-    return std::make_unique<Frame>(frame_count_, std::move(data));
+    auto frame = std::make_unique<Frame>(frame_count_, std::move(data));
+    frame->width = imgFrame->getWidth();
+    frame->height = imgFrame->getHeight();
+    frame->format = PixelFormat::MJPEG; // OAK default in this impl
+    return frame;
 }
 
 } // namespace micecam

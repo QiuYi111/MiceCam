@@ -107,6 +107,7 @@ bool DiskWriter::start() {
     session_metadata_ = SessionMetadata{
         .session_name = config_.session_name,
         .camera_backend = config_.camera_backend_name,
+        .pixel_format = config_.pixel_format,
         .width = config_.width,
         .height = config_.height,
         .fps = config_.fps,

@@ -34,46 +34,38 @@ jobs:
           enable-cache: true
           version: "latest"
 
-      - name: Initialize Environment
-        shell: bash
+      - name: Install System Dependencies (macOS)
+        if: runner.os == 'macos'
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            # Windows direct init logic
-            if [ ! -d "vcpkg" ]; then
-              git clone https://github.com/microsoft/vcpkg.git vcpkg
-            fi
-            ./vcpkg/bootstrap-vcpkg.sh
-            uv sync --all-extras
-          else
-            # Linux/macOS use the project's 'make init'
-            make init
-          fi
+          brew install pkg-config nasm autoconf automake libtool autoconf-archive ninja
+
+      - name: Install System Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config nasm autoconf autoconf-archive automake libtool ninja-build
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 1e199d32ad53aab1defda61ce41c380302e3f95c
+          vcpkgDirectory: ${{ github.workspace }}/vcpkg
+          vcpkgJsonGlob: '**/vcpkg.json'
 
       - name: Configure CMake
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            VCPKG_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-            cmake -B build -S . \
-              -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN_FILE" \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DWITH_PYTHON_BINDINGS=ON
-          else
-            # For Linux/macOS, we don't call cmake directly if we want to use 'make build'
-            # However, 'make build' in the current Makefile handles its own cmake call.
-            # We just need to ensure VCPKG_ROOT is set if the Makefile needs it,
-            # but the Makefile seems to find it relative to CURDIR.
-            true
-          fi
+          VCPKG_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          cmake -B build -S . \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN_FILE" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_PYTHON_BINDINGS=ON
 
       - name: Build C++ and Bindings
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cmake --build build --config Release -j$NUMBER_OF_PROCESSORS
-          else
-            make build
-          fi
+          cmake --build build --config Release
 
       - name: Install Python Dependencies
         run: uv sync --all-extras
@@ -81,21 +73,12 @@ jobs:
       - name: Run C++ Tests
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cd build
-            ctest --output-on-failure -C Release
-          else
-            make test
-          fi
+          cd build && ctest --output-on-failure -C Release
 
       - name: Build Python Package
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            uv build
-          else
-            make package
-          fi
+          uv build
 
       - name: Package EXE (Windows)
         if: runner.os == 'Windows'

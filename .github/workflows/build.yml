@@ -20,7 +20,7 @@ jobs:
       run: |
         brew install pkg-config nasm autoconf automake libtool autoconf-archive ninja
 
-    - name: Setup vcpkg caches
+    - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 1e199d32ad53aab1defda61ce41c380302e3f95c
@@ -33,6 +33,10 @@ jobs:
         -G Ninja
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+        -DBUILD_PYTHON_BINDINGS=ON
 
     - name: Build All Targets
       run: cmake --build ${{ github.workspace }}/build --config Release
+
+    - name: Run Tests
+      run: cd build && ctest --output-on-failure -C Release

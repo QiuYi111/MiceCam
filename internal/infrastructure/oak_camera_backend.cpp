@@ -116,6 +116,8 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             encoder->bitstream.link(sync->inputs[name]);
         }
 
+        impl_->syncQueue = sync->out.createOutputQueue(8, false);
+
         int retries = 3;
         while (retries > 0) {
             try {
@@ -127,7 +129,6 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
             }
         }
 
-        impl_->syncQueue = sync->out.createOutputQueue(8, false);
         return true;
     } catch (const std::exception& e) {
         std::cerr << "OAK Init Error: " << e.what() << "\n";

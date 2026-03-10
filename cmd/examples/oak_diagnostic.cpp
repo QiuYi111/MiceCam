@@ -21,8 +21,8 @@ bool test_socket(dai::CameraBoardSocket socket, std::string socket_name) {
     cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::OFF);
 
     try {
-        pipeline.start();
         auto q = cam->isp.createOutputQueue(8, false);
+        pipeline.start();
 
         std::cout << "Waiting for frames (timeout 3s)...\n";
         bool received = false;
@@ -81,9 +81,9 @@ bool test_sync_pair(dai::CameraBoardSocket master, dai::CameraBoardSocket slave)
     pipeline.setBoardConfig(boardConfig);
 
     try {
-        pipeline.start();
         auto qA = camA->isp.createOutputQueue(4, false);
         auto qB = camB->isp.createOutputQueue(4, false);
+        pipeline.start();
 
         std::cout << "Waiting for synchronized frames (timeout 3s)...\n";
         bool received = false;
@@ -169,8 +169,8 @@ bool test_quad_sync() {
     }
 
     try {
-        pipeline.start();
         auto q = sync->out.createOutputQueue(4, false);
+        pipeline.start();
 
         std::cout << "Waiting for quad-synchronized MJPEG frames (timeout 3s)...\n";
         bool received = false;

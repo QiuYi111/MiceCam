@@ -129,16 +129,20 @@ public:
         std::cout << "[PyPipeline] Stopped\n";
     }
 
-    void attach_callback(std::function<void(py::bytes, uint64_t, double)> callback) {
+    void attach_callback(std::function<void(py::object, uint64_t, double)> callback) {
         class PyCallback : public IFrameObserver {
         public:
-            std::function<void(py::bytes, uint64_t, double)> cb_;
-            explicit PyCallback(std::function<void(py::bytes, uint64_t, double)> cb) : cb_(std::move(cb)) {}
+            std::function<void(py::object, uint64_t, double)> cb_;
+            explicit PyCallback(std::function<void(py::object, uint64_t, double)> cb) : cb_(std::move(cb)) {}
             void on_frame(const FrameView& frame) override {
                 py::gil_scoped_acquire acquire;
                 try {
-                    py::bytes data(reinterpret_cast<const char*>(frame.data), frame.size);
-                    cb_(data, frame.sequence_id, frame.timestamp);
+                    // Create a zero-copy memoryview referencing the C++ memory
+                    py::memoryview memory_view = py::memoryview::from_memory(
+                        frame.data,
+                        frame.size
+                    );
+                    cb_(memory_view, frame.sequence_id, frame.timestamp);
                 } catch (const std::exception& e) {
                     std::cerr << "[PyCallback] Error: " << e.what() << "\n";
                 }
@@ -215,7 +219,7 @@ PYBIND11_MODULE(_micecam, m) {
         .def("stop", &micecam::PyPipeline::stop, "Stop the pipeline")
         .def("attach_callback", &micecam::PyPipeline::attach_callback,
              py::arg("callback"),
-             "Attach callback: (data: bytes, seq: int, timestamp: float)")
+             "Attach callback: (data: memoryview, seq: int, timestamp: float)")
         .def("get_stats", &micecam::PyPipeline::get_stats)
         .def("is_running", &micecam::PyPipeline::is_running)
         .def("get_capabilities", [](micecam::PyPipeline& self) {

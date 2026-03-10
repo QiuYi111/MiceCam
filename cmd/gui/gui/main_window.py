@@ -9,6 +9,9 @@ from PyQt6.QtCore import Qt, QTimer, QSize
 from PyQt6.QtGui import QFont, QIcon, QColor, QTextCursor
 from PyQt6.QtMultimedia import QMediaDevices, QCameraDevice
 
+from gui.recorder_thread import RecorderThread
+from gui.decoder_thread import DecoderThread
+
 
 SDK_AVAILABLE = True
 STYLESHEET = """
@@ -306,7 +309,7 @@ class MainWindow(QMainWindow):
 
     def refresh_cameras(self):
         self.cb_camera.clear()
-        self.cb_camera.addItem("Luxonis OAK-4P (Quad Sync)", "oak")
+        self.cb_camera.addItem("Luxonis OAK (DepthAI)", "oak")
 
         # Real Enumeration via QtMultimedia
         cameras = QMediaDevices.videoInputs()
@@ -390,6 +393,8 @@ class MainWindow(QMainWindow):
 
     def start_decoding(self):
         self.lbl_decode.setVisible(True)
+        self.lbl_decode.setText("Decoding Progress:")
+        self.lbl_decode.setStyleSheet("color: black;")
         self.prog_decode.setVisible(True)
         self.log("Starting Auto-Decode...")
 
@@ -400,10 +405,17 @@ class MainWindow(QMainWindow):
         self.decoder.progress_updated.connect(self.prog_decode.setValue)
         self.decoder.status_message.connect(self.log)
         self.decoder.finished_decoding.connect(self.on_decode_finished)
+        self.decoder.status_message.connect(self.on_decoder_status) # Hook into status to find errors
         self.decoder.start()
 
         # Disable start while decoding?
         self.btn_start.setEnabled(False)
+
+    def on_decoder_status(self, msg):
+        if "Error:" in msg or "Exception" in msg:
+            self.lbl_decode.setText(f"Decoding Failed: {msg}")
+            self.lbl_decode.setStyleSheet("color: #d93025; font-weight: bold;")
+            self.prog_decode.setStyleSheet("QProgressBar::chunk { background-color: #d93025; }")
 
     def on_decode_finished(self):
         self.btn_start.setEnabled(True)

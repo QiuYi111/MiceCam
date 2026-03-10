@@ -239,25 +239,55 @@ void DiskWriter::flush_aggregation_buffer() {
 #ifdef _WIN32
     if (h_file_ != INVALID_HANDLE_VALUE) {
         // For unbuffered I/O, we must write in sector-aligned sizes.
-        // We round up the write size to the next 4KB boundary if it's the final flush,
-        // but for intermediate flushes, we should ideally stay aligned.
-        // However, our threshold is 128MB (aligned).
+        // We only write multiples of 4096 during intermediate flushes.
+        // The unaligned remainder is moved to the front of the aggregation buffer.
+        // During finalization (!writing_), we pad the remainder to 4096 and execute SetEndOfFile.
 
         DWORD bytesToWrite = static_cast<DWORD>(current_buffer_pos_);
-        // If not aligned to 4096, unbuffered WriteFile will fail.
-        // So we PAD the buffer to 4096 alignment if needed.
         size_t remainder = current_buffer_pos_ % 4096;
-        if (remainder != 0) {
-            size_t padding = 4096 - remainder;
-            std::memset(aggregation_buffer_ + current_buffer_pos_, 0, padding);
-            bytesToWrite += static_cast<DWORD>(padding);
+
+        if (writing_.load()) {
+            // Intermediate flush: only write aligned chunk
+            bytesToWrite -= static_cast<DWORD>(remainder);
+        } else {
+            // Final flush (finalize): Pad remainder to 4096 boundary
+            if (remainder != 0) {
+                size_t padding = 4096 - remainder;
+                std::memset(aggregation_buffer_ + current_buffer_pos_, 0, padding);
+                bytesToWrite += static_cast<DWORD>(padding);
+            }
         }
 
-        DWORD bytesWritten;
-        if (!WriteFile(h_file_, aggregation_buffer_, bytesToWrite, &bytesWritten, NULL)) {
-            std::cerr << "Error flushing aggregation buffer to disk (Unbuffered WriteFile failed: " << GetLastError() << ")\n";
+        if (bytesToWrite > 0) {
+            DWORD bytesWritten;
+            if (!WriteFile(h_file_, aggregation_buffer_, bytesToWrite, &bytesWritten, NULL)) {
+                std::cerr << "Error flushing aggregation buffer to disk (Unbuffered WriteFile failed: " << GetLastError() << ")\n";
+            }
+            total_bytes_on_disk_ += bytesWritten;
         }
-        total_bytes_on_disk_ += bytesWritten;
+
+        if (writing_.load() && remainder > 0) {
+            // Move unwritten remainder to the front of the aggregation buffer
+            std::memmove(aggregation_buffer_, aggregation_buffer_ + bytesToWrite, remainder);
+            current_buffer_pos_ = remainder;
+        } else {
+            current_buffer_pos_ = 0;
+
+            // If this is the final flush, we must truncate the physical file padding bytes
+            // so the logical size precisely matches the payload bytes.
+            if (!writing_.load() && remainder != 0) {
+                size_t padding = 4096 - remainder;
+                LARGE_INTEGER li;
+                // Move pointer back by padding amount
+                li.QuadPart = total_bytes_on_disk_ - padding;
+                if (SetFilePointerEx(h_file_, li, NULL, FILE_BEGIN)) {
+                    SetEndOfFile(h_file_);
+                    total_bytes_on_disk_ = li.QuadPart; // Reflect exact logical size
+                } else {
+                    std::cerr << "Error truncating file padding: " << GetLastError() << "\n";
+                }
+            }
+        }
     }
 #else
     if (bin_file_.is_open()) {

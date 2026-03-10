@@ -1,5 +1,12 @@
 import sys
 import os
+
+# Ensure the C++ extension in build/bindings/python is found during dev
+base_dir = os.path.dirname(os.path.abspath(__file__))
+dev_lib_path = os.path.abspath(os.path.join(base_dir, "..", "..", "build", "bindings", "python"))
+if os.path.exists(dev_lib_path) and dev_lib_path not in sys.path:
+    sys.path.insert(0, dev_lib_path)
+
 import time
 import json
 import threading
@@ -183,7 +190,13 @@ def main():
                 # IPC for Qt (Print to stdout)
                 print(f"STATUS_UPDATE:{json.dumps(summary_stats)}", flush=True)
 
-            if os.path.exists("stop_signal.txt"):
+            stop_file = os.environ.get("MICECAM_STOP_FILE", "stop_signal.txt")
+            if os.path.exists(stop_file):
+                stop_requested = True
+                try: os.remove(stop_file)
+                except: pass
+            # Legacy fallback
+            elif os.path.exists("stop_signal.txt"):
                 stop_requested = True
                 try: os.remove("stop_signal.txt")
                 except: pass

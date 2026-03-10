@@ -29,9 +29,21 @@ bool FFmpegCameraBackend::initialize(const CameraConfig& config) {
 bool FFmpegCameraBackend::open_device() {
     close_device();
 
-    const AVInputFormat* ifmt = av_find_input_format("dshow");
+#if defined(_WIN32)
+    const char* format_name = "dshow";
+    std::string device_name = "video=@device_pnp_\\\\?\\usb#vid_1bcf&pid_2cd1&mi_00#6&197ce02b&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global";
+#elif defined(__APPLE__)
+    const char* format_name = "avfoundation";
+    std::string device_name = config_.device_id == 0 ? "0" : std::to_string(config_.device_id);
+    // Usually "0:0" or just "0" for the default video device
+#else
+    const char* format_name = "v4l2";
+    std::string device_name = "/dev/video" + std::to_string(config_.device_id);
+#endif
+
+    const AVInputFormat* ifmt = av_find_input_format(format_name);
     if (!ifmt) {
-        std::cerr << "FFmpeg: Failed to find dshow input format" << std::endl;
+        std::cerr << "FFmpeg: Failed to find " << format_name << " input format" << std::endl;
         return false;
     }
 
@@ -45,10 +57,6 @@ bool FFmpegCameraBackend::open_device() {
     av_dict_set(&options, "framerate", std::to_string(static_cast<int>(config_.fps)).c_str(), 0);
     // Set buffer size to avoid drops
     av_dict_set(&options, "rtbufsize", "1024M", 0);
-
-    // Device string for Windows dshow.
-    // We'll use the robust PNP ID verified in previous logs.
-    std::string device_name = "video=@device_pnp_\\\\?\\usb#vid_1bcf&pid_2cd1&mi_00#6&197ce02b&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global";
 
     int ret = avformat_open_input(&fmt_ctx_, device_name.c_str(), ifmt, &options);
     av_dict_free(&options);

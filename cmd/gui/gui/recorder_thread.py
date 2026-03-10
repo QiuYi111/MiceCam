@@ -37,6 +37,9 @@ class RecorderThread(QObject):
         self.config = config
         self.process = None
         self._is_running = False
+        self._byte_buffer = bytearray()
+        import tempfile
+        self.stop_file = os.path.join(tempfile.gettempdir(), f"micecam_stop_{id(self)}.txt")
 
     def start(self):
         if self._is_running: return
@@ -129,6 +132,7 @@ class RecorderThread(QObject):
         # but we can remove specific keys if they exist.
         env.remove("PYTHONHOME")
         env.remove("PYTHONPATH")
+        env.insert("MICECAM_STOP_FILE", self.stop_file)
 
         # If we wanted to copy from a clean dict, we'd iterate and insert,
         # but systemEnvironment() gives us everything.
@@ -148,7 +152,7 @@ class RecorderThread(QObject):
 
             # Method A: Create stop_signal.txt (Universal)
             try:
-                with open("stop_signal.txt", "w") as f:
+                with open(self.stop_file, "w") as f:
                     f.write("STOP")
             except Exception as e:
                 self.log_message.emit(f"Failed to write stop signal: {e}")
@@ -161,19 +165,13 @@ class RecorderThread(QObject):
         data_bytes = self.process.readAllStandardOutput().data()
         if not data_bytes: return
 
-        try:
-             # Use errors='replace' to avoid crashing on split multi-byte characters
-             chunk = data_bytes.decode('utf-8', errors='replace')
-        except:
-             return
+        self._byte_buffer.extend(data_bytes)
 
-        # Initialize buffer if missing (legacy safety)
-        if not hasattr(self, '_buffer'): self._buffer = ""
-        self._buffer += chunk
-
-        while "\n" in self._buffer:
-            line, self._buffer = self._buffer.split("\n", 1)
-            line = line.strip()
+        # Process complete lines from the byte buffer
+        while b"\n" in self._byte_buffer:
+            line_bytes, self._byte_buffer = self._byte_buffer.split(b"\n", 1)
+            # Safe decode, discarding remaining incomplete UTF-8 characters if any
+            line = line_bytes.decode('utf-8', errors='replace').strip()
             if not line: continue
 
             if line.startswith("STATUS_UPDATE:"):

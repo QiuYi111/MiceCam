@@ -9,6 +9,8 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     steps:
     - name: Checkout Repository
@@ -26,6 +28,9 @@ jobs:
         vcpkgGitCommitId: 1e199d32ad53aab1defda61ce41c380302e3f95c
         vcpkgDirectory: ${{ github.workspace }}/vcpkg
         vcpkgJsonGlob: '**/vcpkg.json'
+      env:
+        ACTIONS_CACHE_URL: ${{ env.ACTIONS_CACHE_URL }}
+        ACTIONS_RUNTIME_TOKEN: ${{ env.ACTIONS_RUNTIME_TOKEN }}
 
     - name: Configure CMake
       run: >

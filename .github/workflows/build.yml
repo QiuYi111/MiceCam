@@ -18,7 +18,7 @@ jobs:
 
     - name: Install System Dependencies (macOS)
       run: |
-        brew install pkg-config nasm autoconf automake libtool
+        brew install pkg-config nasm autoconf automake libtool autoconf-archive ninja
 
     - name: Setup vcpkg caches
       uses: lukka/run-vcpkg@v11
@@ -30,8 +30,9 @@ jobs:
     - name: Configure CMake
       run: >
         cmake -S ${{ github.workspace }} -B ${{ github.workspace }}/build
+        -G Ninja
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
 
     - name: Build All Targets
-      run: cmake --build ${{ github.workspace }}/build --config Release -j$(sysctl -n hw.ncpu)
+      run: cmake --build ${{ github.workspace }}/build --config Release

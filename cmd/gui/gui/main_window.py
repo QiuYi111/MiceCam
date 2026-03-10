@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QComboBox, QLineEdit,
                              QGroupBox, QPlainTextEdit, QMessageBox, QFrame,
                              QGridLayout, QScrollArea, QSizePolicy, QCheckBox, QProgressBar)
-from PyQt6.QtCore import Qt, QTimer, QSize
-from PyQt6.QtGui import QFont, QIcon, QColor, QTextCursor
+from PyQt6.QtCore import Qt, QTimer, QSize, pyqtSignal
+from PyQt6.QtGui import QFont, QIcon, QColor, QTextCursor, QImage, QPixmap
 from PyQt6.QtMultimedia import QMediaDevices, QCameraDevice
 
 from gui.recorder_thread import RecorderThread
@@ -114,6 +114,13 @@ QLabel#StatValue {
 QLabel#StatLabel {
     font-size: 11px;
     color: #5f6368;
+}
+/* Preview */
+QLabel#PreviewLabel {
+    background-color: #202124;
+    border-radius: 6px;
+    min-height: 200px;
+    alignment: center;
 }
 """
 
@@ -280,6 +287,24 @@ class MainWindow(QMainWindow):
 
         content_layout.addWidget(ctl_grp)
 
+        # -- Preview Group --
+        preview_grp = QGroupBox("👁 Preview")
+        preview_layout = QVBoxLayout(preview_grp)
+
+        self.chk_preview = QCheckBox("Enable Live Preview (Uses more CPU)")
+        self.chk_preview.setChecked(True)
+
+        self.lbl_preview = QLabel("Preview will appear here while recording")
+        self.lbl_preview.setObjectName("PreviewLabel")
+        self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_preview.setMinimumHeight(240)
+        self.lbl_preview.setStyleSheet("color: #7f8c8d; background-color: #ecf0f1;")
+
+        preview_layout.addWidget(self.chk_preview)
+        preview_layout.addWidget(self.lbl_preview)
+
+        content_layout.addWidget(preview_grp)
+
         # -- Log Widget --
         log_grp = QGroupBox("📜 System Log")
         log_layout = QVBoxLayout(log_grp)
@@ -352,6 +377,7 @@ class MainWindow(QMainWindow):
         self.recorder.log_message.connect(self.log)
         self.recorder.error_occurred.connect(self.on_error)
         self.recorder.stats_updated.connect(self.on_stats)
+        self.recorder.preview_updated.connect(self.on_preview_updated)
         self.recorder.finished_recording.connect(self.on_finished)
 
         self.recorder.start()
@@ -390,6 +416,46 @@ class MainWindow(QMainWindow):
         else:
             self.refresh_session_name()
             self.log("Session finished (No decode).")
+
+        self.lbl_preview.clear()
+        self.lbl_preview.setText("Preview offline")
+        self.lbl_preview.setStyleSheet("color: #7f8c8d; background-color: #ecf0f1;")
+
+    def on_preview_updated(self, msg):
+        if not self.chk_preview.isChecked():
+            return
+
+        try:
+            import base64
+            img_b64 = msg.get("image")
+            if not img_b64:
+                return
+
+            img_data = base64.b64decode(img_b64)
+            fmt = msg.get("format", "jpeg")
+
+            if fmt == "raw":
+                w = msg.get("width", 0)
+                h = msg.get("height", 0)
+                # Create QImage from raw Grayscale 8-bit data
+                image = QImage(img_data, w, h, w, QImage.Format.Format_Grayscale8)
+                pixmap = QPixmap.fromImage(image)
+            else:
+                pixmap = QPixmap()
+                if not pixmap.loadFromData(img_data):
+                    return
+
+            # Scale it nicely for the label while keeping aspect ratio
+            scaled_pixmap = pixmap.scaled(
+                self.lbl_preview.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            self.lbl_preview.setPixmap(scaled_pixmap)
+            self.lbl_preview.setStyleSheet("background-color: black;")
+        except Exception as e:
+            pass
 
     def start_decoding(self):
         self.lbl_decode.setVisible(True)

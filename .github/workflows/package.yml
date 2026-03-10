@@ -97,8 +97,53 @@ jobs:
             make package
           fi
 
+      - name: Package EXE (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          uv pip install pyinstaller
+          # Find the compiled .pyd file
+          $PydFile = Get-ChildItem -Path "build" -Filter "micecam*.pyd" -Recurse | Select-Object -First 1
+          if ($null -eq $PydFile) {
+            Write-Error "Could not find micecam.pyd"
+            exit 1
+          }
+          echo "Found .pyd at $($PydFile.FullName)"
+
+          # 1. Build Worker EXE
+          uv run pyinstaller --noconsole --clean `
+            --add-data "$($PydFile.FullName);internal/micecam" `
+            --name "MiceCamWorker" `
+            --distpath "dist/windows_exe/MiceCam/tools" `
+            cmd/gui/recorder_worker.py
+
+          # 2. Build GUI EXE
+          uv run pyinstaller --noconsole --clean `
+            --add-data "$($PydFile.FullName);internal/micecam" `
+            --name "MiceCam" `
+            --distpath "dist/windows_exe" `
+            cmd/gui/gui/main_window.py
+
+      - name: Build MSI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # WiX Toolset is pre-installed on Windows runners
+          # Step 1: Harvest files from PyInstaller output
+          heat dir "dist/windows_exe/MiceCam" -dr INSTALLFOLDER -cg ProductComponents -gg -sreg -sfrag -srd -out "packaging/windows/components.wxs"
+
+          # Step 2: Compile .wxs files
+          candle packaging/windows/micecam.wxs packaging/windows/components.wxs -o packaging/windows/
+
+          # Step 3: Link into MSI
+          light packaging/windows/micecam.wixobj packaging/windows/components.wixobj -o "dist/MiceCam-Installer.msi"
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: micecam-${{ runner.os }}-py${{ matrix.python-version }}
-          path: dist/*
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.msi
+            dist/windows_exe/MiceCam/*.exe

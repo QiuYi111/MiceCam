@@ -23,6 +23,7 @@ class RecorderThread(QObject):
     error_occurred = pyqtSignal(str)
     log_message = pyqtSignal(str)
     finished_recording = pyqtSignal()
+    preview_updated = pyqtSignal(dict)
 
     def __init__(self, config):
         """
@@ -193,6 +194,13 @@ class RecorderThread(QObject):
                 except Exception as e:
                      # Log parsing errors to console
                     print(f"Failed to parse status: {e}")
+            elif line.startswith("PREVIEW_UPDATE:"):
+                try:
+                    json_str = line[len("PREVIEW_UPDATE:"):]
+                    msg = json.loads(json_str)
+                    self.preview_updated.emit(msg)
+                except Exception as e:
+                    pass
             else:
                 # Forward generic logs to UI
                 self.log_message.emit(f"[Worker] {line}")

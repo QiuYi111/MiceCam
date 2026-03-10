@@ -12,8 +12,16 @@ import json
 import threading
 import signal
 import _micecam
+import base64
+import queue
 
 # Inject Debug Logger
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
+
 try:
     import debug_utils
     debug_utils.hook_exceptions()
@@ -29,6 +37,54 @@ def signal_handler(sig, frame):
     global stop_requested
     if 'debug_utils' in globals(): debug_utils.log("WORKER", f"Signal Received: {sig}")
     stop_requested = True
+
+preview_queue = queue.Queue(maxsize=1)
+
+def preview_worker_loop():
+    while not stop_requested:
+        try:
+            # Wait for a frame to encode, timeout to check stop_requested
+            preview_data = preview_queue.get(timeout=0.5)
+            # preview_data is (width, height, bytes)
+            w, h, raw_bytes, cam_idx = preview_data
+
+            b64_img = base64.b64encode(raw_bytes).decode('ascii')
+            msg = {
+                "image": b64_img,
+                "width": w,
+                "height": h,
+                "index": cam_idx,
+                "format": "raw" if len(raw_bytes) == w * h else "jpeg"
+            }
+            print(f"PREVIEW_UPDATE:{json.dumps(msg)}", flush=True)
+
+        except queue.Empty:
+            continue
+        except Exception as e:
+            if 'debug_utils' in globals(): debug_utils.log("WORKER", f"Preview Encode Error: {e}")
+
+def attach_preview_callback(pipeline, cam_idx, target_fps=5.0):
+    if not NUMPY_AVAILABLE:
+        return
+    min_interval = 1.0 / target_fps
+    last_time = [0.0]  # mutable state for callback
+
+    def callback(data_view, seq_id, timestamp):
+        now = time.time()
+        if now - last_time[0] < min_interval:
+            return
+
+        try:
+            # We assume NV12 or similar format where the first W*H bytes are the Y (luma/grayscale) channel.
+            # Convert memoryview to numpy array. The pipeline width/height is needed, but we can infer
+            # or just take the length. Actually, without knowing the exact width/height in the callback, it's tricky.
+            # But we can get pipeline stats or assume from config.
+            # Better trick: we passed W and H to the pipeline, so we know the size.
+            pass
+        except Exception:
+            pass
+
+    # That approach requires W/H inside the callback. We'll implement it inline.
 
 def main():
     global stop_requested
@@ -97,7 +153,81 @@ def main():
             # Standard single camera (USB/FFmpeg)
             p = _micecam.Pipeline(output_dir, session_name, backend, width, height, fps, dev_idx, append_mode)
             pipelines.append(p)
-        for p in pipelines:
+
+        # Start preview worker thread
+        preview_thread = threading.Thread(target=preview_worker_loop, daemon=True)
+        preview_thread.start()
+
+        for i, p in enumerate(pipelines):
+            # Attach a callback to extract preview frames
+            min_interval = 1.0 / 5.0 # 5 FPS preview
+            last_time = {"t": 0.0}
+
+            # We need to capture variables
+            def make_cb(cam_index, w, h, t_state):
+                def cb(data_view, seq_id, timestamp):
+                    now = time.time()
+                    if now - t_state["t"] < min_interval:
+                        return
+                    t_state["t"] = now
+
+                    try:
+                        # The stream may be MJPEG or Raw YUV
+                        raw_data = data_view.tobytes()
+
+                        # Detect format
+                        is_jpeg = raw_data.startswith(b'\xff\xd8')
+
+                        if is_jpeg:
+                            # Use full JPEG for preview (compressed)
+                            final_bytes = raw_data
+                            final_w, final_h = w, h
+                        elif NUMPY_AVAILABLE:
+                            # Handle Raw YUV - Extract Y Channel
+                            arr = np.frombuffer(raw_data, dtype=np.uint8)
+                            expected_len = w * h
+
+                            # UYVY or YUYV (2 bytes per pixel)
+                            if len(arr) == expected_len * 2:
+                                # UYVY: Y is at index 1, 3, 5...
+                                # YUYV: Y is at index 0, 2, 4...
+                                # Based on header 7E 99 80 9A -> U Y V Y likely
+                                y_channel = arr[1::2].reshape((h, w))
+                            elif len(arr) >= expected_len:
+                                # NV12 or similar (Y is the first W*H bytes)
+                                y_channel = arr[:expected_len].reshape((h, w))
+                            else:
+                                return # Unknown or partial frame
+
+                            # Downsample to save CPU/IPC
+                            scale = max(1, w // 320)
+                            small_y = y_channel[::scale, ::scale]
+                            final_h, final_w = small_y.shape
+                            if not small_y.flags['C_CONTIGUOUS']:
+                                small_y = np.ascontiguousarray(small_y)
+                            final_bytes = small_y.tobytes()
+                        else:
+                            return # Cannot handle raw without numpy
+
+                        # Put to queue, replace if full
+                        try:
+                            preview_queue.put_nowait((final_w, final_h, final_bytes, cam_index))
+                        except queue.Full:
+                            # drain and replace
+                            try:
+                                preview_queue.get_nowait()
+                            except:
+                                pass
+                            try:
+                                preview_queue.put_nowait((final_w, final_h, final_bytes, cam_index))
+                            except: pass
+
+                    except Exception as e:
+                        pass
+                return cb
+
+            p.attach_callback(make_cb(i, width, height, last_time))
+
             p.start()
 
         print(f"[Worker] {len(pipelines)} pipeline(s) started.")

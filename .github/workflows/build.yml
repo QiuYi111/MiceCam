@@ -23,7 +23,7 @@ jobs:
     - name: Setup vcpkg caches
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgGitCommitId: 3c62cf3457a4128f7fb7e60b865525d88f615f21
+        vcpkgGitCommitId: 1e199d32ad53aab1defda61ce41c380302e3f95c
         vcpkgDirectory: ${{ github.workspace }}/vcpkg
         vcpkgJsonGlob: '**/vcpkg.json'
 

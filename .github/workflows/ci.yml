@@ -13,7 +13,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-      VCPKG_DEFAULT_TRIPLET: ${{ runner.os == 'Windows' && 'x64-windows' || '' }}
     strategy:
       fail-fast: false
       matrix:

@@ -50,7 +50,7 @@ TEST(WorkerProcessRuntimeTest, LaunchFailsWhenChildNeverPublishesHello) {
     EXPECT_FALSE(observer.expected);
 }
 
-TEST(WorkerProcessRuntimeTest, StartSessionFailsWhenWorkerNeverReplies) {
+TEST(WorkerProcessRuntimeTest, StartSessionReturnsAfterSendingCommandToWorker) {
     int argc = 0;
     char** argv = nullptr;
     QCoreApplication app(argc, argv);
@@ -74,8 +74,9 @@ TEST(WorkerProcessRuntimeTest, StartSessionFailsWhenWorkerNeverReplies) {
     request.fps = 30.0;
     request.autoDecode = false;
 
-    EXPECT_FALSE(runtime.startSession(request, &errorMessage));
-    EXPECT_NE(errorMessage.indexOf("timed out"), -1) << errorMessage.toStdString();
+    EXPECT_TRUE(runtime.startSession(request, &errorMessage)) << errorMessage.toStdString();
+    EXPECT_TRUE(runtime.forceShutdown(&errorMessage)) << errorMessage.toStdString();
+    EXPECT_EQ(observer.exitCalls, 0);
 }
 
 }  // namespace

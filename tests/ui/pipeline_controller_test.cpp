@@ -35,6 +35,12 @@ public:
         return true;
     }
 
+    bool forceShutdown(QString* errorMessage) override {
+        Q_UNUSED(errorMessage);
+        forceShutdownCalls += 1;
+        return true;
+    }
+
     void setObserver(micecam_ui::IRecordingRuntimeObserver* nextObserver) override {
         observer = nextObserver;
     }
@@ -48,6 +54,7 @@ public:
     }
 
     int shutdownCalls = 0;
+    int forceShutdownCalls = 0;
     micecam_ui::IRecordingRuntimeObserver* observer = nullptr;
 };
 
@@ -147,6 +154,24 @@ TEST(PipelineControllerTest, PreviewToggleDefaultsOnAndCanBeDisabled) {
     EXPECT_TRUE(controller.previewEnabled());
     controller.setPreviewEnabled(false);
     EXPECT_FALSE(controller.previewEnabled());
+}
+
+TEST(PipelineControllerTest, ShutdownForExitForceStopsWorker) {
+    int argc = 0;
+    char** argv = nullptr;
+    QCoreApplication app(argc, argv);
+
+    auto runtime = std::make_unique<FakeRecordingRuntime>();
+    auto* runtimePtr = runtime.get();
+    auto supervisor = std::make_unique<micecam_ui::RecordingSupervisorService>(std::move(runtime));
+    auto* supervisorPtr = supervisor.get();
+    PipelineController controller(std::move(supervisor));
+
+    ASSERT_TRUE(supervisorPtr->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
+
+    controller.shutdownForExit();
+
+    EXPECT_EQ(runtimePtr->forceShutdownCalls, 1);
 }
 
 }  // namespace

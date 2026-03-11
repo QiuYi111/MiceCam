@@ -30,9 +30,29 @@ namespace {
 using micecam_ui::ActivityEventModel;
 using micecam_ui::RecordingStartRequest;
 
-CaptureDeviceDescriptor makeOakDevice(const QString& name, int index) {
+#ifdef WITH_OAK_CAMERA
+QString formatOakLabel(const dai::DeviceInfo& info) {
+    const QString baseName = QStringLiteral("Luxonis OAK (DepthAI)");
+    const QString rawName = QString::fromStdString(info.name).trimmed();
+    const QString deviceId = QString::fromStdString(info.getDeviceId()).trimmed();
+
+    QString label = rawName;
+    if (label.isEmpty() || label == QStringLiteral("0.1")) {
+        label = baseName;
+    } else if (!label.contains(QStringLiteral("OAK"), Qt::CaseInsensitive)) {
+        label = QStringLiteral("%1 (%2)").arg(baseName, label);
+    }
+
+    if (!deviceId.isEmpty()) {
+        label = QStringLiteral("%1 [%2]").arg(label, deviceId.right(6));
+    }
+    return label;
+}
+#endif
+
+CaptureDeviceDescriptor makeOakDevice(const QString& name, const QString& deviceId, int index) {
     CaptureDeviceDescriptor device;
-    device.deviceId = QStringLiteral("oak:%1").arg(index);
+    device.deviceId = deviceId.isEmpty() ? QStringLiteral("oak:%1").arg(index) : deviceId;
     device.backendId = "oak";
     device.displayName = name;
     device.deviceIndex = index;
@@ -95,8 +115,11 @@ QList<CaptureDeviceDescriptor> enumerateDevices() {
         const auto oakDevices = dai::DeviceBase::getAllAvailableDevices();
         for (int i = 0; i < static_cast<int>(oakDevices.size()); ++i) {
             const auto& info = oakDevices.at(i);
-            const std::string name = info.name.empty() ? "Luxonis OAK (DepthAI)" : info.name;
-            devices.push_back(makeOakDevice(QString::fromStdString(name), i));
+            devices.push_back(makeOakDevice(
+                formatOakLabel(info),
+                QString::fromStdString(info.getDeviceId()),
+                i
+            ));
         }
     } catch (const std::exception&) {
     }
@@ -197,7 +220,7 @@ PipelineController::~PipelineController() {
     if (m_elapsedTimerId > 0) {
         killTimer(m_elapsedTimerId);
     }
-    m_supervisor->prepareForClose();
+    m_supervisor->shutdownForExit();
 }
 
 bool PipelineController::isRecording() const { return m_supervisor->isRecording(); }
@@ -367,12 +390,28 @@ void PipelineController::setRequestedFps(double fps) {
 }
 
 void PipelineController::refreshCameraInventory() {
+    const auto previousDevices = m_cameraInventoryModel->devices();
+    const QString previousDeviceId = (
+        m_selectedCameraIndex >= 0 && m_selectedCameraIndex < previousDevices.size()
+    ) ? previousDevices.at(m_selectedCameraIndex).deviceId : QString();
+
     const QList<CaptureDeviceDescriptor> devices = enumerateDevices();
     m_cameraInventoryModel->setDevices(devices);
 
     int nextIndex = m_selectedCameraIndex;
     if (devices.isEmpty()) {
         nextIndex = -1;
+    } else if (!previousDeviceId.isEmpty()) {
+        nextIndex = -1;
+        for (int i = 0; i < devices.size(); ++i) {
+            if (devices.at(i).deviceId == previousDeviceId) {
+                nextIndex = i;
+                break;
+            }
+        }
+        if (nextIndex < 0) {
+            nextIndex = 0;
+        }
     } else if (nextIndex < 0 || nextIndex >= devices.size()) {
         nextIndex = 0;
     }
@@ -460,6 +499,14 @@ bool PipelineController::requestAppClose() {
     }
     syncFromSupervisor();
     return false;
+}
+
+void PipelineController::shutdownForExit() {
+    if (m_elapsedTimerId > 0) {
+        killTimer(m_elapsedTimerId);
+        m_elapsedTimerId = 0;
+    }
+    m_supervisor->shutdownForExit();
 }
 
 void PipelineController::setVideoProvider(VideoFrameProvider* provider) {

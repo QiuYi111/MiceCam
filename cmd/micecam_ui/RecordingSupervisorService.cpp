@@ -4,6 +4,12 @@
 
 namespace micecam_ui {
 
+namespace {
+
+constexpr int kStartupTimeoutMs = 45000;
+
+}  // namespace
+
 RecordingSupervisorService::RecordingSupervisorService(
     std::unique_ptr<IRecordingRuntime> runtime,
     QObject* parent
@@ -11,6 +17,9 @@ RecordingSupervisorService::RecordingSupervisorService(
     m_runtime(std::move(runtime)),
     m_activityModel(new ActivityEventModel(this)) {
     m_runtime->setObserver(this);
+    m_startupWatchdog = new QTimer(this);
+    m_startupWatchdog->setSingleShot(true);
+    connect(m_startupWatchdog, &QTimer::timeout, this, &RecordingSupervisorService::handleStartupTimeout);
 }
 
 bool RecordingSupervisorService::startRecording(
@@ -46,6 +55,8 @@ bool RecordingSupervisorService::startRecording(
         return false;
     }
 
+    m_startPending = true;
+    m_startupWatchdog->start(kStartupTimeoutMs);
     m_shouldAttemptResume = true;
     appendActivity("info", "session", "Recording worker launching.", m_resolvedSessionPath);
     setState("launching_worker", "Launching recording worker.");
@@ -63,6 +74,7 @@ bool RecordingSupervisorService::stopRecording() {
         return false;
     }
 
+    cancelStartupWatchdog();
     m_shouldAttemptResume = false;
     setState("stopping", "Stopping recording safely.");
     appendActivity("session", "session", "Stop requested.", m_resolvedSessionPath);
@@ -80,8 +92,30 @@ bool RecordingSupervisorService::prepareForClose() {
         return false;
     }
 
+    cancelStartupWatchdog();
     appendActivity("warning", "system", "Application close requested while runtime is busy.");
     return true;
+}
+
+void RecordingSupervisorService::shutdownForExit() {
+    cancelStartupWatchdog();
+    m_shouldAttemptResume = false;
+    m_startPending = false;
+
+    if (!m_runtimeLaunched) {
+        return;
+    }
+
+    QString errorMessage;
+    if (!m_runtime->forceShutdown(&errorMessage) && !errorMessage.isEmpty()) {
+        appendActivity("warning", "system", errorMessage);
+    }
+
+    m_runtimeLaunched = false;
+    m_runtimeHealthy = false;
+    m_isRecording = false;
+    m_isDecoding = false;
+    m_previewAvailable = false;
 }
 
 QString RecordingSupervisorService::state() const { return m_state; }
@@ -137,9 +171,12 @@ void RecordingSupervisorService::onRuntimeStatus(const RuntimeStatus& status) {
 
     if (status.state == "worker_ready") {
         m_runtimeHealthy = true;
-        setState("preflight", status.detail.isEmpty() ? "Worker ready." : status.detail);
+        if (!m_startPending) {
+            setState("preflight", status.detail.isEmpty() ? "Worker ready." : status.detail);
+        }
         appendActivity("info", "system", "Recording worker ready.");
     } else if (status.state == "recording") {
+        cancelStartupWatchdog();
         m_isRecording = true;
         m_isDecoding = false;
         if (m_previewDetail.isEmpty()) {
@@ -147,20 +184,24 @@ void RecordingSupervisorService::onRuntimeStatus(const RuntimeStatus& status) {
         }
         setState("recording", status.detail.isEmpty() ? "Recording now. Watch preview and capture health." : status.detail);
     } else if (status.state == "stopping") {
+        cancelStartupWatchdog();
         m_isRecording = false;
         m_isDecoding = false;
         setState("stopping", status.detail.isEmpty() ? "Stopping recording safely." : status.detail);
     } else if (status.state == "decoding") {
+        cancelStartupWatchdog();
         m_isRecording = false;
         m_isDecoding = true;
         setState("decoding", status.detail.isEmpty() ? "Preparing export." : status.detail);
     } else if (status.state == "completed") {
+        cancelStartupWatchdog();
         m_isRecording = false;
         m_isDecoding = false;
         m_shouldAttemptResume = false;
         setState("completed", status.detail.isEmpty() ? "Export is ready. Review the files or start another session." : status.detail);
         appendActivity("info", "export", "Session completed.", m_resolvedExportPath);
     } else if (status.state == "error") {
+        cancelStartupWatchdog();
         m_shouldAttemptResume = false;
         setError(status.detail.isEmpty() ? "Recording worker reported an error." : status.detail);
     }
@@ -178,6 +219,7 @@ void RecordingSupervisorService::onRuntimePreview(const QByteArray& jpegBytes) {
 }
 
 void RecordingSupervisorService::onRuntimeExited(bool expected, const QString& reason) {
+    cancelStartupWatchdog();
     m_runtimeLaunched = false;
 
     if (expected) {
@@ -247,6 +289,7 @@ void RecordingSupervisorService::setState(const QString& state, const QString& d
 }
 
 void RecordingSupervisorService::setError(const QString& errorMessage) {
+    cancelStartupWatchdog();
     m_isRecording = false;
     m_isDecoding = false;
     m_lastErrorMessage = errorMessage;
@@ -299,9 +342,36 @@ bool RecordingSupervisorService::resumeLastSession(QString* errorMessage) {
         return false;
     }
 
+    m_startPending = true;
+    m_startupWatchdog->start(kStartupTimeoutMs);
     m_shouldAttemptResume = true;
     appendActivity("info", "session", "Session resume request accepted by restarted worker.", m_resolvedSessionPath);
     return true;
+}
+
+void RecordingSupervisorService::cancelStartupWatchdog() {
+    m_startPending = false;
+    if (m_startupWatchdog->isActive()) {
+        m_startupWatchdog->stop();
+    }
+}
+
+void RecordingSupervisorService::handleStartupTimeout() {
+    m_startPending = false;
+    m_shouldAttemptResume = false;
+
+    QString shutdownError;
+    if (!m_runtime->forceShutdown(&shutdownError) && !shutdownError.isEmpty()) {
+        appendActivity("warning", "system", shutdownError);
+    }
+
+    m_runtimeLaunched = false;
+    m_runtimeHealthy = true;
+
+    const QString message = QStringLiteral(
+        "Camera initialization timed out after %1 seconds. Check camera permission, device availability, and whether another app is using the camera."
+    ).arg(kStartupTimeoutMs / 1000);
+    setError(message);
 }
 
 }  // namespace micecam_ui

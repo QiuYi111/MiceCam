@@ -116,6 +116,7 @@ public:
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE bool openResolvedOutput();
     Q_INVOKABLE bool requestAppClose();
+    void shutdownForExit();
 
     void setVideoProvider(VideoFrameProvider* provider);
 

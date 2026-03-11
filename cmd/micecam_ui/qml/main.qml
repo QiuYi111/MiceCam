@@ -255,10 +255,22 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: Theme.space12
 
-                    Text {
-                        text: "Camera"
-                        color: Theme.textSecondary
-                        font.pixelSize: 12
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.space12
+
+                        Text {
+                            text: "Camera"
+                            color: Theme.textSecondary
+                            font.pixelSize: 12
+                            Layout.fillWidth: true
+                        }
+
+                        SecondaryButton {
+                            text: "Refresh"
+                            enabled: !pipeline.isRecording && !pipeline.isDecoding
+                            onClicked: pipeline.refreshCameraInventory()
+                        }
                     }
 
                     ComboBox {

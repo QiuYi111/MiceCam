@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QSize>
 #include <QString>
+#include <QTimer>
 #include <memory>
 
 namespace micecam_ui {
@@ -51,6 +52,7 @@ public:
     virtual bool startSession(const RecordingStartRequest& request, QString* errorMessage) = 0;
     virtual bool stopSession(QString* errorMessage) = 0;
     virtual bool requestShutdown(QString* errorMessage) = 0;
+    virtual bool forceShutdown(QString* errorMessage) = 0;
     virtual void setObserver(IRecordingRuntimeObserver* observer) = 0;
 };
 
@@ -64,6 +66,7 @@ public:
     bool startRecording(const RecordingStartRequest& request, const QString& workerProgram);
     bool stopRecording();
     bool prepareForClose();
+    void shutdownForExit();
 
     QString state() const;
     QString statusDetail() const;
@@ -100,6 +103,8 @@ private:
     void appendActivity(const QString& severity, const QString& category, const QString& message, const QString& path = QString());
     bool relaunchWorker(QString* errorMessage);
     bool resumeLastSession(QString* errorMessage);
+    void cancelStartupWatchdog();
+    void handleStartupTimeout();
 
     std::unique_ptr<IRecordingRuntime> m_runtime;
     ActivityEventModel* m_activityModel = nullptr;
@@ -117,12 +122,14 @@ private:
     QString m_workerProgram;
     bool m_isRecording = false;
     bool m_isDecoding = false;
+    bool m_startPending = false;
     bool m_shouldAttemptResume = false;
     uint64_t m_capturedFrames = 0;
     uint64_t m_droppedFrames = 0;
     double m_throughputMbps = 0.0;
     double m_currentFps = 0.0;
     double m_decodeProgress = 0.0;
+    QTimer* m_startupWatchdog = nullptr;
 };
 
 }  // namespace micecam_ui

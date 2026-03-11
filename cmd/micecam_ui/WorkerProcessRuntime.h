@@ -19,12 +19,12 @@ public:
     bool startSession(const RecordingStartRequest& request, QString* errorMessage) override;
     bool stopSession(QString* errorMessage) override;
     bool requestShutdown(QString* errorMessage) override;
+    bool forceShutdown(QString* errorMessage) override;
     void setObserver(IRecordingRuntimeObserver* observer) override;
 
 private:
     bool sendCommand(const QVariantMap& command, QString* errorMessage);
     bool waitForWorkerReady(QString* errorMessage);
-    bool waitForStartResponse(const QString& backendId, QString* errorMessage);
     void handleStdout();
     void handleStderr();
     void handleFinished(int exitCode);
@@ -35,10 +35,6 @@ private:
     QByteArray m_stderrBuffer;
     bool m_shutdownRequested = false;
     bool m_workerReady = false;
-    bool m_waitingForStartResponse = false;
-    bool m_startResponseReady = false;
-    QString m_startResponseState;
-    QString m_startResponseDetail;
     bool m_suppressNextExitNotification = false;
 };
 

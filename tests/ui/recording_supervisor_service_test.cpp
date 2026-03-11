@@ -44,6 +44,14 @@ public:
         return shutdownResult;
     }
 
+    bool forceShutdown(QString* errorMessage) override {
+        forceShutdownCalls += 1;
+        if (!forceShutdownResult && errorMessage) {
+            *errorMessage = forceShutdownError;
+        }
+        return forceShutdownResult;
+    }
+
     void setObserver(micecam_ui::IRecordingRuntimeObserver* nextObserver) override {
         observer = nextObserver;
     }
@@ -72,10 +80,13 @@ public:
     QString stopError = "worker rejected stop";
     bool shutdownResult = true;
     QString shutdownError = "worker rejected shutdown";
+    bool forceShutdownResult = true;
+    QString forceShutdownError = "worker rejected force shutdown";
     bool launched = false;
     int startCalls = 0;
     int stopCalls = 0;
     int shutdownCalls = 0;
+    int forceShutdownCalls = 0;
     micecam_ui::RecordingStartRequest lastRequest;
     micecam_ui::IRecordingRuntimeObserver* observer = nullptr;
 };
@@ -83,6 +94,11 @@ public:
 class RecordingSupervisorServiceTest : public ::testing::Test {
 protected:
     void SetUp() override {
+        if (!QCoreApplication::instance()) {
+            int argc = 0;
+            char** argv = nullptr;
+            app = std::make_unique<QCoreApplication>(argc, argv);
+        }
         runtime = std::make_unique<FakeRecordingRuntime>();
         runtimePtr = runtime.get();
         service = std::make_unique<micecam_ui::RecordingSupervisorService>(std::move(runtime));
@@ -103,6 +119,7 @@ protected:
         return request;
     }
 
+    std::unique_ptr<QCoreApplication> app;
     std::unique_ptr<FakeRecordingRuntime> runtime;
     FakeRecordingRuntime* runtimePtr = nullptr;
     std::unique_ptr<micecam_ui::RecordingSupervisorService> service;
@@ -145,13 +162,13 @@ TEST_F(RecordingSupervisorServiceTest, ReportsWorkerLaunchFailure) {
     EXPECT_EQ(service->lastErrorMessage(), "worker executable missing");
 }
 
-TEST_F(RecordingSupervisorServiceTest, WorkerReadyStateAllowsRecordingToStart) {
+TEST_F(RecordingSupervisorServiceTest, WorkerReadyStateKeepsLaunchPendingUntilRecordingStarts) {
     ASSERT_TRUE(service->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
 
     runtimePtr->emitState({.state = "worker_ready", .detail = "Worker ready."});
 
-    EXPECT_EQ(service->state(), "preflight");
-    EXPECT_TRUE(service->canRequestStart());
+    EXPECT_EQ(service->state(), "launching_worker");
+    EXPECT_FALSE(service->canRequestStart());
 }
 
 TEST_F(RecordingSupervisorServiceTest, UnexpectedWorkerExitKeepsRecoveryInNonStartableStateUntilRuntimeConfirmsResume) {
@@ -208,6 +225,14 @@ TEST_F(RecordingSupervisorServiceTest, ExpectedExitAfterShutdownMakesCloseSafe) 
     EXPECT_TRUE(service->canCloseSafely());
     EXPECT_EQ(service->state(), "idle");
     EXPECT_FALSE(service->isDecoding());
+}
+
+TEST_F(RecordingSupervisorServiceTest, ShutdownForExitForceStopsRuntime) {
+    ASSERT_TRUE(service->startRecording(makeRequest(true), "/tmp/micecam_ui_worker"));
+
+    service->shutdownForExit();
+
+    EXPECT_EQ(runtimePtr->forceShutdownCalls, 1);
 }
 
 TEST_F(RecordingSupervisorServiceTest, TracksPreviewPolicyFromRuntimeStatus) {

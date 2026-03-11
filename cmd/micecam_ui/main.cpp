@@ -1,13 +1,33 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QSocketNotifier>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
 #include <QCommandLineParser>
 #include <QtQuickControls2/QQuickStyle>
+#include <csignal>
+#ifdef Q_OS_UNIX
+#include <unistd.h>
+#endif
 #include "NativeWorkerRuntime.h"
 #include "PipelineController.h"
 #include "VideoFrameProvider.h"
+
+namespace {
+
+#ifdef Q_OS_UNIX
+int gSignalPipe[2] = {-1, -1};
+
+void forwardUnixSignal(int signalNumber) {
+    const unsigned char signalByte = static_cast<unsigned char>(signalNumber);
+    if (gSignalPipe[1] >= 0) {
+        ::write(gSignalPipe[1], &signalByte, sizeof(signalByte));
+    }
+}
+#endif
+
+}  // namespace
 
 int main(int argc, char *argv[]) {
     bool workerMode = false;
@@ -43,6 +63,26 @@ int main(int argc, char *argv[]) {
     // Register backend controller
     auto* pipelineController = new PipelineController(&app);
     auto* videoProvider = new VideoFrameProvider();
+
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, pipelineController, &PipelineController::shutdownForExit);
+
+    QSocketNotifier* signalNotifier = nullptr;
+#ifdef Q_OS_UNIX
+    if (::pipe(gSignalPipe) == 0) {
+        std::signal(SIGINT, forwardUnixSignal);
+        std::signal(SIGTERM, forwardUnixSignal);
+        signalNotifier = new QSocketNotifier(gSignalPipe[0], QSocketNotifier::Read, &app);
+        auto* notifier = signalNotifier;
+        QObject::connect(notifier, &QSocketNotifier::activated, &app, [&app, notifier, pipelineController]() {
+            notifier->setEnabled(false);
+            unsigned char signalByte = 0;
+            ::read(gSignalPipe[0], &signalByte, sizeof(signalByte));
+            pipelineController->shutdownForExit();
+            app.quit();
+        });
+    }
+#endif
+    Q_UNUSED(signalNotifier);
 
     // Allow QML to read frames from image://live_camera/feed
     engine.addImageProvider("live_camera", videoProvider);

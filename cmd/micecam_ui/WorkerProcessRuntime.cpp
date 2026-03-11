@@ -1,11 +1,11 @@
 #include "WorkerProcessRuntime.h"
 
 #include <algorithm>
+#include <chrono>
 
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
-#include <QElapsedTimer>
 #include <QVariantMap>
 
 namespace micecam_ui {
@@ -15,8 +15,6 @@ namespace {
 QString readJsonString(const QJsonObject& object, const char* key) {
     return object.value(QLatin1String(key)).toString();
 }
-
-constexpr int kWorkerStartTimeoutMs = 45000;
 
 }  // namespace
 
@@ -80,19 +78,7 @@ bool WorkerProcessRuntime::startSession(const RecordingStartRequest& request, QS
     command.insert("fps", request.fps);
     command.insert("autoDecode", request.autoDecode);
     command.insert("previewEnabled", request.previewEnabled);
-    m_waitingForStartResponse = true;
-    m_startResponseReady = false;
-    m_startResponseState.clear();
-    m_startResponseDetail.clear();
-
-    if (!sendCommand(command, errorMessage)) {
-        m_waitingForStartResponse = false;
-        return false;
-    }
-
-    const bool started = waitForStartResponse(request.backendId, errorMessage);
-    m_waitingForStartResponse = false;
-    return started;
+    return sendCommand(command, errorMessage);
 }
 
 bool WorkerProcessRuntime::stopSession(QString* errorMessage) {
@@ -102,6 +88,23 @@ bool WorkerProcessRuntime::stopSession(QString* errorMessage) {
 bool WorkerProcessRuntime::requestShutdown(QString* errorMessage) {
     m_shutdownRequested = true;
     return sendCommand({{"type", "shutdown"}}, errorMessage);
+}
+
+bool WorkerProcessRuntime::forceShutdown(QString* errorMessage) {
+    if (!m_process || m_process->state() == QProcess::NotRunning) {
+        return true;
+    }
+
+    m_shutdownRequested = true;
+    m_suppressNextExitNotification = true;
+    m_process->kill();
+    if (!m_process->waitForFinished(1000)) {
+        if (errorMessage) {
+            *errorMessage = "Timed out while forcefully stopping the recording worker.";
+        }
+        return false;
+    }
+    return true;
 }
 
 void WorkerProcessRuntime::setObserver(IRecordingRuntimeObserver* observer) {
@@ -116,9 +119,10 @@ bool WorkerProcessRuntime::waitForWorkerReady(QString* errorMessage) {
         return false;
     }
 
-    QElapsedTimer timer;
-    timer.start();
-    while (!m_workerReady && timer.elapsed() < 3000) {
+    const auto startedAt = std::chrono::steady_clock::now();
+    while (!m_workerReady &&
+           std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - startedAt).count() < 3000) {
         handleStdout();
         handleStderr();
         if (m_workerReady) {
@@ -128,7 +132,9 @@ bool WorkerProcessRuntime::waitForWorkerReady(QString* errorMessage) {
             break;
         }
 
-        const int remainingMs = static_cast<int>(3000 - timer.elapsed());
+        const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startedAt).count();
+        const int remainingMs = static_cast<int>(3000 - elapsedMs);
         if (remainingMs <= 0) {
             break;
         }
@@ -150,71 +156,6 @@ bool WorkerProcessRuntime::waitForWorkerReady(QString* errorMessage) {
         } else {
             *errorMessage = "Timed out waiting for the recording worker to become ready.";
         }
-    }
-    return false;
-}
-
-bool WorkerProcessRuntime::waitForStartResponse(const QString& backendId, QString* errorMessage) {
-    if (!m_process) {
-        if (errorMessage) {
-            *errorMessage = "Recording worker process is not available.";
-        }
-        return false;
-    }
-
-    Q_UNUSED(backendId);
-    const int timeoutMs = kWorkerStartTimeoutMs;
-    QElapsedTimer timer;
-    timer.start();
-    while (!m_startResponseReady && timer.elapsed() < timeoutMs) {
-        handleStdout();
-        handleStderr();
-        if (m_startResponseReady) {
-            break;
-        }
-        if (m_process->state() == QProcess::NotRunning) {
-            break;
-        }
-
-        const int remainingMs = static_cast<int>(timeoutMs - timer.elapsed());
-        if (remainingMs <= 0) {
-            break;
-        }
-        m_process->waitForReadyRead(std::min(remainingMs, 100));
-    }
-
-    handleStdout();
-    handleStderr();
-
-    if (m_startResponseReady) {
-        if (m_startResponseState == "error") {
-            if (errorMessage) {
-                *errorMessage = m_startResponseDetail.isEmpty()
-                    ? QStringLiteral("Recording worker reported a startup error.")
-                    : m_startResponseDetail;
-            }
-            return false;
-        }
-        return true;
-    }
-
-    const QString stderrText = QString::fromUtf8(m_stderrBuffer).trimmed();
-    if (errorMessage) {
-        if (!stderrText.isEmpty()) {
-            *errorMessage = QStringLiteral(
-                "Camera initialization did not complete: %1"
-            ).arg(stderrText);
-        } else {
-            *errorMessage = QStringLiteral(
-                "Camera initialization timed out after %1 seconds. On macOS, check Camera permission and close other apps using the camera."
-            ).arg(timeoutMs / 1000);
-        }
-    }
-
-    if (m_process->state() != QProcess::NotRunning) {
-        m_suppressNextExitNotification = true;
-        m_process->kill();
-        m_process->waitForFinished(1000);
     }
     return false;
 }
@@ -297,11 +238,6 @@ void WorkerProcessRuntime::handleStdout() {
             if (status.state == "worker_ready") {
                 m_workerReady = true;
             }
-            if (m_waitingForStartResponse && status.state != "worker_ready") {
-                m_startResponseReady = true;
-                m_startResponseState = status.state;
-                m_startResponseDetail = status.detail;
-            }
             m_observer->onRuntimeStatus(status);
         }
     }
@@ -337,8 +273,6 @@ void WorkerProcessRuntime::handleStderr() {
 
 void WorkerProcessRuntime::handleFinished(int exitCode) {
     m_workerReady = false;
-    m_waitingForStartResponse = false;
-    m_startResponseReady = false;
 
     if (m_suppressNextExitNotification) {
         m_suppressNextExitNotification = false;

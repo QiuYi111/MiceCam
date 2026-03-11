@@ -1,5 +1,15 @@
 <!DOCTYPE RCC><RCC version="1.0">
 <qresource>
     <file>main.qml</file>
+    <file>theme/Theme.js</file>
+    <file>components/Card.qml</file>
+    <file>components/StateChip.qml</file>
+    <file>components/MetricTile.qml</file>
+    <file>components/PrimaryButton.qml</file>
+    <file>components/SecondaryButton.qml</file>
+    <file>components/AppHeader.qml</file>
+    <file>components/PreviewStage.qml</file>
+    <file>components/ActionDock.qml</file>
+    <file>components/StatusRow.qml</file>
 </qresource>
 </RCC>

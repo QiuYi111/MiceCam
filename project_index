@@ -1,0 +1,25 @@
+# MiceCam Project Index
+
+## Overview
+- `cmd/micecam_ui/`: Native Qt/QML desktop application entry, QML scene, and UI-facing controller.
+- `cmd/gui/`: Legacy Python/PyQt and web-based UI implementations kept for reference and fallback.
+- `internal/`: Core C++ capture, pipeline, storage, and decoder logic.
+- `bindings/`: Python bindings for the native C++ core.
+- `tests/`: C++ and Python automated tests.
+- `docs/reports/`: Review and implementation reports.
+- `docs/wikis/`: Architecture and design knowledge base.
+
+## Current UI Stack
+- Current shipping native UI entry: `cmd/micecam_ui/main.cpp`
+- Current QML scene: `cmd/micecam_ui/qml/main.qml`
+- Shared QML components: `cmd/micecam_ui/qml/components/`
+- QML theme tokens: `cmd/micecam_ui/qml/theme/`
+- UI state bridge: `cmd/micecam_ui/PipelineController.h`
+- Live preview provider: `cmd/micecam_ui/VideoFrameProvider.h`
+- Legacy desktop UI reference: `cmd/gui/gui/main_window.py`
+
+## Notable Constraints
+- Current repository does not include `docs/requirements/` or `docs/plan/`.
+- Active QML UI has been refactored into a preview-first workspace with reusable components and a tokenized theme layer.
+- Camera enumeration now renders in the native UI, but full device-selection-to-capture linkage still requires follow-up integration work.
+- Existing git worktree contains unrelated local changes under `3rdParty/depthai-core`.

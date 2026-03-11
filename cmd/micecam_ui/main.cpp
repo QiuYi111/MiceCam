@@ -8,10 +8,6 @@
 #include "VideoFrameProvider.h"
 
 int main(int argc, char *argv[]) {
-    // Set up high DPI scaling
-    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
-    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
-
     QGuiApplication app(argc, argv);
 
     app.setOrganizationName("MiceCam");

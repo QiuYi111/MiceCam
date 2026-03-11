@@ -41,6 +41,45 @@ uint64_t PipelineController::getDroppedFrames() const { return m_droppedFrames; 
 double PipelineController::getMbps() const { return m_mbps; }
 QString PipelineController::getFormat() const { return m_format; }
 bool PipelineController::getAutoDecode() const { return m_autoDecode; }
+QString PipelineController::getSessionState() const { return m_sessionState; }
+QString PipelineController::getStatusHeadline() const {
+    if (m_sessionState == "recording") return "Recording now";
+    if (m_sessionState == "decoding") return "Preparing export";
+    if (m_sessionState == "completed") return "Ready for the next session";
+    if (m_sessionState == "error") return "Needs attention";
+    return "Ready to record";
+}
+QString PipelineController::getStatusDetail() const { return m_statusDetail; }
+QString PipelineController::getLastErrorMessage() const { return m_lastErrorMessage; }
+QString PipelineController::getLastSessionName() const { return m_lastSessionName; }
+QString PipelineController::getDecodedOutputDir() const { return m_decodedOutputDir; }
+int PipelineController::getElapsedSeconds() const {
+    return (m_isRecording && m_recordingTimer.isValid())
+        ? static_cast<int>(m_recordingTimer.elapsed() / 1000)
+        : 0;
+}
+QString PipelineController::getRecordingDurationText() const {
+    const int totalSeconds = getElapsedSeconds();
+    const int minutes = totalSeconds / 60;
+    const int seconds = totalSeconds % 60;
+    return QStringLiteral("%1:%2")
+        .arg(minutes, 2, 10, QLatin1Char('0'))
+        .arg(seconds, 2, 10, QLatin1Char('0'));
+}
+bool PipelineController::isDecoding() const { return m_isDecoding; }
+bool PipelineController::hasAvailableCamera() const { return !getAvailableCameras().isEmpty(); }
+bool PipelineController::hasDroppedFramesWarning() const { return m_droppedFrames > 0; }
+QString PipelineController::getResolvedSessionPath() const {
+    const QString session = m_lastSessionName.isEmpty() ? m_sessionName : m_lastSessionName;
+    return QDir(m_outputDir).filePath(session);
+}
+QString PipelineController::getResolvedExportPath() const {
+    if (!m_decodedOutputDir.isEmpty()) {
+        return m_decodedOutputDir;
+    }
+    const QString session = m_lastSessionName.isEmpty() ? m_sessionName : m_lastSessionName;
+    return QDir(m_outputDir).filePath(session + "_decoded");
+}
 QStringList PipelineController::logMessages() const { return m_logMessages; }
 double PipelineController::getDecodeProgress() const { return m_decodeProgress; }
 
@@ -49,6 +88,7 @@ void PipelineController::setSessionName(const QString& name) {
     if (m_sessionName != name) {
         m_sessionName = name;
         emit sessionNameChanged(m_sessionName);
+        emit sessionArchiveChanged();
     }
 }
 
@@ -56,6 +96,7 @@ void PipelineController::setOutputDir(const QString& dir) {
     if (m_outputDir != dir) {
         m_outputDir = dir;
         emit outputDirChanged(m_outputDir);
+        emit sessionArchiveChanged();
     }
 }
 
@@ -73,8 +114,41 @@ void PipelineController::log(const QString& message) {
     emit logMessagesChanged();
 }
 
+void PipelineController::setSessionState(const QString& state, const QString& detail) {
+    bool changed = false;
+    if (m_sessionState != state) {
+        m_sessionState = state;
+        changed = true;
+    }
+    if (!detail.isNull() && m_statusDetail != detail) {
+        m_statusDetail = detail;
+        changed = true;
+    }
+    if (changed) {
+        emit sessionStateChanged();
+    }
+}
 
-QVariantList PipelineController::getAvailableCameras() {
+void PipelineController::setErrorState(const QString& errorMsg) {
+    if (m_lastErrorMessage != errorMsg) {
+        m_lastErrorMessage = errorMsg;
+        emit errorStateChanged();
+    }
+    setDecodingState(false);
+    setSessionState("error", errorMsg);
+    log("Error: " + errorMsg);
+    emit errorOccurred(errorMsg);
+}
+
+void PipelineController::setDecodingState(bool decoding) {
+    if (m_isDecoding != decoding) {
+        m_isDecoding = decoding;
+        emit decodeStateChanged();
+    }
+}
+
+
+QVariantList PipelineController::getAvailableCameras() const {
     QVariantList list;
 
 #ifdef WITH_OAK_CAMERA
@@ -107,7 +181,7 @@ QVariantList PipelineController::getAvailableCameras() {
     return list;
 }
 
-QVariantList PipelineController::getAvailableResolutions(const QString& backend) {
+QVariantList PipelineController::getAvailableResolutions(const QString& backend) const {
     QVariantList list;
     if (backend == "oak") {
         list.append("1280x800");
@@ -135,26 +209,35 @@ void PipelineController::startRecording(const QString& backend, int type, int wi
         cam_config.device_id = type; // Generic ID handling
 
         log("Starting capture with backend: " + backend + " (" + QString::number(width) + "x" + QString::number(height) + ")");
+        if (!m_lastErrorMessage.isEmpty()) {
+            m_lastErrorMessage.clear();
+            emit errorStateChanged();
+        }
+        setDecodingState(false);
+        m_decodeProgress = 0.0;
+        emit decodeProgressChanged(m_decodeProgress);
+        m_decodedOutputDir.clear();
+        emit sessionArchiveChanged();
 
 
         if (backend == "oak") {
 #ifdef WITH_OAK_CAMERA
             m_cameraBackend = std::make_unique<micecam::OAKCameraBackend>();
 #else
-            emit errorOccurred("OAK camera support not compiled");
+            setErrorState("OAK camera support not compiled");
             return;
 #endif
         } else {
 #ifdef WITH_FFMPEG
             m_cameraBackend = std::make_unique<micecam::FFmpegCameraBackend>();
 #else
-            emit errorOccurred("Webcam support not compiled");
+            setErrorState("Webcam support not compiled");
             return;
 #endif
         }
 
         if (!m_cameraBackend->initialize(cam_config)) {
-            emit errorOccurred("Failed to initialize camera backend " + backend);
+            setErrorState("Failed to initialize camera backend " + backend);
             return;
         }
 
@@ -181,13 +264,15 @@ void PipelineController::startRecording(const QString& backend, int type, int wi
 
 
         if (!m_pipeline->start()) {
-            emit errorOccurred("Failed to start ingestion pipeline");
+            setErrorState("Failed to start ingestion pipeline");
             return;
         }
 
         m_isRecording = true;
         emit isRecordingChanged(true);
         emit captureStarted();
+        m_recordingTimer.start();
+        setSessionState("recording", "Recording now. Watch preview and capture health.");
 
         // Start stats polling
         m_statsTimerId = startTimer(1000);
@@ -195,7 +280,7 @@ void PipelineController::startRecording(const QString& backend, int type, int wi
         qInfo() << "Recording started. Session:" << m_sessionName;
 
     } catch (const std::exception& e) {
-        emit errorOccurred(QString::fromStdString(e.what()));
+        setErrorState(QString::fromStdString(e.what()));
     }
 }
 
@@ -217,6 +302,8 @@ void PipelineController::stopRecording() {
 
     m_isRecording = false;
     emit isRecordingChanged(false);
+    m_lastSessionName = m_sessionName;
+    emit sessionArchiveChanged();
     log("Recording stopped. Session saved.");
 
     if (m_autoDecode) {
@@ -225,8 +312,10 @@ void PipelineController::stopRecording() {
         std::string outputDir = m_outputDir.toStdString();
         std::string sessionName = m_sessionName.toStdString();
         std::string targetParentDir = (QDir(m_outputDir).filePath(m_sessionName + "_decoded")).toStdString();
+        setDecodingState(true);
+        setSessionState("decoding", "Recording finished. Preparing export.");
 
-        QtConcurrent::run([this, outputDir, sessionName, targetParentDir]() {
+        auto decodeTask = QtConcurrent::run([this, outputDir, sessionName, targetParentDir]() {
             m_decodeProgress = 5.0;
             emit decodeProgressChanged(m_decodeProgress);
 
@@ -238,12 +327,20 @@ void PipelineController::stopRecording() {
             if (m_decoder->decode_micecam_project(outputDir, sessionName, targetParentDir, cb)) {
                 log("Native decoding finished successfully. Exported to: " + QString::fromStdString(targetParentDir));
                 m_decodeProgress = 100.0;
+                m_decodedOutputDir = QString::fromStdString(targetParentDir);
+                emit sessionArchiveChanged();
+                setDecodingState(false);
+                setSessionState("completed", "Export is ready. Review the files or start another session.");
             } else {
-                log("Native decoding failed. Check project files.");
+                setErrorState("Native decoding failed. Check project files.");
                 m_decodeProgress = 0.0;
             }
             emit decodeProgressChanged(m_decodeProgress);
         });
+        Q_UNUSED(decodeTask);
+    } else {
+        setDecodingState(false);
+        setSessionState("completed", "Raw session data is saved and ready.");
     }
 
     // Refresh session name immediately for next recording

@@ -122,6 +122,7 @@ void NativeWorkerRuntime::startRecording(const QJsonObject& command) {
     m_outputDir = command.value("outputDir").toString();
     m_sessionName = command.value("sessionName").toString();
     m_autoDecode = command.value("autoDecode").toBool(true);
+    m_previewEnabled = command.value("previewEnabled").toBool(true);
     m_exportPath = QDir(m_outputDir).filePath(m_sessionName + "_decoded");
 
     micecam::CameraConfig camConfig;
@@ -180,7 +181,7 @@ void NativeWorkerRuntime::startRecording(const QJsonObject& command) {
             killTimer(m_previewTimerId);
         }
         m_statsTimerId = startTimer(1000);
-        m_previewTimerId = startTimer(200);
+        m_previewTimerId = m_previewEnabled ? startTimer(200) : 0;
         publishActivity("info", "session", "Recording started.", QDir(m_outputDir).filePath(m_sessionName));
         publishStatus("recording", "Recording now. Watch preview and capture health.");
     } catch (const std::exception& exception) {
@@ -273,10 +274,12 @@ void NativeWorkerRuntime::publishStatus(const QString& state, const QString& det
         {"detail", detail},
         {"resolvedSessionPath", QDir(m_outputDir).filePath(m_sessionName)},
         {"resolvedExportPath", m_exportPath},
-        {"previewAvailable", m_isRecording},
-        {"previewMode", m_isRecording ? "capped" : "offline"},
+        {"previewAvailable", m_isRecording && m_previewEnabled},
+        {"previewMode", m_isRecording ? (m_previewEnabled ? "capped" : "disabled") : "offline"},
         {"previewDetail", m_isRecording
-            ? "Preview is capped at 5 FPS with latest-frame-only delivery."
+            ? (m_previewEnabled
+                ? "Preview is capped at 5 FPS with latest-frame-only delivery."
+                : "Preview is disabled for recording stability.")
             : "Preview is offline until recording starts."},
     };
 
@@ -338,7 +341,7 @@ void NativeWorkerRuntime::timerEvent(QTimerEvent* event) {
 }
 
 void NativeWorkerRuntime::publishPreviewFrame() {
-    if (!m_pipeline || !m_isRecording) {
+    if (!m_pipeline || !m_isRecording || !m_previewEnabled) {
         return;
     }
 

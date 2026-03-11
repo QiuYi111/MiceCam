@@ -10,6 +10,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFileInfo>
 #include <QCameraDevice>
 #include <QCameraFormat>
 #include <QMediaDevices>
@@ -208,6 +209,7 @@ uint64_t PipelineController::getDroppedFrames() const { return m_supervisor->dro
 double PipelineController::getMbps() const { return m_supervisor->throughputMbps(); }
 QString PipelineController::getFormat() const { return currentBackendId() == "oak" ? "MJPEG" : "MJPEG"; }
 bool PipelineController::getAutoDecode() const { return m_autoDecode; }
+bool PipelineController::previewEnabled() const { return m_previewEnabled; }
 QString PipelineController::getSessionState() const { return m_supervisor->state(); }
 QString PipelineController::getStatusHeadline() const {
     const QString state = m_supervisor->state();
@@ -266,6 +268,19 @@ bool PipelineController::hasAvailableCamera() const { return m_cameraInventoryMo
 bool PipelineController::hasDroppedFramesWarning() const { return m_supervisor->droppedFrames() > 0; }
 QString PipelineController::getResolvedSessionPath() const { return m_supervisor->resolvedSessionPath(); }
 QString PipelineController::getResolvedExportPath() const { return m_supervisor->resolvedExportPath(); }
+QString PipelineController::getPreferredOutputPath() const {
+    const QString exportPath = getResolvedExportPath();
+    if (!exportPath.isEmpty() && QFileInfo::exists(exportPath)) {
+        return exportPath;
+    }
+
+    const QString sessionPath = getResolvedSessionPath();
+    if (!sessionPath.isEmpty() && QFileInfo::exists(sessionPath)) {
+        return sessionPath;
+    }
+
+    return !exportPath.isEmpty() ? exportPath : sessionPath;
+}
 bool PipelineController::previewAvailable() const { return m_supervisor->previewAvailable(); }
 QString PipelineController::previewMode() const { return m_supervisor->previewMode(); }
 QString PipelineController::previewDetail() const { return m_supervisor->previewDetail(); }
@@ -294,6 +309,13 @@ void PipelineController::setAutoDecode(bool enable) {
     if (m_autoDecode != enable) {
         m_autoDecode = enable;
         emit autoDecodeChanged(m_autoDecode);
+    }
+}
+
+void PipelineController::setPreviewEnabled(bool enable) {
+    if (m_previewEnabled != enable) {
+        m_previewEnabled = enable;
+        emit previewEnabledChanged(m_previewEnabled);
     }
 }
 
@@ -399,6 +421,7 @@ void PipelineController::startRecording() {
     request.resolution = QSize(resolutionParts.at(0).toInt(), resolutionParts.at(1).toInt());
     request.fps = m_requestedFps;
     request.autoDecode = m_autoDecode;
+    request.previewEnabled = m_previewEnabled;
 
     if (!m_supervisor->startRecording(request, QCoreApplication::applicationFilePath())) {
         syncFromSupervisor();
@@ -420,7 +443,7 @@ void PipelineController::stopRecording() {
 }
 
 bool PipelineController::openResolvedOutput() {
-    const QString path = !getResolvedExportPath().isEmpty() ? getResolvedExportPath() : getResolvedSessionPath();
+    const QString path = getPreferredOutputPath();
     if (path.isEmpty()) {
         return false;
     }

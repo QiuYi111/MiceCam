@@ -44,6 +44,8 @@ class PipelineController : public QObject {
     Q_PROPERTY(bool hasDroppedFramesWarning READ hasDroppedFramesWarning NOTIFY statsUpdated)
     Q_PROPERTY(QString resolvedSessionPath READ getResolvedSessionPath NOTIFY sessionArchiveChanged)
     Q_PROPERTY(QString resolvedExportPath READ getResolvedExportPath NOTIFY sessionArchiveChanged)
+    Q_PROPERTY(QString preferredOutputPath READ getPreferredOutputPath NOTIFY sessionArchiveChanged)
+    Q_PROPERTY(bool previewEnabled READ previewEnabled WRITE setPreviewEnabled NOTIFY previewEnabledChanged)
     Q_PROPERTY(bool previewAvailable READ previewAvailable NOTIFY sessionStateChanged)
     Q_PROPERTY(QString previewMode READ previewMode NOTIFY sessionStateChanged)
     Q_PROPERTY(QString previewDetail READ previewDetail NOTIFY sessionStateChanged)
@@ -93,6 +95,8 @@ public:
     bool hasDroppedFramesWarning() const;
     QString getResolvedSessionPath() const;
     QString getResolvedExportPath() const;
+    QString getPreferredOutputPath() const;
+    bool previewEnabled() const;
     bool previewAvailable() const;
     QString previewMode() const;
     QString previewDetail() const;
@@ -102,6 +106,7 @@ public:
     void setSessionName(const QString& name);
     void setOutputDir(const QString& dir);
     void setAutoDecode(bool enable);
+    void setPreviewEnabled(bool enable);
     void setSelectedCameraIndex(int index);
     void setSelectedResolution(const QString& resolution);
     void setRequestedFps(double fps);
@@ -122,6 +127,7 @@ signals:
     void errorOccurred(const QString& errorMsg);
     void logMessagesChanged();
     void autoDecodeChanged(bool autoDecode);
+    void previewEnabledChanged(bool previewEnabled);
     void decodeProgressChanged(double progress);
     void decodeStateChanged();
     void cameraInventoryChanged();
@@ -151,6 +157,7 @@ private:
     double m_requestedFps = 30.0;
     bool m_canStartRecording = false;
     bool m_autoDecode = true;
+    bool m_previewEnabled = true;
     QStringList m_logMessages;
     QMediaDevices* m_mediaDevices = nullptr;
     std::unique_ptr<micecam_ui::RecordingSupervisorService> m_supervisor;

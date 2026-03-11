@@ -17,6 +17,7 @@ struct RecordingStartRequest {
     QSize resolution;
     double fps = 0.0;
     bool autoDecode = true;
+    bool previewEnabled = true;
 };
 
 struct RuntimeStatus {

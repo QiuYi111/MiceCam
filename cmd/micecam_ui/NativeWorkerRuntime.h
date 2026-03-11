@@ -47,6 +47,7 @@ private:
     QString m_exportPath;
     QString m_backendId;
     bool m_autoDecode = true;
+    bool m_previewEnabled = true;
     bool m_isRecording = false;
     bool m_isDecoding = false;
     bool m_shutdownRequested = false;

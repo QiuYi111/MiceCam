@@ -275,6 +275,10 @@ endif()
 
 # Tests
 if(MICECAM_BUILD_TESTS)
+    add_executable(worker_protocol_hang_helper
+        tests/ui/worker_protocol_hang_helper.cpp
+    )
+
     add_executable(micecam_tests
         tests/core/frame_test.cpp
         tests/core/ring_buffer_test.cpp
@@ -291,6 +295,7 @@ if(MICECAM_BUILD_TESTS)
         tests/ui/native_app_preflight_test.cpp
         tests/ui/pipeline_controller_test.cpp
         tests/ui/recording_supervisor_service_test.cpp
+        tests/ui/worker_process_runtime_test.cpp
         cmd/micecam_ui/ActivityEventModel.cpp
         cmd/micecam_ui/PipelineController.cpp
         cmd/micecam_ui/RecordingSupervisorService.cpp
@@ -317,6 +322,8 @@ if(MICECAM_BUILD_TESTS)
         Qt6::Quick
         Qt6::Multimedia
     )
+
+    add_dependencies(micecam_tests worker_protocol_hang_helper)
 
     include(GoogleTest)
     gtest_discover_tests(micecam_tests)

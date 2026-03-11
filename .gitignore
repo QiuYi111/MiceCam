@@ -1,6 +1,8 @@
 build/
 .clangd/
 .cache/
+.DS_Store
+__pycache__/
 *.bin
 *.json
 *.h5

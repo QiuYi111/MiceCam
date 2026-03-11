@@ -25,6 +25,7 @@ ApplicationWindow {
     property string sessionNameDraft: pipeline.sessionName
     property string outputDirDraft: pipeline.outputDir
     property bool autoDecodeDraft: pipeline.autoDecode
+    property bool previewEnabledDraft: pipeline.previewEnabled
 
     onClosing: function(close) {
         close.accepted = pipeline.requestAppClose()
@@ -32,7 +33,7 @@ ApplicationWindow {
 
     function summaryText() {
         if (pipeline.isDecoding) {
-            return "Exporting to " + pipeline.resolvedExportPath
+            return "Exporting to " + pipeline.preferredOutputPath
         }
         if (pipeline.isRecording) {
             return "Recording into " + pipeline.resolvedSessionPath
@@ -50,6 +51,7 @@ ApplicationWindow {
         pipeline.sessionName = sessionNameDraft.trim()
         pipeline.outputDir = outputDirDraft.trim()
         pipeline.autoDecode = autoDecodeDraft
+        pipeline.previewEnabled = previewEnabledDraft
         pipeline.startRecording()
     }
 
@@ -57,6 +59,7 @@ ApplicationWindow {
         sessionNameDraft = pipeline.sessionName
         outputDirDraft = pipeline.outputDir
         autoDecodeDraft = pipeline.autoDecode
+        previewEnabledDraft = pipeline.previewEnabled
         pipeline.refreshCameraInventory()
     }
 
@@ -73,6 +76,10 @@ ApplicationWindow {
 
         function onAutoDecodeChanged(autoDecode) {
             autoDecodeDraft = autoDecode
+        }
+
+        function onPreviewEnabledChanged(previewEnabled) {
+            previewEnabledDraft = previewEnabled
         }
     }
 
@@ -526,6 +533,45 @@ ApplicationWindow {
                             color: Theme.textPrimary
                             font.pixelSize: 12
                             leftPadding: autoDecodeCheck.indicator.width + Theme.space12
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.Wrap
+                        }
+                    }
+
+                    CheckBox {
+                        id: previewCheck
+                        text: "Enable live preview during recording"
+                        enabled: !pipeline.isRecording && !pipeline.isDecoding
+                        checked: previewEnabledDraft
+                        onToggled: {
+                            previewEnabledDraft = checked
+                            pipeline.previewEnabled = checked
+                        }
+
+                        indicator: Rectangle {
+                            implicitWidth: 20
+                            implicitHeight: 20
+                            radius: 6
+                            x: previewCheck.leftPadding
+                            y: parent.height / 2 - height / 2
+                            color: previewCheck.checked ? Theme.accent : Theme.surface
+                            border.color: previewCheck.checked ? Theme.accent : Theme.borderSubtle
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 8
+                                height: 8
+                                radius: 4
+                                color: "white"
+                                visible: previewCheck.checked
+                            }
+                        }
+
+                        contentItem: Text {
+                            text: previewCheck.text
+                            color: Theme.textPrimary
+                            font.pixelSize: 12
+                            leftPadding: previewCheck.indicator.width + Theme.space12
                             verticalAlignment: Text.AlignVCenter
                             wrapMode: Text.Wrap
                         }

@@ -281,10 +281,10 @@ To achieve the "Apple-like" seamless UX and the ADR-0001 process-isolation, the 
 
 ### 11.2 State Machine Projection (Standardized Event Model)
 **The UX Requirement:** The QML UI transitions elegantly based on strict states (`idle`, `recording`, `stopping`, `error`) and reacts to health signals (like dropped frames) with clean visual banners, avoiding raw text logs.
-**The Backend Gap:** `internal/` currently relies heavily on `std::cout` and `std::cerr` for logging. It does not emit a standardized "Event Bus" or typed alerts (e.g., `DeviceLost`, `FrameDropped(severity)`). 
+**The Backend Gap:** `internal/` currently relies heavily on `std::cout` and `std::cerr` for logging. It does not emit a standardized "Event Bus" or typed alerts (e.g., `DeviceLost`, `FrameDropped(severity)`).
 **The Fix:** The backend must stop printing directly to stdout as its primary communication. It needs an `Observer` or structured message queue (IPC-ready) to pump typed event objects back to the Supervisor UI.
 
 ### 11.3 Granular Decode Tracking
 **The UX Requirement:** During the `decoding` phase, the UI must show a clean, accurate progress transition, allowing the user to seamlessly move to post-recording actions (e.g., "Reveal Output").
-**The Backend Gap:** While `micecam::Decoder` supports a callback `cb(float p)`, in a two-process architecture, this callback cannot directly interact with Qt's UI thread. 
+**The Backend Gap:** While `micecam::Decoder` supports a callback `cb(float p)`, in a two-process architecture, this callback cannot directly interact with Qt's UI thread.
 **The Fix:** Decode progress must be packaged into the same IPC/Event mechanism as runtime stats, allowing the Headless Worker to report `[Decode Progress: 45%]` safely across process boundaries to the QML Supervisor.

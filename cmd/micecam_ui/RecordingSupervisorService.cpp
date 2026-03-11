@@ -95,7 +95,11 @@ QString RecordingSupervisorService::previewDetail() const { return m_previewDeta
 bool RecordingSupervisorService::isRecording() const { return m_isRecording; }
 bool RecordingSupervisorService::isDecoding() const { return m_isDecoding; }
 bool RecordingSupervisorService::canRequestStart() const {
-    return m_runtimeHealthy && (m_state == "idle" || m_state == "completed" || m_state == "error");
+    return m_runtimeHealthy && (
+        m_state == "idle" ||
+        m_state == "preflight" ||
+        m_state == "completed" ||
+        m_state == "error");
 }
 bool RecordingSupervisorService::canCloseSafely() const {
     return !(m_state == "launching_worker" || m_state == "recording" ||
@@ -174,15 +178,25 @@ void RecordingSupervisorService::onRuntimePreview(const QByteArray& jpegBytes) {
 }
 
 void RecordingSupervisorService::onRuntimeExited(bool expected, const QString& reason) {
+    m_runtimeLaunched = false;
+
     if (expected) {
         m_runtimeHealthy = false;
+        m_isRecording = false;
+        m_isDecoding = false;
+        m_shouldAttemptResume = false;
+        m_previewAvailable = false;
         appendActivity("info", "system", "Recording worker exited.");
+        setState("idle", "Recording worker shut down.");
         return;
     }
 
-    m_runtimeHealthy = false;
     const bool wasRecording = m_isRecording || m_state == "launching_worker";
     const bool wasBusy = wasRecording || m_isDecoding || m_state == "stopping";
+    m_runtimeHealthy = false;
+    m_isRecording = false;
+    m_isDecoding = false;
+    m_previewAvailable = false;
     setState("recovering", "Recording worker exited unexpectedly.");
     appendActivity("warning", "system", "Recording worker crashed. Attempting restart.");
 
@@ -197,7 +211,8 @@ void RecordingSupervisorService::onRuntimeExited(bool expected, const QString& r
             if (resumeLastSession(&resumeError)) {
                 const QString message = QStringLiteral("%1 Recovery resumed the session with a new worker.")
                     .arg(crashReason);
-                setError(message);
+                appendActivity("warning", "system", message, m_resolvedSessionPath);
+                setState("recovering", message);
             } else {
                 const QString message = QStringLiteral("%1 Worker restarted but session resume failed: %2")
                     .arg(crashReason, resumeError.isEmpty() ? QStringLiteral("resume failed") : resumeError);

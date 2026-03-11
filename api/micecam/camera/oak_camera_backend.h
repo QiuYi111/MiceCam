@@ -2,6 +2,7 @@
 
 #include "micecam/camera/camera_backend.h"
 #include <atomic>
+#include <optional>
 #include <memory>
 #include <string>
 #include <vector>

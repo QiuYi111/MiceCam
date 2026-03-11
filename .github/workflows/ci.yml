@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build & Package (${{ matrix.os }})
+  native-app:
+    name: Native App Gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
@@ -69,9 +69,10 @@ jobs:
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN_FILE" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DMICECAM_BUILD_TESTS=ON \
             -DBUILD_PYTHON_BINDINGS=ON
 
-      - name: Build C++ and Bindings
+      - name: Build Native App and Tests
         shell: bash
         run: |
           cmake --build build --config Release
@@ -79,56 +80,67 @@ jobs:
       - name: Install Python Dependencies
         run: uv sync --all-extras
 
+      - name: Run Lint Gate
+        shell: bash
+        run: |
+          uv run pre-commit run --all-files
+
       - name: Run C++ Tests
         shell: bash
         run: |
           cd build && ctest --output-on-failure -C Release
 
-      - name: Build Python Package
+      - name: Run Native Worker Smoke
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          uv build
+          scripts/smoke_native_app.sh
 
-      - name: Package EXE (Windows)
+      - name: Run Native Worker Smoke (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          uv pip install pyinstaller
-          $PydFile = Get-ChildItem -Path "build" -Filter "micecam*.pyd" -Recurse | Select-Object -First 1
-          if ($null -eq $PydFile) {
-            Write-Error "Could not find micecam.pyd"
+          $WorkerOutput = "{""type"":""shutdown""}" | & ".\build\micecam_ui.exe" --worker
+          if ($WorkerOutput -notmatch '"type":"hello"') {
+            Write-Error "native worker handshake failed"
             exit 1
           }
-          echo "Found .pyd at $($PydFile.FullName)"
+          Write-Output $WorkerOutput
 
-          # 1. Build Worker EXE
-          uv run pyinstaller --noconsole --clean `
-            --add-data "$($PydFile.FullName);internal/micecam" `
-            --name "MiceCamWorker" `
-            --distpath "dist/windows_exe/MiceCam/tools" `
-            cmd/gui/recorder_worker.py
+      - name: Package Native App Bundle
+        shell: bash
+        run: |
+          mkdir -p dist/native-app
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp build/micecam_ui.exe dist/native-app/
+          else
+            cp build/micecam_ui dist/native-app/
+          fi
 
-          # 2. Build GUI EXE
-          uv run pyinstaller --noconsole --clean `
-            --add-data "$($PydFile.FullName);internal/micecam" `
-            --name "MiceCam" `
-            --distpath "dist/windows_exe" `
-            cmd/gui/gui/main_window.py
+      - name: Validate Packaged Native Bundle
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          APP_BIN="dist/native-app/micecam_ui"
+          WORKER_OUTPUT="$(printf '{"type":"shutdown"}\n' | "${APP_BIN}" --worker)"
+          if [[ "${WORKER_OUTPUT}" != *'"type":"hello"'* ]]; then
+            echo "packaged worker handshake failed"
+            exit 1
+          fi
 
-      - name: Build MSI (Windows)
+      - name: Validate Packaged Native Bundle (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          heat dir "dist/windows_exe/MiceCam" -dr INSTALLFOLDER -cg ProductComponents -gg -sreg -sfrag -srd -out "packaging/windows/components.wxs"
-          candle packaging/windows/micecam.wxs packaging/windows/components.wxs -o packaging/windows/
-          light packaging/windows/micecam.wixobj packaging/windows/components.wixobj -o "dist/MiceCam-Installer.msi"
+          $WorkerOutput = "{""type"":""shutdown""}" | & ".\dist\native-app\micecam_ui.exe" --worker
+          if ($WorkerOutput -notmatch '"type":"hello"') {
+            Write-Error "packaged native worker handshake failed"
+            exit 1
+          }
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: micecam-${{ runner.os }}-py${{ matrix.python-version }}
+          name: micecam-native-${{ runner.os }}-py${{ matrix.python-version }}
           path: |
-            dist/*.whl
-            dist/*.tar.gz
-            dist/*.msi
-            dist/windows_exe/MiceCam/*.exe
+            dist/native-app/**

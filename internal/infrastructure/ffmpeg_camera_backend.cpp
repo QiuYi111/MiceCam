@@ -1,4 +1,6 @@
 #include "micecam/camera/ffmpeg_camera_backend.h"
+#include "infrastructure/ffmpeg_device_selector.h"
+
 #include <iostream>
 #include <vector>
 
@@ -11,6 +13,37 @@ extern "C" {
 }
 
 namespace micecam {
+
+namespace {
+
+#if defined(_WIN32)
+std::vector<std::string> enumerate_windows_dshow_video_devices() {
+    std::vector<std::string> devices;
+
+    const AVInputFormat* input_format = av_find_input_format("dshow");
+    if (!input_format) {
+        return devices;
+    }
+
+    AVDeviceInfoList* device_list = nullptr;
+    if (avdevice_list_input_sources(input_format, nullptr, nullptr, &device_list) < 0 || !device_list) {
+        return devices;
+    }
+
+    for (int index = 0; index < device_list->nb_devices; ++index) {
+        const AVDeviceInfo* device = device_list->devices[index];
+        if (!device || !device->device_name) {
+            continue;
+        }
+        devices.emplace_back(device->device_name);
+    }
+
+    avdevice_free_list_devices(&device_list);
+    return devices;
+}
+#endif
+
+}  // namespace
 
 FFmpegCameraBackend::FFmpegCameraBackend() {
     avdevice_register_all();
@@ -31,11 +64,17 @@ bool FFmpegCameraBackend::open_device() {
 
 #if defined(_WIN32)
     const char* format_name = "dshow";
-    std::string device_name = "video=@device_pnp_\\\\?\\usb#vid_1bcf&pid_2cd1&mi_00#6&197ce02b&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global";
+    const auto available_devices = enumerate_windows_dshow_video_devices();
+    const auto selected_device_name = resolve_ffmpeg_input_device_name(available_devices, config_.device_id, "video=");
+    if (!selected_device_name.has_value()) {
+        std::cerr << "FFmpeg: Invalid Windows webcam index " << config_.device_id
+                  << " (found " << available_devices.size() << " video device(s))" << std::endl;
+        return false;
+    }
+    std::string device_name = *selected_device_name;
 #elif defined(__APPLE__)
     const char* format_name = "avfoundation";
-    std::string device_name = config_.device_id == 0 ? "0" : std::to_string(config_.device_id);
-    // Usually "0:0" or just "0" for the default video device
+    std::string device_name = std::to_string(config_.device_id) + ":none";
 #else
     const char* format_name = "v4l2";
     std::string device_name = "/dev/video" + std::to_string(config_.device_id);
@@ -48,8 +87,6 @@ bool FFmpegCameraBackend::open_device() {
     }
 
     AVDictionary* options = nullptr;
-    // Force MJPEG
-    av_dict_set(&options, "vcodec", "mjpeg", 0);
     // Set resolution
     std::string res = std::to_string(config_.width) + "x" + std::to_string(config_.height);
     av_dict_set(&options, "video_size", res.c_str(), 0);
@@ -57,6 +94,17 @@ bool FFmpegCameraBackend::open_device() {
     av_dict_set(&options, "framerate", std::to_string(static_cast<int>(config_.fps)).c_str(), 0);
     // Set buffer size to avoid drops
     av_dict_set(&options, "rtbufsize", "1024M", 0);
+
+#if defined(__APPLE__)
+    // Built-in macOS cameras typically expose raw YUV formats via AVFoundation.
+    av_dict_set(&options, "pixel_format", "uyvy422", 0);
+    av_dict_set(&options, "probesize", "32", 0);
+    av_dict_set(&options, "analyzeduration", "0", 0);
+    av_dict_set(&options, "fflags", "nobuffer", 0);
+#else
+    // USB webcams on other platforms often deliver MJPEG directly and should prefer it.
+    av_dict_set(&options, "vcodec", "mjpeg", 0);
+#endif
 
     int ret = avformat_open_input(&fmt_ctx_, device_name.c_str(), ifmt, &options);
     av_dict_free(&options);

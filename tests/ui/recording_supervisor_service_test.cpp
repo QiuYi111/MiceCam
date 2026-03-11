@@ -145,15 +145,25 @@ TEST_F(RecordingSupervisorServiceTest, ReportsWorkerLaunchFailure) {
     EXPECT_EQ(service->lastErrorMessage(), "worker executable missing");
 }
 
-TEST_F(RecordingSupervisorServiceTest, UnexpectedWorkerExitEntersRecoveringThenError) {
+TEST_F(RecordingSupervisorServiceTest, WorkerReadyStateAllowsRecordingToStart) {
+    ASSERT_TRUE(service->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
+
+    runtimePtr->emitState({.state = "worker_ready", .detail = "Worker ready."});
+
+    EXPECT_EQ(service->state(), "preflight");
+    EXPECT_TRUE(service->canRequestStart());
+}
+
+TEST_F(RecordingSupervisorServiceTest, UnexpectedWorkerExitKeepsRecoveryInNonStartableStateUntilRuntimeConfirmsResume) {
     ASSERT_TRUE(service->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
 
     runtimePtr->emitState({.state = "recording", .detail = "Recording now"});
     runtimePtr->emitExited(false, "worker crashed");
 
-    EXPECT_EQ(service->state(), "error");
-    EXPECT_EQ(service->lastErrorMessage(), "worker crashed Recovery resumed the session with a new worker.");
+    EXPECT_EQ(service->state(), "recovering");
+    EXPECT_EQ(service->statusDetail(), "worker crashed Recovery resumed the session with a new worker.");
     EXPECT_EQ(runtimePtr->startCalls, 2);
+    EXPECT_FALSE(service->canRequestStart());
     EXPECT_FALSE(service->isRecording());
     ASSERT_GE(service->activityModel()->rowCount(), 1);
 }
@@ -181,6 +191,23 @@ TEST_F(RecordingSupervisorServiceTest, CloseDuringDecodeRequestsRuntimeShutdown)
     EXPECT_FALSE(service->canCloseSafely());
     EXPECT_TRUE(service->prepareForClose());
     EXPECT_EQ(runtimePtr->shutdownCalls, 1);
+}
+
+TEST_F(RecordingSupervisorServiceTest, ExpectedExitAfterShutdownMakesCloseSafe) {
+    ASSERT_TRUE(service->startRecording(makeRequest(true), "/tmp/micecam_ui_worker"));
+
+    runtimePtr->emitState({.state = "recording"});
+    ASSERT_TRUE(service->stopRecording());
+    runtimePtr->emitState({.state = "decoding", .detail = "Preparing export"});
+
+    EXPECT_FALSE(service->canCloseSafely());
+    ASSERT_TRUE(service->prepareForClose());
+
+    runtimePtr->emitExited(true, QString());
+
+    EXPECT_TRUE(service->canCloseSafely());
+    EXPECT_EQ(service->state(), "idle");
+    EXPECT_FALSE(service->isDecoding());
 }
 
 TEST_F(RecordingSupervisorServiceTest, TracksPreviewPolicyFromRuntimeStatus) {

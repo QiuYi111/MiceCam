@@ -136,11 +136,18 @@ QList<CaptureDeviceDescriptor> enumerateDevices() {
 }  // namespace
 
 PipelineController::PipelineController(QObject* parent)
+    : PipelineController(
+          std::make_unique<micecam_ui::RecordingSupervisorService>(
+              std::make_unique<micecam_ui::WorkerProcessRuntime>()),
+          parent) {}
+
+PipelineController::PipelineController(
+    std::unique_ptr<micecam_ui::RecordingSupervisorService> supervisor,
+    QObject* parent)
     : QObject(parent),
       m_cameraInventoryModel(new CameraInventoryModel(this)),
       m_mediaDevices(new QMediaDevices(this)),
-      m_supervisor(std::make_unique<micecam_ui::RecordingSupervisorService>(
-          std::make_unique<micecam_ui::WorkerProcessRuntime>())) {
+      m_supervisor(std::move(supervisor)) {
     connect(m_mediaDevices, &QMediaDevices::videoInputsChanged, this, &PipelineController::refreshCameraInventory);
     connect(
         m_supervisor.get(),
@@ -424,7 +431,10 @@ bool PipelineController::requestAppClose() {
     if (m_supervisor->canCloseSafely()) {
         return true;
     }
-    m_supervisor->prepareForClose();
+    m_closeRequested = true;
+    if (!m_supervisor->prepareForClose()) {
+        m_closeRequested = false;
+    }
     syncFromSupervisor();
     return false;
 }
@@ -504,6 +514,11 @@ void PipelineController::syncFromSupervisor() {
     }
 
     refreshReadiness();
+
+    if (m_closeRequested && m_supervisor->canCloseSafely()) {
+        m_closeRequested = false;
+        QCoreApplication::quit();
+    }
 }
 
 void PipelineController::rebuildLogMessages() {

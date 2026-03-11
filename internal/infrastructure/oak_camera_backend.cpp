@@ -1,4 +1,6 @@
 #include "micecam/camera/oak_camera_backend.h"
+#include "infrastructure/oak_device_selector.h"
+
 #include <depthai/depthai.hpp>
 #include <iostream>
 #include <vector>
@@ -36,8 +38,10 @@ private:
 };
 
 struct OAKCameraBackend::Impl {
-    dai::Pipeline pipeline;
+    std::shared_ptr<dai::Device> device;
+    std::unique_ptr<dai::Pipeline> pipeline;
     std::shared_ptr<dai::MessageQueue> syncQueue;
+    std::optional<dai::DeviceInfo> selectedDeviceInfo;
 
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> total_groups_{0};
@@ -80,15 +84,27 @@ OAKCameraBackend::~OAKCameraBackend() {
 
 bool OAKCameraBackend::initialize(const CameraConfig& config) {
     try {
+        const auto availableDevices = dai::DeviceBase::getAllAvailableDevices();
+        const auto selectedDeviceInfo = resolve_oak_device_info(availableDevices, config.device_id);
+        if (!selectedDeviceInfo.has_value()) {
+            std::cerr << "OAK Init Error: Invalid OAK device index " << config.device_id
+                      << " (found " << availableDevices.size() << " device(s))\n";
+            return false;
+        }
+
+        impl_->selectedDeviceInfo = *selectedDeviceInfo;
+        impl_->device = std::make_shared<dai::Device>(*impl_->selectedDeviceInfo);
+        impl_->pipeline = std::make_unique<dai::Pipeline>(impl_->device);
+
         auto boardConfig = dai::BoardConfig();
         boardConfig.gpio[42] = dai::BoardConfig::GPIO(
             dai::BoardConfig::GPIO::Direction::INPUT,
             dai::BoardConfig::GPIO::Level::HIGH,
             dai::BoardConfig::GPIO::Pull::PULL_DOWN
         );
-        impl_->pipeline.setBoardConfig(boardConfig);
+        impl_->pipeline->setBoardConfig(boardConfig);
 
-        auto sync = impl_->pipeline.create<dai::node::Sync>();
+        auto sync = impl_->pipeline->create<dai::node::Sync>();
         sync->setSyncThreshold(std::chrono::milliseconds(50));
 
         std::vector<std::pair<dai::CameraBoardSocket, std::string>> sockets = {
@@ -99,7 +115,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
         };
 
         for(const auto& [socket, name] : sockets) {
-            auto cam = impl_->pipeline.create<dai::node::ColorCamera>();
+            auto cam = impl_->pipeline->create<dai::node::ColorCamera>();
             cam->setBoardSocket(socket);
             cam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
             cam->setFps(config.fps);
@@ -110,7 +126,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
                 cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::INPUT);
             }
 
-            auto encoder = impl_->pipeline.create<dai::node::VideoEncoder>();
+            auto encoder = impl_->pipeline->create<dai::node::VideoEncoder>();
             encoder->setDefaultProfilePreset(config.fps, dai::VideoEncoderProperties::Profile::MJPEG);
 
             cam->video.link(encoder->input);
@@ -122,7 +138,7 @@ bool OAKCameraBackend::initialize(const CameraConfig& config) {
         int retries = 3;
         while (retries > 0) {
             try {
-                impl_->pipeline.start();
+                impl_->pipeline->start();
                 break;
             } catch (const std::exception& e) {
                 if (--retries == 0) throw;
@@ -151,7 +167,9 @@ void OAKCameraBackend::stop() {
     if (impl_->distributor_thread.joinable()) {
         impl_->distributor_thread.join();
     }
-    impl_->pipeline.stop();
+    if (impl_->pipeline) {
+        impl_->pipeline->stop();
+    }
 }
 
 std::unique_ptr<Frame> OAKCameraBackend::get_frame() {

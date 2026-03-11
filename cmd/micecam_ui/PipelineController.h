@@ -58,6 +58,7 @@ class PipelineController : public QObject {
 
 public:
     explicit PipelineController(QObject* parent = nullptr);
+    explicit PipelineController(std::unique_ptr<micecam_ui::RecordingSupervisorService> supervisor, QObject* parent = nullptr);
     ~PipelineController() override;
 
     bool isRecording() const;
@@ -155,6 +156,7 @@ private:
     std::unique_ptr<micecam_ui::RecordingSupervisorService> m_supervisor;
     int m_elapsedTimerId = 0;
     VideoFrameProvider* m_videoProvider = nullptr;
+    bool m_closeRequested = false;
 
 protected:
     void timerEvent(QTimerEvent* event) override;

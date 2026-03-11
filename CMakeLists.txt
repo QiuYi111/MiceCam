@@ -185,7 +185,10 @@ target_link_libraries(micecam_core PUBLIC
 
 # Camera backend (optional)
 if(WITH_CAMERA_BACKEND)
-    set(CAMERA_SOURCES internal/infrastructure/camera_backend.cpp)
+    set(CAMERA_SOURCES
+        internal/infrastructure/camera_backend.cpp
+        internal/infrastructure/ffmpeg_device_selector.cpp
+    )
 
     if(FFMPEG_FOUND)
         list(APPEND CAMERA_SOURCES internal/infrastructure/ffmpeg_camera_backend.cpp)
@@ -276,6 +279,8 @@ if(MICECAM_BUILD_TESTS)
         tests/core/frame_test.cpp
         tests/core/ring_buffer_test.cpp
         tests/camera/fake_camera.cpp
+        tests/camera/ffmpeg_device_selector_test.cpp
+        tests/camera/oak_device_selector_test.cpp
         tests/pipeline/pipeline_test.cpp
         tests/pipeline/integration_test.cpp
         tests/pipeline/disk_writer_stream_test.cpp
@@ -284,11 +289,16 @@ if(MICECAM_BUILD_TESTS)
         tests/pipeline/configurable_buffer_test.cpp
         tests/benchmark/stress_test.cpp
         tests/ui/native_app_preflight_test.cpp
+        tests/ui/pipeline_controller_test.cpp
         tests/ui/recording_supervisor_service_test.cpp
         cmd/micecam_ui/ActivityEventModel.cpp
+        cmd/micecam_ui/PipelineController.cpp
         cmd/micecam_ui/RecordingSupervisorService.cpp
         cmd/micecam_ui/RecordingSetup.cpp
         cmd/micecam_ui/CameraInventoryModel.cpp
+        cmd/micecam_ui/VideoFrameProvider.cpp
+        cmd/micecam_ui/WorkerProcessRuntime.cpp
+        internal/infrastructure/ffmpeg_device_selector.cpp
     )
 
     target_include_directories(micecam_tests PRIVATE
@@ -303,6 +313,9 @@ if(MICECAM_BUILD_TESTS)
         GTest::gtest_main
         micecam_core
         Qt6::Core
+        Qt6::Gui
+        Qt6::Quick
+        Qt6::Multimedia
     )
 
     include(GoogleTest)

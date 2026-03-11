@@ -2,9 +2,9 @@ name: MiceCam CI
 
 on:
   push:
-    branches: [ "main", "master", "feat/*", "fix/*", "feature/**" ]
+    branches: [ "main", "master", "feat/*", "fix/*", "feature/**", "native_app", "codex/native_app" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "native_app", "codex/native_app" ]
   workflow_dispatch:
 
 jobs:
@@ -13,6 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      VCPKG_DEFAULT_TRIPLET: ${{ runner.os == 'Windows' && 'x64-windows' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -117,6 +118,44 @@ jobs:
             cp build/micecam_ui dist/native-app/
           fi
 
+      - name: Deploy Windows Native App Runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $PackageDir = Join-Path $env:GITHUB_WORKSPACE 'dist/native-app'
+          $PackagedExe = Join-Path $PackageDir 'micecam_ui.exe'
+          $InstalledRoot = Join-Path $env:GITHUB_WORKSPACE 'vcpkg_installed'
+          $TripletName = if ([string]::IsNullOrWhiteSpace($env:VCPKG_DEFAULT_TRIPLET)) { 'x64-windows' } else { $env:VCPKG_DEFAULT_TRIPLET }
+          $TripletDir = Join-Path $InstalledRoot $TripletName
+          if ($null -eq $TripletDir) {
+            throw "Unable to locate the Windows vcpkg installed triplet under $InstalledRoot"
+          }
+          if (-not (Test-Path $TripletDir)) {
+            throw "Unable to locate triplet directory $TripletDir"
+          }
+
+          $WinDeployQt = Get-ChildItem -Path $TripletDir -Recurse -Filter windeployqt.exe | Select-Object -First 1
+          if ($null -eq $WinDeployQt) {
+            throw "Unable to locate windeployqt.exe in $TripletDir"
+          }
+
+          & $WinDeployQt.FullName --release --compiler-runtime $PackagedExe
+
+          $VcpkgBinDir = Join-Path $TripletDir 'bin'
+          if (Test-Path $VcpkgBinDir) {
+            Get-ChildItem -Path $VcpkgBinDir -Filter '*.dll' | Copy-Item -Destination $PackageDir -Force
+          }
+
+          Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'build') -Recurse -Filter '*.dll' |
+            Where-Object { $_.FullName -notlike "$PackageDir*" } |
+            Copy-Item -Destination $PackageDir -Force
+
+          if (-not (Test-Path (Join-Path $PackageDir 'platforms/qwindows.dll'))) {
+            throw "Qt Windows platform plugin was not deployed"
+          }
+
       - name: Validate Packaged Native Bundle
         if: runner.os != 'Windows'
         shell: bash
@@ -132,6 +171,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          if (-not (Test-Path ".\dist\native-app\platforms\qwindows.dll")) {
+            Write-Error "packaged Qt platform plugin missing"
+            exit 1
+          }
           $WorkerOutput = "{""type"":""shutdown""}" | & ".\dist\native-app\micecam_ui.exe" --worker
           if ($WorkerOutput -notmatch '"type":"hello"') {
             Write-Error "packaged native worker handshake failed"

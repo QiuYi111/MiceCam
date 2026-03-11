@@ -39,9 +39,11 @@ Validate the following in the desktop UI:
 Before promoting a packaged build:
 
 1. Verify the packaged app bundle includes the worker-capable `micecam_ui` binary.
-2. Launch the packaged app and repeat the manual native UI smoke flow.
-3. Run the worker handshake against the packaged binary if the packaging format allows headless invocation.
-4. Confirm Qt runtime dependencies resolve on a clean target machine.
+2. On Windows, deploy the Qt runtime with `windeployqt` and verify `platforms/qwindows.dll` is present next to the packaged app.
+3. On Windows, stage the required vcpkg and build-produced runtime DLLs so the packaged app can start on a clean machine without a developer shell.
+4. Launch the packaged app and repeat the manual native UI smoke flow.
+5. Run the worker handshake against the packaged binary if the packaging format allows headless invocation.
+6. Confirm Qt runtime dependencies resolve on a clean target machine.
 
 ## Known Current Limitation
 

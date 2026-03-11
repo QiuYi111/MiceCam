@@ -10,6 +10,7 @@ Rectangle {
     property bool busy: false
     property string sessionState: "idle"
     property string outputSummary: ""
+    property string readinessMessage: ""
     property bool autoDecode: true
     property string primaryText: "Start Recording"
     property string secondaryText: ""
@@ -21,7 +22,7 @@ Rectangle {
     color: Theme.surface
     border.color: Theme.separator
     border.width: 1
-    implicitHeight: compact ? 96 : 58
+    implicitHeight: compact ? 116 : 78
 
     ColumnLayout {
         anchors.fill: parent
@@ -46,9 +47,10 @@ Rectangle {
                 }
 
                 Text {
-                    text: root.autoDecode ? "Auto-decode on" : "Auto-decode off"
+                    text: root.readyToRecord ? (root.autoDecode ? "Auto-decode on" : "Auto-decode off") : root.readinessMessage
                     color: Theme.textSecondary
                     font.pixelSize: 10
+                    wrapMode: Text.Wrap
                 }
             }
 
@@ -66,7 +68,7 @@ Rectangle {
                 PrimaryButton {
                     text: root.primaryText
                     implicitWidth: 146
-                    enabled: root.sessionState === "recording" || (!root.busy && root.readyToRecord)
+                    enabled: root.sessionState === "recording" || !root.busy
                     fillColor: root.sessionState === "recording" ? Theme.error : Theme.accent
                     onClicked: root.primaryClicked()
                 }

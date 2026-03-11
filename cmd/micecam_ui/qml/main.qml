@@ -22,6 +22,13 @@ ApplicationWindow {
     property bool dockCompact: width < 1040
     property bool showValidationHints: false
     property bool readyToRecord: pipeline.canStartRecording
+    property string sessionNameDraft: pipeline.sessionName
+    property string outputDirDraft: pipeline.outputDir
+    property bool autoDecodeDraft: pipeline.autoDecode
+
+    onClosing: function(close) {
+        close.accepted = pipeline.requestAppClose()
+    }
 
     function summaryText() {
         if (pipeline.isDecoding) {
@@ -30,7 +37,7 @@ ApplicationWindow {
         if (pipeline.isRecording) {
             return "Recording into " + pipeline.resolvedSessionPath
         }
-        return outputField.text.trim().length > 0 ? outputField.text.trim() : "Choose an output folder"
+        return outputDirDraft.trim().length > 0 ? outputDirDraft.trim() : "Choose an output folder"
     }
 
     function startCapture() {
@@ -40,16 +47,16 @@ ApplicationWindow {
         }
 
         showValidationHints = false
-        pipeline.sessionName = sessionField.text.trim()
-        pipeline.outputDir = outputField.text.trim()
-        pipeline.autoDecode = autoDecodeCheck.checked
+        pipeline.sessionName = sessionNameDraft.trim()
+        pipeline.outputDir = outputDirDraft.trim()
+        pipeline.autoDecode = autoDecodeDraft
         pipeline.startRecording()
     }
 
     Component.onCompleted: {
-        sessionField.text = pipeline.sessionName
-        outputField.text = pipeline.outputDir
-        autoDecodeCheck.checked = pipeline.autoDecode
+        sessionNameDraft = pipeline.sessionName
+        outputDirDraft = pipeline.outputDir
+        autoDecodeDraft = pipeline.autoDecode
         pipeline.refreshCameraInventory()
     }
 
@@ -57,15 +64,15 @@ ApplicationWindow {
         target: pipeline
 
         function onSessionNameChanged(name) {
-            sessionField.text = name
+            sessionNameDraft = name
         }
 
         function onOutputDirChanged(dir) {
-            outputField.text = dir
+            outputDirDraft = dir
         }
 
         function onAutoDecodeChanged(autoDecode) {
-            autoDecodeCheck.checked = autoDecode
+            autoDecodeDraft = autoDecode
         }
     }
 
@@ -85,7 +92,7 @@ ApplicationWindow {
             statusHeadline: pipeline.statusHeadline
             statusDetail: pipeline.statusDetail
             sessionName: pipeline.sessionName
-            outputDir: outputField.text
+            outputDir: outputDirDraft
         }
 
         Rectangle {
@@ -121,10 +128,11 @@ ApplicationWindow {
             busy: pipeline.isDecoding
             sessionState: pipeline.sessionState
             outputSummary: summaryText()
-            autoDecode: autoDecodeCheck.checked
+            readinessMessage: pipeline.readinessMessage
+            autoDecode: autoDecodeDraft
             primaryText: pipeline.isRecording ? "Stop Recording" :
                          pipeline.isDecoding ? "Exporting" : "Start Recording"
-            secondaryText: pipeline.isRecording ? "" : "Browse Output"
+            secondaryText: pipeline.isRecording ? "" : (pipeline.sessionState === "completed" || pipeline.sessionState === "error" ? "Open Output" : "Browse Output")
 
             onPrimaryClicked: {
                 if (pipeline.isRecording) {
@@ -134,7 +142,13 @@ ApplicationWindow {
                 }
             }
 
-            onSecondaryClicked: folderDialog.open()
+            onSecondaryClicked: {
+                if (pipeline.sessionState === "completed" || pipeline.sessionState === "error") {
+                    pipeline.openResolvedOutput()
+                } else {
+                    folderDialog.open()
+                }
+            }
         }
     }
 
@@ -298,7 +312,11 @@ ApplicationWindow {
                         placeholderText: "Session name"
                         placeholderTextColor: Theme.textTertiary
                         selectByMouse: true
-                        onTextEdited: pipeline.sessionName = text.trim()
+                        text: sessionNameDraft
+                        onTextEdited: {
+                            sessionNameDraft = text
+                            pipeline.sessionName = text.trim()
+                        }
 
                         background: Rectangle {
                             radius: Theme.radiusControl
@@ -448,12 +466,16 @@ ApplicationWindow {
                             placeholderText: "recordings"
                             placeholderTextColor: Theme.textTertiary
                             selectByMouse: true
-                            onTextEdited: pipeline.outputDir = text.trim()
+                            text: outputDirDraft
+                            onTextEdited: {
+                                outputDirDraft = text
+                                pipeline.outputDir = text.trim()
+                            }
 
                             background: Rectangle {
                                 radius: Theme.radiusControl
                                 color: Theme.surface
-                                border.color: showValidationHints && outputField.text.trim().length === 0 ? Theme.error : Theme.borderSubtle
+                                border.color: showValidationHints && outputDirDraft.trim().length === 0 ? Theme.error : Theme.borderSubtle
                             }
                         }
 
@@ -468,8 +490,11 @@ ApplicationWindow {
                         id: autoDecodeCheck
                         text: "Prepare export automatically after recording"
                         enabled: !pipeline.isRecording
-                        checked: true
-                        onToggled: pipeline.autoDecode = checked
+                        checked: autoDecodeDraft
+                        onToggled: {
+                            autoDecodeDraft = checked
+                            pipeline.autoDecode = checked
+                        }
 
                         indicator: Rectangle {
                             implicitWidth: 20
@@ -502,7 +527,7 @@ ApplicationWindow {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        visible: showValidationHints && !readyToRecord && !pipeline.isRecording && !pipeline.isDecoding
+                        visible: !readyToRecord && !pipeline.isRecording && !pipeline.isDecoding
                         color: Theme.surface
                         radius: Theme.radiusControl
                         border.color: Theme.errorSoft
@@ -532,14 +557,20 @@ ApplicationWindow {
 
                     StatusRow {
                         Layout.fillWidth: true
+                        dotColor: pipeline.canStartRecording ? Theme.success : Theme.warning
+                        label: pipeline.canStartRecording ? "Preflight ready" : pipeline.readinessMessage
+                    }
+
+                    StatusRow {
+                        Layout.fillWidth: true
                         dotColor: pipeline.hasAvailableCamera ? Theme.success : Theme.warning
                         label: pipeline.hasAvailableCamera ? "Camera available" : "No camera available"
                     }
 
                     StatusRow {
                         Layout.fillWidth: true
-                        dotColor: outputField.text.trim().length > 0 ? Theme.success : Theme.warning
-                        label: outputField.text.trim().length > 0 ? "Output path ready" : "Output path needed"
+                        dotColor: outputDirDraft.trim().length > 0 ? Theme.success : Theme.warning
+                        label: outputDirDraft.trim().length > 0 ? "Output path ready" : "Output path needed"
                     }
 
                     StatusRow {
@@ -739,6 +770,12 @@ ApplicationWindow {
                             }
                         }
                     }
+
+                    SecondaryButton {
+                        visible: pipeline.sessionState === "completed" || pipeline.sessionState === "error"
+                        text: "Open Output"
+                        onClicked: pipeline.openResolvedOutput()
+                    }
                 }
             }
 
@@ -790,7 +827,7 @@ ApplicationWindow {
 
         onAccepted: {
             var selectedFolder = String(folder).replace("file://", "")
-            outputField.text = selectedFolder
+            outputDirDraft = selectedFolder
             pipeline.outputDir = selectedFolder
         }
     }

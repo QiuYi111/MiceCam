@@ -245,17 +245,31 @@ The worker process will own:
 
 This decision is formalized in [`ADR 0001`](/Users/qiujingyi.7/MiceCam/docs/adr/0001-native-worker-process-runtime.md).
 
-## 9. Immediate Gaps in the Current Native App
+## 9. Current Native Worker Integration
 
-The current implementation still shows these architectural mismatches relative to the chosen worker-process target:
+The current implementation now has a concrete supervisor-worker slice in the native app:
 
-- camera setup is driven by UI-managed lists and string parsing
-- `PipelineController` mixes domain orchestration and view-model concerns
-- decode is started from the controller rather than a supervised worker/job service
-- metrics include placeholders rather than production-trustworthy values
-- release verification does not yet prove worker launch, crash handling, or recovery behavior
+- `PipelineController` remains the QML adapter for setup fields and camera capability selection.
+- `RecordingSupervisorService` owns lifecycle state, failure mapping, close semantics, and structured activity events.
+- `WorkerProcessRuntime` launches the same `micecam_ui` binary in `--worker` mode through `QProcess` and exchanges JSON-line IPC messages.
+- `NativeWorkerRuntime` owns camera initialization, recording pipeline execution, decode progression, heartbeat-like stats publication, and safe shutdown sequencing.
 
-## 10. What "Production-Ready" Means Here
+This means the app now explicitly handles:
+
+- worker launch failure
+- runtime error propagation
+- unexpected worker exit
+- recording stop and decode transitions
+- close requests during decode or stop
+- resolved raw/export path reporting back into QML
+
+## 10. Remaining Gaps
+
+The worker-process baseline is now present, but two production gaps still remain:
+
+- preview frames are not yet transported across the worker boundary, so preview currently degrades to an offline/idle experience under the isolated runtime path
+- recovery policy is explicit at the state machine level, but it does not yet attempt automatic worker restart or device re-acquisition
+## 11. What "Production-Ready" Means Here
 
 For this application, production-ready does not mean "the UI looks finished".
 

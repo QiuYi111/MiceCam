@@ -153,7 +153,7 @@ endif()
 # Hint to find Qt6 installed via Homebrew when using vcpkg toolchain
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
 
-find_package(Qt6 COMPONENTS Core Gui Qml Quick Multimedia REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia REQUIRED)
 # Require C++17 or C++20 for Qt6 usually
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -284,6 +284,9 @@ if(MICECAM_BUILD_TESTS)
         tests/pipeline/configurable_buffer_test.cpp
         tests/benchmark/stress_test.cpp
         tests/ui/native_app_preflight_test.cpp
+        tests/ui/recording_supervisor_service_test.cpp
+        cmd/micecam_ui/ActivityEventModel.cpp
+        cmd/micecam_ui/RecordingSupervisorService.cpp
         cmd/micecam_ui/RecordingSetup.cpp
         cmd/micecam_ui/CameraInventoryModel.cpp
     )
@@ -319,8 +322,12 @@ endif()
 # Qt QML UI executable
 add_executable(micecam_ui
     cmd/micecam_ui/main.cpp
+    cmd/micecam_ui/ActivityEventModel.cpp
+    cmd/micecam_ui/NativeWorkerRuntime.cpp
     cmd/micecam_ui/PipelineController.cpp
+    cmd/micecam_ui/RecordingSupervisorService.cpp
     cmd/micecam_ui/VideoFrameProvider.cpp
+    cmd/micecam_ui/WorkerProcessRuntime.cpp
     cmd/micecam_ui/RecordingSetup.cpp
     cmd/micecam_ui/CameraInventoryModel.cpp
     cmd/micecam_ui/qml/qml.qrc
@@ -331,6 +338,7 @@ target_link_libraries(micecam_ui PRIVATE
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
+    Qt6::QuickControls2
     Qt6::Multimedia
     micecam_core
 )

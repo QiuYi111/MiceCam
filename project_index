@@ -18,10 +18,15 @@
 - Shared QML components: `cmd/micecam_ui/qml/components/`
 - QML theme tokens: `cmd/micecam_ui/qml/theme/`
 - UI state bridge: `cmd/micecam_ui/PipelineController.h`
+- Supervisor lifecycle service: `cmd/micecam_ui/RecordingSupervisorService.h`
+- Worker process runtime bridge: `cmd/micecam_ui/WorkerProcessRuntime.h`
+- Headless native worker entry/runtime: `cmd/micecam_ui/NativeWorkerRuntime.h`
 - Camera inventory model: `cmd/micecam_ui/CameraInventoryModel.h`
 - Recording setup and preflight helpers: `cmd/micecam_ui/RecordingSetup.h`
+- Structured activity feed model: `cmd/micecam_ui/ActivityEventModel.h`
 - Live preview provider: `cmd/micecam_ui/VideoFrameProvider.h`
 - Native app preflight tests: `tests/ui/native_app_preflight_test.cpp`
+- Native app supervisor lifecycle tests: `tests/ui/recording_supervisor_service_test.cpp`
 - Legacy desktop UI reference: `cmd/gui/gui/main_window.py`
 - Native production integration requirements: `docs/requirements/native-app-production-integration.md`
 - Native worker runtime ADR: `docs/adr/0001-native-worker-process-runtime.md`
@@ -30,6 +35,7 @@
 
 ## Notable Constraints
 - Active QML UI has been refactored into a preview-first workspace with reusable components and a tokenized theme layer.
-- Camera inventory, capability-driven selection, and controller-side preflight now exist in the native UI path, but worker-process supervision remains follow-up integration work.
+- Camera inventory, capability-driven selection, controller-side preflight, and worker-process supervision now exist in the native UI path.
+- Preview transport is currently degraded by design while the worker-process boundary is being established; worker-side preview budgeting and IPC preview frames remain follow-up work.
 - Legacy Python UI remains the strongest reference for worker isolation and preview budget strategy.
 - Existing git worktree contains unrelated local changes under `3rdParty/depthai-core`.

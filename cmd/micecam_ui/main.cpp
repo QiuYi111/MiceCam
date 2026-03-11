@@ -1,35 +1,42 @@
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QIcon>
 #include <QCommandLineParser>
-#include <iostream>
+#include <QtQuickControls2/QQuickStyle>
+#include "NativeWorkerRuntime.h"
 #include "PipelineController.h"
 #include "VideoFrameProvider.h"
 
 int main(int argc, char *argv[]) {
+    bool workerMode = false;
+    for (int index = 1; index < argc; ++index) {
+        if (QString::fromLocal8Bit(argv[index]) == "--worker") {
+            workerMode = true;
+            break;
+        }
+    }
+
+    if (workerMode) {
+        QCoreApplication app(argc, argv);
+        app.setOrganizationName("MiceCam");
+        app.setOrganizationDomain("micecam.local");
+        app.setApplicationName("MiceCam Worker");
+        app.setApplicationVersion("1.0.0");
+
+        micecam_ui::NativeWorkerRuntime worker;
+        worker.start();
+        return app.exec();
+    }
+
+    QQuickStyle::setStyle("Basic");
     QGuiApplication app(argc, argv);
 
     app.setOrganizationName("MiceCam");
     app.setOrganizationDomain("micecam.local");
     app.setApplicationName("MiceCam");
     app.setApplicationVersion("1.0.0");
-
-    QCommandLineParser parser;
-    parser.setApplicationDescription("MiceCam High Performance Camera Suite");
-    parser.addHelpOption();
-    parser.addVersionOption();
-
-    QCommandLineOption workerOption("worker", "Run as a headless recording worker process.");
-    parser.addOption(workerOption);
-
-    parser.process(app);
-
-    if (parser.isSet(workerOption)) {
-        // TODO: Implement headless worker entry point if process isolation is required
-        std::cout << "MiceCam: Running in worker mode (Headless)" << std::endl;
-        return 0; // Worker logic would go here
-    }
 
     QQmlApplicationEngine engine;
 
@@ -52,8 +59,6 @@ int main(int argc, char *argv[]) {
         if (!obj && url == objUrl)
             QCoreApplication::exit(-1);
     }, Qt::QueuedConnection);
-
-    std::cout << "Starting MiceCam UI..." << std::endl;
     engine.load(url);
 
     return app.exec();

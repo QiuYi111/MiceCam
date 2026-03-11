@@ -1,28 +1,23 @@
 #pragma once
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
-#include <QElapsedTimer>
 #include <memory>
-#include <vector>
 
 class CameraInventoryModel;
 class QMediaDevices;
-class VideoFrameProvider; // Forward declare
+class VideoFrameProvider;
 
-// Forward declarations to keep Qt compile fast
-namespace micecam {
-    class IngestionPipeline;
-    class ICameraBackend;
-    class Decoder;
+namespace micecam_ui {
+class RecordingSupervisorService;
 }
 
 class PipelineController : public QObject {
     Q_OBJECT
 
-    // QML Properties
     Q_PROPERTY(bool isRecording READ isRecording NOTIFY isRecordingChanged)
     Q_PROPERTY(QString sessionName READ getSessionName WRITE setSessionName NOTIFY sessionNameChanged)
     Q_PROPERTY(QString outputDir READ getOutputDir WRITE setOutputDir NOTIFY outputDirChanged)
@@ -49,24 +44,19 @@ class PipelineController : public QObject {
     Q_PROPERTY(bool hasDroppedFramesWarning READ hasDroppedFramesWarning NOTIFY statsUpdated)
     Q_PROPERTY(QString resolvedSessionPath READ getResolvedSessionPath NOTIFY sessionArchiveChanged)
     Q_PROPERTY(QString resolvedExportPath READ getResolvedExportPath NOTIFY sessionArchiveChanged)
-
-    // Log system
     Q_PROPERTY(QStringList logMessages READ logMessages NOTIFY logMessagesChanged)
     Q_PROPERTY(double decodeProgress READ getDecodeProgress NOTIFY decodeProgressChanged)
-
-
-    // Stats for UI
     Q_PROPERTY(double currentFps READ getCurrentFps NOTIFY statsUpdated)
     Q_PROPERTY(uint64_t capturedFrames READ getCapturedFrames NOTIFY statsUpdated)
     Q_PROPERTY(uint64_t droppedFrames READ getDroppedFrames NOTIFY statsUpdated)
     Q_PROPERTY(double mbps READ getMbps NOTIFY statsUpdated)
-    Q_PROPERTY(QString format READ getFormat NOTIFY captureStarted)
+    Q_PROPERTY(QString format READ getFormat NOTIFY captureConfigChanged)
+    Q_PROPERTY(QObject* activityModel READ activityModel CONSTANT)
 
 public:
-    explicit PipelineController(QObject *parent = nullptr);
+    explicit PipelineController(QObject* parent = nullptr);
     ~PipelineController() override;
 
-    // Property getters
     bool isRecording() const;
     QString getSessionName() const;
     QString getOutputDir() const;
@@ -80,6 +70,7 @@ public:
     QString getStatusHeadline() const;
     QString getStatusDetail() const;
     QObject* cameraInventoryModel() const;
+    QObject* activityModel() const;
     int selectedCameraIndex() const;
     QStringList availableResolutions() const;
     QVariantList availableFps() const;
@@ -101,8 +92,6 @@ public:
     QStringList logMessages() const;
     double getDecodeProgress() const;
 
-
-    // Property setters
     void setSessionName(const QString& name);
     void setOutputDir(const QString& dir);
     void setAutoDecode(bool enable);
@@ -110,16 +99,12 @@ public:
     void setSelectedResolution(const QString& resolution);
     void setRequestedFps(double fps);
 
-    // Logging
-    Q_INVOKABLE void log(const QString& message);
-
-
-    // Q_INVOKABLE methods (callable from QML)
     Q_INVOKABLE void refreshCameraInventory();
     Q_INVOKABLE void startRecording();
     Q_INVOKABLE void stopRecording();
+    Q_INVOKABLE bool openResolvedOutput();
+    Q_INVOKABLE bool requestAppClose();
 
-    // Attach QQuickImageProvider for preview
     void setVideoProvider(VideoFrameProvider* provider);
 
 signals:
@@ -127,7 +112,6 @@ signals:
     void sessionNameChanged(const QString& name);
     void outputDirChanged(const QString& dir);
     void statsUpdated();
-    void captureStarted();
     void errorOccurred(const QString& errorMsg);
     void logMessagesChanged();
     void autoDecodeChanged(bool autoDecode);
@@ -141,51 +125,31 @@ signals:
     void sessionArchiveChanged();
     void readinessChanged();
 
-
 private:
     void refreshReadiness();
     QString currentBackendId() const;
     int currentDeviceIndex() const;
-    void setSessionState(const QString& state, const QString& detail = QString());
-    void setErrorState(const QString& errorMsg);
-    void setDecodingState(bool decoding);
+    void syncFromSupervisor();
+    void rebuildLogMessages();
 
-    bool m_isRecording = false;
-    bool m_isDecoding = false;
     QString m_sessionName;
     QString m_outputDir = "recordings";
-    QString m_sessionState = "idle";
-    QString m_statusDetail = "Choose a camera and destination to prepare the next capture.";
     QString m_readinessMessage = "Connect a camera to begin.";
     QString m_sanitizedSessionName;
-    QString m_lastErrorMessage;
     QString m_lastSessionName;
-    QString m_decodedOutputDir;
-    QString m_lastOutputDir;
     QElapsedTimer m_recordingTimer;
     CameraInventoryModel* m_cameraInventoryModel = nullptr;
     int m_selectedCameraIndex = -1;
     QString m_selectedResolution;
     double m_requestedFps = 30.0;
     bool m_canStartRecording = false;
-    QMediaDevices* m_mediaDevices = nullptr;
-
-    double m_currentFps = 0.0;
-    uint64_t m_capturedFrames = 0;
-    uint64_t m_droppedFrames = 0;
-    double m_mbps = 0.0;
-    QString m_format = "MJPEG";
-
     bool m_autoDecode = true;
     QStringList m_logMessages;
-    double m_decodeProgress = 0.0;
-    std::unique_ptr<micecam::Decoder> m_decoder;
-
-    std::unique_ptr<micecam::ICameraBackend> m_cameraBackend;
-    std::unique_ptr<micecam::IngestionPipeline> m_pipeline;
-    int m_statsTimerId = 0;
+    QMediaDevices* m_mediaDevices = nullptr;
+    std::unique_ptr<micecam_ui::RecordingSupervisorService> m_supervisor;
+    int m_elapsedTimerId = 0;
     VideoFrameProvider* m_videoProvider = nullptr;
 
 protected:
-    void timerEvent(QTimerEvent *event) override;
+    void timerEvent(QTimerEvent* event) override;
 };

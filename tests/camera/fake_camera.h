@@ -1,6 +1,6 @@
 #pragma once
 
-#include "infrastructure/camera_backend.h"
+#include "micecam/camera/camera_backend.h"
 #include <atomic>
 #include <memory>
 #include <vector>
@@ -29,6 +29,9 @@ public:
 
     [[nodiscard]] std::string get_backend_name() const override {
         return "FakeCamera";
+    }
+    [[nodiscard]] PixelFormat get_current_format() const override {
+        return PixelFormat::RGB24;
     }
 
     // Test controls

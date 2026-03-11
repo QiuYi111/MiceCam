@@ -6,6 +6,9 @@
 - `internal/`: Core C++ capture, pipeline, storage, and decoder logic.
 - `bindings/`: Python bindings for the native C++ core.
 - `tests/`: C++ and Python automated tests.
+- `docs/requirements/`: Product requirements and acceptance criteria.
+- `docs/adr/`: Architecture decision records.
+- `docs/plan/`: Phase-level implementation plans.
 - `docs/reports/`: Review and implementation reports.
 - `docs/wikis/`: Architecture and design knowledge base.
 
@@ -15,11 +18,18 @@
 - Shared QML components: `cmd/micecam_ui/qml/components/`
 - QML theme tokens: `cmd/micecam_ui/qml/theme/`
 - UI state bridge: `cmd/micecam_ui/PipelineController.h`
+- Camera inventory model: `cmd/micecam_ui/CameraInventoryModel.h`
+- Recording setup and preflight helpers: `cmd/micecam_ui/RecordingSetup.h`
 - Live preview provider: `cmd/micecam_ui/VideoFrameProvider.h`
+- Native app preflight tests: `tests/ui/native_app_preflight_test.cpp`
 - Legacy desktop UI reference: `cmd/gui/gui/main_window.py`
+- Native production integration requirements: `docs/requirements/native-app-production-integration.md`
+- Native worker runtime ADR: `docs/adr/0001-native-worker-process-runtime.md`
+- Native production phase plan: `docs/plan/phase-native-app-integration.md`
+- Native runtime architecture notes: `docs/wikis/native-app-runtime-architecture.md`
 
 ## Notable Constraints
-- Current repository does not include `docs/requirements/` or `docs/plan/`.
 - Active QML UI has been refactored into a preview-first workspace with reusable components and a tokenized theme layer.
-- Camera enumeration now renders in the native UI, but full device-selection-to-capture linkage still requires follow-up integration work.
+- Camera inventory, capability-driven selection, and controller-side preflight now exist in the native UI path, but worker-process supervision remains follow-up integration work.
+- Legacy Python UI remains the strongest reference for worker isolation and preview budget strategy.
 - Existing git worktree contains unrelated local changes under `3rdParty/depthai-core`.

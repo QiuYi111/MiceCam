@@ -1,4 +1,4 @@
-#include "infrastructure/disk_writer.h"
+#include "micecam/pipeline/disk_writer.h"
 #include "domain/ring_buffer.h"
 #include <iostream>
 #include <chrono>

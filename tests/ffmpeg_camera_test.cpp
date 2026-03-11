@@ -1,5 +1,5 @@
-#include "infrastructure/ffmpeg_camera_backend.h"
-#include "infrastructure/ingestion_pipeline.h"
+#include "micecam/camera/ffmpeg_camera_backend.h"
+#include "micecam/pipeline/ingestion_pipeline.h"
 #include <iostream>
 #include <vector>
 #include <chrono>

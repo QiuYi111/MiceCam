@@ -18,24 +18,10 @@ ApplicationWindow {
     title: qsTr("MiceCam")
     color: Theme.appBackground
 
-    property var cameraOptions: []
-    property var resolutionOptions: []
     property bool compactLayout: width < 1220
     property bool dockCompact: width < 1040
     property bool showValidationHints: false
-    property real parsedFps: Number(fpsField.text)
-    property bool fpsValid: isFinite(parsedFps) && parsedFps > 0 && parsedFps <= 240
-    property bool sessionNameValid: sessionField.text.trim().length > 0
-    property bool outputDirValid: outputField.text.trim().length > 0
-    property bool cameraSelected: cameraCombo.currentIndex >= 0 && cameraOptions.length > 0
-    property bool resolutionValid: resolutionCombo.currentIndex >= 0 && resolutionCombo.currentText.length > 0
-    property bool readyToRecord: cameraSelected
-                                  && sessionNameValid
-                                  && outputDirValid
-                                  && fpsValid
-                                  && resolutionValid
-                                  && !pipeline.isRecording
-                                  && !pipeline.isDecoding
+    property bool readyToRecord: pipeline.canStartRecording
 
     function summaryText() {
         if (pipeline.isDecoding) {
@@ -47,55 +33,6 @@ ApplicationWindow {
         return outputField.text.trim().length > 0 ? outputField.text.trim() : "Choose an output folder"
     }
 
-    function currentCameraLabel() {
-        if (!cameraOptions || cameraOptions.length === 0) {
-            return "No camera detected"
-        }
-        if (cameraCombo.currentIndex < 0 || cameraCombo.currentIndex >= cameraOptions.length) {
-            return cameraOptions[0].name
-        }
-        return cameraOptions[cameraCombo.currentIndex].name
-    }
-
-    function currentResolutionLabel() {
-        if (!resolutionOptions || resolutionOptions.length === 0) {
-            return "No resolution"
-        }
-        if (resolutionCombo.currentIndex < 0 || resolutionCombo.currentIndex >= resolutionOptions.length) {
-            return resolutionOptions[0]
-        }
-        return resolutionOptions[resolutionCombo.currentIndex]
-    }
-
-    function refreshCameraOptions() {
-        cameraOptions = pipeline.getAvailableCameras()
-
-        if (cameraOptions.length === 0) {
-            if (typeof cameraCombo !== "undefined" && cameraCombo) {
-                cameraCombo.currentIndex = -1
-            }
-            resolutionOptions = []
-            return
-        }
-
-        if (typeof cameraCombo !== "undefined" && cameraCombo
-                && (cameraCombo.currentIndex < 0 || cameraCombo.currentIndex >= cameraOptions.length)) {
-            cameraCombo.currentIndex = 0
-        }
-
-        syncResolutions()
-    }
-
-    function syncResolutions() {
-        if (!cameraOptions || cameraOptions.length === 0 || typeof cameraCombo === "undefined" || !cameraCombo || cameraCombo.currentIndex < 0) {
-            resolutionOptions = []
-            return
-        }
-
-        resolutionOptions = pipeline.getAvailableResolutions(cameraOptions[cameraCombo.currentIndex].id)
-        resolutionCombo.currentIndex = resolutionOptions.length > 0 ? 0 : -1
-    }
-
     function startCapture() {
         if (!readyToRecord) {
             showValidationHints = true
@@ -103,29 +40,17 @@ ApplicationWindow {
         }
 
         showValidationHints = false
-        var selectedCamera = cameraOptions[cameraCombo.currentIndex]
-        var parts = resolutionCombo.currentText.split("x")
-        if (parts.length !== 2) {
-            return
-        }
-
         pipeline.sessionName = sessionField.text.trim()
         pipeline.outputDir = outputField.text.trim()
         pipeline.autoDecode = autoDecodeCheck.checked
-        pipeline.startRecording(
-            selectedCamera.id,
-            selectedCamera.type,
-            parseInt(parts[0]),
-            parseInt(parts[1]),
-            parsedFps
-        )
+        pipeline.startRecording()
     }
 
     Component.onCompleted: {
         sessionField.text = pipeline.sessionName
         outputField.text = pipeline.outputDir
         autoDecodeCheck.checked = pipeline.autoDecode
-        refreshCameraOptions()
+        pipeline.refreshCameraInventory()
     }
 
     Connections {
@@ -245,7 +170,6 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     width: 332
                     sourceComponent: railContent
-                    onLoaded: refreshCameraOptions()
                 }
             }
         }
@@ -281,7 +205,6 @@ ApplicationWindow {
                     id: stackedRailLoader
                     Layout.fillWidth: true
                     sourceComponent: railContent
-                    onLoaded: refreshCameraOptions()
                 }
             }
         }
@@ -315,23 +238,19 @@ ApplicationWindow {
                         id: cameraCombo
                         Layout.fillWidth: true
                         implicitHeight: 40
-                        model: cameraOptions
+                        model: pipeline.cameraInventoryModel
                         textRole: "name"
-                        valueRole: "id"
+                        currentIndex: pipeline.selectedCameraIndex
                         enabled: !pipeline.isRecording && !pipeline.isDecoding
 
-                        onCurrentIndexChanged: syncResolutions()
-                        Component.onCompleted: refreshCameraOptions()
-                        onModelChanged: {
-                            if (cameraOptions.length > 0 && currentIndex < 0) {
-                                currentIndex = 0
-                            }
+                        onActivated: {
+                            pipeline.selectedCameraIndex = currentIndex
                         }
 
                         contentItem: Text {
                             leftPadding: Theme.space16
                             rightPadding: Theme.space32
-                            text: currentCameraLabel()
+                            text: cameraCombo.currentIndex >= 0 ? cameraCombo.displayText : "No camera detected"
                             color: Theme.textPrimary
                             font.pixelSize: 13
                             verticalAlignment: Text.AlignVCenter
@@ -384,7 +303,7 @@ ApplicationWindow {
                         background: Rectangle {
                             radius: Theme.radiusControl
                             color: Theme.surface
-                            border.color: showValidationHints && !sessionNameValid ? Theme.error : Theme.borderSubtle
+                            border.color: showValidationHints && pipeline.sanitizedSessionName.length === 0 ? Theme.error : Theme.borderSubtle
                         }
                     }
 
@@ -406,18 +325,18 @@ ApplicationWindow {
                                 id: resolutionCombo
                                 Layout.fillWidth: true
                                 implicitHeight: 40
-                                model: resolutionOptions
+                                model: pipeline.availableResolutions
+                                currentIndex: pipeline.availableResolutions.indexOf(pipeline.selectedResolution)
                                 enabled: !pipeline.isRecording && !pipeline.isDecoding
-                                onModelChanged: {
-                                    if (resolutionOptions.length > 0 && currentIndex < 0) {
-                                        currentIndex = 0
-                                    }
+
+                                onActivated: {
+                                    pipeline.selectedResolution = currentText
                                 }
 
                                 contentItem: Text {
                                     leftPadding: Theme.space16
                                     rightPadding: Theme.space32
-                                    text: currentResolutionLabel()
+                                    text: resolutionCombo.currentIndex >= 0 ? resolutionCombo.displayText : "No resolution"
                                     color: Theme.textPrimary
                                     font.pixelSize: 13
                                     verticalAlignment: Text.AlignVCenter
@@ -445,7 +364,7 @@ ApplicationWindow {
                                 background: Rectangle {
                                     radius: Theme.radiusControl
                                     color: Theme.surface
-                                    border.color: showValidationHints && !resolutionValid ? Theme.error : Theme.borderSubtle
+                                    border.color: showValidationHints && pipeline.selectedResolution.length === 0 ? Theme.error : Theme.borderSubtle
                                 }
                             }
                         }
@@ -460,24 +379,50 @@ ApplicationWindow {
                                 font.pixelSize: 11
                             }
 
-                            TextField {
-                                id: fpsField
+                            ComboBox {
+                                id: fpsCombo
                                 Layout.fillWidth: true
                                 implicitHeight: 40
-                                text: "30"
+                                model: pipeline.availableFps
+                                currentIndex: pipeline.availableFps.indexOf(pipeline.requestedFps)
                                 enabled: !pipeline.isRecording && !pipeline.isDecoding
-                                color: Theme.textPrimary
-                                font.pixelSize: 13
-                                horizontalAlignment: Text.AlignHCenter
-                                validator: DoubleValidator {
-                                    bottom: 1
-                                    top: 240
+
+                                onActivated: {
+                                    pipeline.requestedFps = Number(currentText)
+                                }
+
+                                contentItem: Text {
+                                    leftPadding: Theme.space12
+                                    rightPadding: Theme.space24
+                                    text: fpsCombo.currentIndex >= 0 ? fpsCombo.displayText : "FPS"
+                                    color: Theme.textPrimary
+                                    font.pixelSize: 13
+                                    verticalAlignment: Text.AlignVCenter
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+
+                                indicator: Canvas {
+                                    x: fpsCombo.width - width - Theme.space12
+                                    y: fpsCombo.topPadding + (fpsCombo.availableHeight - height) / 2
+                                    width: 12
+                                    height: 8
+
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.moveTo(0, 0)
+                                        ctx.lineTo(width, 0)
+                                        ctx.lineTo(width / 2, height)
+                                        ctx.closePath()
+                                        ctx.fillStyle = Theme.textSecondary
+                                        ctx.fill()
+                                    }
                                 }
 
                                 background: Rectangle {
                                     radius: Theme.radiusControl
                                     color: Theme.surface
-                                    border.color: showValidationHints && !fpsValid ? Theme.error : Theme.borderSubtle
+                                    border.color: showValidationHints && fpsCombo.currentIndex < 0 ? Theme.error : Theme.borderSubtle
                                 }
                             }
                         }
@@ -508,7 +453,7 @@ ApplicationWindow {
                             background: Rectangle {
                                 radius: Theme.radiusControl
                                 color: Theme.surface
-                                border.color: showValidationHints && !outputDirValid ? Theme.error : Theme.borderSubtle
+                                border.color: showValidationHints && outputField.text.trim().length === 0 ? Theme.error : Theme.borderSubtle
                             }
                         }
 
@@ -567,12 +512,7 @@ ApplicationWindow {
                             id: readinessText
                             anchors.fill: parent
                             anchors.margins: Theme.space12
-                            text: !pipeline.hasAvailableCamera ? "Connect a camera to begin."
-                                  : !sessionNameValid ? "Enter a session name."
-                                  : !resolutionValid ? "Choose a resolution."
-                                  : !fpsValid ? "Use an FPS value between 1 and 240."
-                                  : !outputDirValid ? "Choose an output folder."
-                                  : "Ready to record."
+                            text: pipeline.readinessMessage
                             color: Theme.textSecondary
                             font.pixelSize: 12
                             wrapMode: Text.Wrap
@@ -598,8 +538,8 @@ ApplicationWindow {
 
                     StatusRow {
                         Layout.fillWidth: true
-                        dotColor: outputDirValid ? Theme.success : Theme.warning
-                        label: outputDirValid ? "Output path ready" : "Output path needed"
+                        dotColor: outputField.text.trim().length > 0 ? Theme.success : Theme.warning
+                        label: outputField.text.trim().length > 0 ? "Output path ready" : "Output path needed"
                     }
 
                     StatusRow {

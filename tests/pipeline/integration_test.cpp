@@ -1,13 +1,31 @@
-#include "infrastructure/ingestion_pipeline.h"
+#include "micecam/pipeline/ingestion_pipeline.h"
 #include "camera/fake_camera.h"
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 
 namespace micecam {
+
+namespace {
+
+std::vector<nlohmann::json> load_jsonl_records(const fs::path& path) {
+    std::ifstream file(path);
+    std::vector<nlohmann::json> records;
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty()) {
+            records.push_back(nlohmann::json::parse(line));
+        }
+    }
+    return records;
+}
+
+}  // namespace
 
 class PipelineIntegrationTest : public ::testing::Test {
 protected:
@@ -64,7 +82,7 @@ TEST_F(PipelineIntegrationTest, EndToEndFakeCameraCapture) {
 
     // Verify: Check files exist (use std::filesystem for cross-platform paths)
     const fs::path bin_path = fs::path(test_dir_) / "test_session.bin";
-    const fs::path json_path = fs::path(test_dir_) / "test_session_metadata.json";
+    const fs::path json_path = fs::path(test_dir_) / "test_session_metadata.jsonl";
 
     std::ifstream bin_file(bin_path, std::ios::binary | std::ios::ate);
     ASSERT_TRUE(bin_file.is_open()) << "Binary file not created";
@@ -74,26 +92,27 @@ TEST_F(PipelineIntegrationTest, EndToEndFakeCameraCapture) {
         << "Binary file size mismatch";
 
     // Verify: Check metadata JSON
-    std::ifstream json_file(json_path);
-    ASSERT_TRUE(json_file.is_open()) << "Metadata file not created";
+    ASSERT_TRUE(fs::exists(json_path)) << "Metadata file not created";
 
-    nlohmann::json metadata;
-    json_file >> metadata;
+    const auto records = load_jsonl_records(json_path);
+    ASSERT_GE(records.size(), 2u);
 
-    ASSERT_TRUE(metadata.contains("session"));
-    ASSERT_TRUE(metadata.contains("frames"));
-
-    auto session = metadata["session"];
+    const nlohmann::json& session = records.back();
+    EXPECT_EQ(session["type"].get<std::string>(), "session_end");
     EXPECT_EQ(session["total_frames"].get<uint64_t>(), frames_captured);
     EXPECT_EQ(session["total_bytes"].get<uint64_t>(), frames_captured * frame_size);
     EXPECT_TRUE(session["session_checksum"].get<uint32_t>() > 0);
 
-    // Verify: Check frame records
-    auto frames = metadata["frames"];
-    // The metadata file records frames that were actually written to disk
+    std::vector<nlohmann::json> frames;
+    for (const auto& record : records) {
+        if (record.value("type", "") == "frame") {
+            frames.push_back(record);
+        }
+    }
+
     EXPECT_EQ(frames.size(), frames_captured);
 
-    if (frames.size() > 0) {
+    if (!frames.empty()) {
         // Check first frame metadata
         EXPECT_EQ(frames[0]["sequence_id"].get<uint64_t>(), 1);
         EXPECT_EQ(frames[0]["size"].get<uint64_t>(), frame_size);
@@ -191,17 +210,19 @@ TEST_F(PipelineIntegrationTest, DataIntegrityCheck) {
     pipeline.stop();
 
     // Load metadata and verify all checksums are non-zero
-    const fs::path json_path = fs::path(test_dir_) / "integrity_test_metadata.json";
-    std::ifstream json_file(json_path);
-    nlohmann::json metadata;
-    json_file >> metadata;
+    const fs::path json_path = fs::path(test_dir_) / "integrity_test_metadata.jsonl";
+    ASSERT_TRUE(fs::exists(json_path));
 
-    auto session = metadata["session"];
+    const auto records = load_jsonl_records(json_path);
+    ASSERT_GE(records.size(), 2u);
+
+    const nlohmann::json& session = records.back();
     EXPECT_GT(session["session_checksum"], 0) << "Session checksum should be non-zero";
 
-    auto frames = metadata["frames"];
-    for (const auto& frame_rec : frames) {
-        EXPECT_GT(frame_rec["checksum"], 0) << "Frame " << frame_rec["sequence_id"] << " has zero checksum";
+    for (const auto& record : records) {
+        if (record.value("type", "") == "frame") {
+            EXPECT_GT(record["checksum"], 0) << "Frame " << record["sequence_id"] << " has zero checksum";
+        }
     }
 
     std::cout << "Data integrity check passed\n";

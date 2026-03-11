@@ -1,4 +1,4 @@
-#include "infrastructure/disk_writer.h"
+#include "micecam/pipeline/disk_writer.h"
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>

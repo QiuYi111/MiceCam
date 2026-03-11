@@ -2,13 +2,14 @@
 
 #include <QObject>
 #include <QString>
-#include <QVariantList>
 #include <QStringList>
-#include <QProcess>
+#include <QVariantList>
 #include <QElapsedTimer>
 #include <memory>
 #include <vector>
 
+class CameraInventoryModel;
+class QMediaDevices;
 class VideoFrameProvider; // Forward declare
 
 // Forward declarations to keep Qt compile fast
@@ -29,6 +30,15 @@ class PipelineController : public QObject {
     Q_PROPERTY(QString sessionState READ getSessionState NOTIFY sessionStateChanged)
     Q_PROPERTY(QString statusHeadline READ getStatusHeadline NOTIFY sessionStateChanged)
     Q_PROPERTY(QString statusDetail READ getStatusDetail NOTIFY sessionStateChanged)
+    Q_PROPERTY(QObject* cameraInventoryModel READ cameraInventoryModel CONSTANT)
+    Q_PROPERTY(int selectedCameraIndex READ selectedCameraIndex WRITE setSelectedCameraIndex NOTIFY selectedCameraChanged)
+    Q_PROPERTY(QStringList availableResolutions READ availableResolutions NOTIFY selectedCameraChanged)
+    Q_PROPERTY(QVariantList availableFps READ availableFps NOTIFY selectedCameraChanged)
+    Q_PROPERTY(QString selectedResolution READ selectedResolution WRITE setSelectedResolution NOTIFY captureConfigChanged)
+    Q_PROPERTY(double requestedFps READ requestedFps WRITE setRequestedFps NOTIFY captureConfigChanged)
+    Q_PROPERTY(bool canStartRecording READ canStartRecording NOTIFY readinessChanged)
+    Q_PROPERTY(QString readinessMessage READ readinessMessage NOTIFY readinessChanged)
+    Q_PROPERTY(QString sanitizedSessionName READ sanitizedSessionName NOTIFY readinessChanged)
     Q_PROPERTY(QString lastErrorMessage READ getLastErrorMessage NOTIFY errorStateChanged)
     Q_PROPERTY(QString lastSessionName READ getLastSessionName NOTIFY sessionArchiveChanged)
     Q_PROPERTY(QString decodedOutputDir READ getDecodedOutputDir NOTIFY sessionArchiveChanged)
@@ -69,6 +79,15 @@ public:
     QString getSessionState() const;
     QString getStatusHeadline() const;
     QString getStatusDetail() const;
+    QObject* cameraInventoryModel() const;
+    int selectedCameraIndex() const;
+    QStringList availableResolutions() const;
+    QVariantList availableFps() const;
+    QString selectedResolution() const;
+    double requestedFps() const;
+    bool canStartRecording() const;
+    QString readinessMessage() const;
+    QString sanitizedSessionName() const;
     QString getLastErrorMessage() const;
     QString getLastSessionName() const;
     QString getDecodedOutputDir() const;
@@ -87,15 +106,17 @@ public:
     void setSessionName(const QString& name);
     void setOutputDir(const QString& dir);
     void setAutoDecode(bool enable);
+    void setSelectedCameraIndex(int index);
+    void setSelectedResolution(const QString& resolution);
+    void setRequestedFps(double fps);
 
     // Logging
     Q_INVOKABLE void log(const QString& message);
 
 
     // Q_INVOKABLE methods (callable from QML)
-    Q_INVOKABLE QVariantList getAvailableCameras() const;
-    Q_INVOKABLE QVariantList getAvailableResolutions(const QString& backend) const;
-    Q_INVOKABLE void startRecording(const QString& backend, int type, int width, int height, double fps);
+    Q_INVOKABLE void refreshCameraInventory();
+    Q_INVOKABLE void startRecording();
     Q_INVOKABLE void stopRecording();
 
     // Attach QQuickImageProvider for preview
@@ -113,13 +134,18 @@ signals:
     void decodeProgressChanged(double progress);
     void decodeStateChanged();
     void cameraInventoryChanged();
+    void selectedCameraChanged();
+    void captureConfigChanged();
     void sessionStateChanged();
     void errorStateChanged();
     void sessionArchiveChanged();
+    void readinessChanged();
 
 
 private:
-    void updateStatsTimer();
+    void refreshReadiness();
+    QString currentBackendId() const;
+    int currentDeviceIndex() const;
     void setSessionState(const QString& state, const QString& detail = QString());
     void setErrorState(const QString& errorMsg);
     void setDecodingState(bool decoding);
@@ -130,10 +156,19 @@ private:
     QString m_outputDir = "recordings";
     QString m_sessionState = "idle";
     QString m_statusDetail = "Choose a camera and destination to prepare the next capture.";
+    QString m_readinessMessage = "Connect a camera to begin.";
+    QString m_sanitizedSessionName;
     QString m_lastErrorMessage;
     QString m_lastSessionName;
     QString m_decodedOutputDir;
+    QString m_lastOutputDir;
     QElapsedTimer m_recordingTimer;
+    CameraInventoryModel* m_cameraInventoryModel = nullptr;
+    int m_selectedCameraIndex = -1;
+    QString m_selectedResolution;
+    double m_requestedFps = 30.0;
+    bool m_canStartRecording = false;
+    QMediaDevices* m_mediaDevices = nullptr;
 
     double m_currentFps = 0.0;
     uint64_t m_capturedFrames = 0;

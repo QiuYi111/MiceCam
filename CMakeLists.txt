@@ -29,7 +29,11 @@ else()
 endif()
 
 # Build options
-option(BUILD_TESTS "Build test suite" OFF)
+option(BUILD_TESTS "Legacy compatibility toggle for MiceCam tests" OFF)
+option(MICECAM_BUILD_TESTS "Build MiceCam test suite" OFF)
+if(BUILD_TESTS AND NOT MICECAM_BUILD_TESTS)
+    set(MICECAM_BUILD_TESTS ON)
+endif()
 option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings (requires pybind11)" OFF)
 option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
@@ -95,7 +99,10 @@ if(WITH_OAK_CAMERA)
     # Required for depthai-core's target export
     install(TARGETS httplib EXPORT depthaiDependencies)
 
+    set(MICECAM_THIRDPARTY_BUILD_TESTS ${BUILD_TESTS})
+    set(BUILD_TESTS OFF CACHE BOOL "Disable third-party test suites" FORCE)
     add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
+    set(BUILD_TESTS ${MICECAM_THIRDPARTY_BUILD_TESTS} CACHE BOOL "Restore MiceCam test toggle" FORCE)
 
     set(DEPTHAI_FOUND ON)
 endif()
@@ -132,7 +139,7 @@ message(STATUS "DEPTHAI_FOUND: ${DEPTHAI_FOUND}")
 message(STATUS "FFMPEG_FOUND: ${FFMPEG_FOUND}")
 message(STATUS "OpenCV_FOUND: ${OpenCV_FOUND}")
 
-if(BUILD_TESTS)
+if(MICECAM_BUILD_TESTS)
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
@@ -232,10 +239,10 @@ if(WITH_CAMERA_BACKEND)
             set(MAC_FRAMEWORKS "-framework CoreFoundation" "-framework IOKit")
             target_link_libraries(micecam_camera PUBLIC ${MAC_FRAMEWORKS})
         endif()
-        if(BUILD_TESTS)
-            add_executable(oak_camera_test tests/oak_camera_test.cpp)
-            target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
-            target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
+    if(MICECAM_BUILD_TESTS)
+        add_executable(oak_camera_test tests/oak_camera_test.cpp)
+        target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
+        target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
             if(APPLE)
                 target_link_libraries(oak_camera_test PRIVATE ${MAC_FRAMEWORKS})
             endif()
@@ -256,7 +263,7 @@ if(WITH_CAMERA_BACKEND)
     endif()
 
     # FFmpeg camera test
-    if(BUILD_TESTS)
+    if(MICECAM_BUILD_TESTS)
         add_executable(ffmpeg_camera_test tests/ffmpeg_camera_test.cpp)
         target_link_libraries(ffmpeg_camera_test PRIVATE micecam_core micecam_camera)
         target_compile_definitions(ffmpeg_camera_test PRIVATE WITH_FFMPEG)
@@ -264,7 +271,7 @@ if(WITH_CAMERA_BACKEND)
 endif()
 
 # Tests
-if(BUILD_TESTS)
+if(MICECAM_BUILD_TESTS)
     add_executable(micecam_tests
         tests/core/frame_test.cpp
         tests/core/ring_buffer_test.cpp
@@ -276,17 +283,23 @@ if(BUILD_TESTS)
         tests/pipeline/hdf5_test.cpp
         tests/pipeline/configurable_buffer_test.cpp
         tests/benchmark/stress_test.cpp
+        tests/ui/native_app_preflight_test.cpp
+        cmd/micecam_ui/RecordingSetup.cpp
+        cmd/micecam_ui/CameraInventoryModel.cpp
     )
 
     target_include_directories(micecam_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/api
         ${CMAKE_CURRENT_SOURCE_DIR}/internal
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
 
     target_link_libraries(micecam_tests
-        micecam_core
+        GTest::gtest
         GTest::gtest_main
+        micecam_core
+        Qt6::Core
     )
 
     include(GoogleTest)
@@ -308,6 +321,8 @@ add_executable(micecam_ui
     cmd/micecam_ui/main.cpp
     cmd/micecam_ui/PipelineController.cpp
     cmd/micecam_ui/VideoFrameProvider.cpp
+    cmd/micecam_ui/RecordingSetup.cpp
+    cmd/micecam_ui/CameraInventoryModel.cpp
     cmd/micecam_ui/qml/qml.qrc
 )
 

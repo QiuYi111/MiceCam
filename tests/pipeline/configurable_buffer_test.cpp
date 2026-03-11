@@ -1,8 +1,30 @@
-#include "infrastructure/ingestion_pipeline.h"
+#include "micecam/pipeline/ingestion_pipeline.h"
 #include "camera/fake_camera.h"
 #include <gtest/gtest.h>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
 
 namespace micecam {
+
+namespace {
+
+std::vector<nlohmann::json> load_jsonl_records(const std::string& path) {
+    std::ifstream json_file(path);
+    std::vector<nlohmann::json> records;
+    std::string line;
+    while (std::getline(json_file, line)) {
+        if (!line.empty()) {
+            records.push_back(nlohmann::json::parse(line));
+        }
+    }
+    return records;
+}
+
+}  // namespace
 
 TEST(ConfigurableBufferTest, ConfigurableBufferSizeWorks) {
     // Test that configurable buffer size is respected
@@ -40,14 +62,13 @@ TEST(ConfigurableBufferTest, ConfigurableBufferSizeWorks) {
     EXPECT_EQ(pipeline.get_frames_dropped(), 0);
 
     // Verify metadata
-    const std::string metadata_path = "test_output/buffer_size_test_metadata.json";
-    std::ifstream json_file(metadata_path);
-    ASSERT_TRUE(json_file.is_open());
+    const std::string metadata_path = "test_output/buffer_size_test_metadata.jsonl";
+    ASSERT_TRUE(std::filesystem::exists(metadata_path));
 
-    nlohmann::json metadata;
-    json_file >> metadata;
+    const auto records = load_jsonl_records(metadata_path);
+    ASSERT_GE(records.size(), 2u);
 
-    auto session = metadata["session"];
+    const auto& session = records.back();
     EXPECT_EQ(session["camera_backend"].get<std::string>(), "FakeCamera");
     EXPECT_EQ(session["width"].get<int>(), 320);
     EXPECT_EQ(session["height"].get<int>(), 240);
@@ -85,14 +106,13 @@ TEST(ConfigurableBufferTest, MetadataContainsCameraConfig) {
     pipeline.stop();
 
     // Verify metadata file contains correct camera info
-    const std::string metadata_path = "test_output/metadata_test_metadata.json";
-    std::ifstream json_file(metadata_path);
-    ASSERT_TRUE(json_file.is_open());
+    const std::string metadata_path = "test_output/metadata_test_metadata.jsonl";
+    ASSERT_TRUE(std::filesystem::exists(metadata_path));
 
-    nlohmann::json metadata;
-    json_file >> metadata;
+    const auto records = load_jsonl_records(metadata_path);
+    ASSERT_GE(records.size(), 2u);
 
-    auto session = metadata["session"];
+    const auto& session = records.back();
     EXPECT_EQ(session["camera_backend"].get<std::string>(), "FakeCamera");
     EXPECT_EQ(session["width"].get<int>(), 320);
     EXPECT_EQ(session["height"].get<int>(), 240);

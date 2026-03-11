@@ -19,6 +19,7 @@ public:
     ~VideoFrameProvider() override;
 
     void setPipeline(micecam::IngestionPipeline* pipeline);
+    void setPreviewImage(const QImage& image);
 
     // QQuickImageProvider interface
     QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override;

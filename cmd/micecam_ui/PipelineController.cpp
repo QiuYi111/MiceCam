@@ -160,6 +160,22 @@ PipelineController::PipelineController(QObject* parent)
         this,
         [this]() { rebuildLogMessages(); }
     );
+    connect(
+        m_supervisor.get(),
+        &micecam_ui::RecordingSupervisorService::previewFrameReady,
+        this,
+        [this](const QByteArray& jpegBytes) {
+            if (!m_videoProvider || jpegBytes.isEmpty()) {
+                return;
+            }
+
+            QImage image;
+            image.loadFromData(jpegBytes, "JPEG");
+            if (!image.isNull()) {
+                m_videoProvider->setPreviewImage(image);
+            }
+        }
+    );
 
     m_sessionName = QStringLiteral("session_%1").arg(
         QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss")
@@ -243,6 +259,9 @@ bool PipelineController::hasAvailableCamera() const { return m_cameraInventoryMo
 bool PipelineController::hasDroppedFramesWarning() const { return m_supervisor->droppedFrames() > 0; }
 QString PipelineController::getResolvedSessionPath() const { return m_supervisor->resolvedSessionPath(); }
 QString PipelineController::getResolvedExportPath() const { return m_supervisor->resolvedExportPath(); }
+bool PipelineController::previewAvailable() const { return m_supervisor->previewAvailable(); }
+QString PipelineController::previewMode() const { return m_supervisor->previewMode(); }
+QString PipelineController::previewDetail() const { return m_supervisor->previewDetail(); }
 QStringList PipelineController::logMessages() const { return m_logMessages; }
 double PipelineController::getDecodeProgress() const { return m_supervisor->decodeProgress(); }
 

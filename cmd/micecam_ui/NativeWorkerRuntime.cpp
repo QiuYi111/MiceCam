@@ -1,9 +1,11 @@
 #include "NativeWorkerRuntime.h"
 
 #include <QCoreApplication>
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileDevice>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaObject>
@@ -11,7 +13,9 @@
 #include <QTextStream>
 #include <QtConcurrent/QtConcurrent>
 
+#include <cstring>
 #include <cstdio>
+#include <opencv2/opencv.hpp>
 
 #include "micecam/camera/camera_backend.h"
 #include "micecam/pipeline/decoder.h"
@@ -44,6 +48,9 @@ NativeWorkerRuntime::~NativeWorkerRuntime() {
     if (m_statsTimerId > 0) {
         killTimer(m_statsTimerId);
     }
+    if (m_previewTimerId > 0) {
+        killTimer(m_previewTimerId);
+    }
 }
 
 void NativeWorkerRuntime::start() {
@@ -61,6 +68,9 @@ void NativeWorkerRuntime::start() {
     writeJsonLine({
         {"type", "hello"},
         {"detail", "Recording worker ready."},
+        {"previewAvailable", false},
+        {"previewMode", "offline"},
+        {"previewDetail", "Preview is offline until recording starts."},
     });
 }
 
@@ -166,7 +176,11 @@ void NativeWorkerRuntime::startRecording(const QJsonObject& command) {
         if (m_statsTimerId > 0) {
             killTimer(m_statsTimerId);
         }
+        if (m_previewTimerId > 0) {
+            killTimer(m_previewTimerId);
+        }
         m_statsTimerId = startTimer(1000);
+        m_previewTimerId = startTimer(200);
         publishActivity("info", "session", "Recording started.", QDir(m_outputDir).filePath(m_sessionName));
         publishStatus("recording", "Recording now. Watch preview and capture health.");
     } catch (const std::exception& exception) {
@@ -184,6 +198,10 @@ void NativeWorkerRuntime::stopRecording() {
     if (m_statsTimerId > 0) {
         killTimer(m_statsTimerId);
         m_statsTimerId = 0;
+    }
+    if (m_previewTimerId > 0) {
+        killTimer(m_previewTimerId);
+        m_previewTimerId = 0;
     }
     if (m_pipeline) {
         m_pipeline->stop();
@@ -255,6 +273,11 @@ void NativeWorkerRuntime::publishStatus(const QString& state, const QString& det
         {"detail", detail},
         {"resolvedSessionPath", QDir(m_outputDir).filePath(m_sessionName)},
         {"resolvedExportPath", m_exportPath},
+        {"previewAvailable", m_isRecording},
+        {"previewMode", m_isRecording ? "capped" : "offline"},
+        {"previewDetail", m_isRecording
+            ? "Preview is capped at 5 FPS with latest-frame-only delivery."
+            : "Preview is offline until recording starts."},
     };
 
     if (decodeProgress >= 0.0) {
@@ -297,14 +320,64 @@ void NativeWorkerRuntime::finishCompletedState() {
 }
 
 void NativeWorkerRuntime::timerEvent(QTimerEvent* event) {
-    if (event->timerId() != m_statsTimerId || !m_pipeline || !m_isRecording) {
+    if (event->timerId() == m_statsTimerId) {
+        if (!m_pipeline || !m_isRecording) {
+            return;
+        }
+
+        const auto stats = m_pipeline->get_stats();
+        m_lastCurrentFps = static_cast<double>(stats.captured_frames - m_lastCapturedFrames);
+        m_lastCapturedFrames = stats.captured_frames;
+        publishStatus("recording", "Recording now. Watch preview and capture health.");
         return;
     }
 
-    const auto stats = m_pipeline->get_stats();
-    m_lastCurrentFps = static_cast<double>(stats.captured_frames - m_lastCapturedFrames);
-    m_lastCapturedFrames = stats.captured_frames;
-    publishStatus("recording", "Recording now. Watch preview and capture health.");
+    if (event->timerId() == m_previewTimerId) {
+        publishPreviewFrame();
+    }
+}
+
+void NativeWorkerRuntime::publishPreviewFrame() {
+    if (!m_pipeline || !m_isRecording) {
+        return;
+    }
+
+    std::unique_ptr<micecam::Frame> frame = m_pipeline->get_preview_frame();
+    if (!frame) {
+        return;
+    }
+
+    QImage image;
+    if (frame->format == micecam::PixelFormat::MONO8) {
+        image = QImage(frame->width, frame->height, QImage::Format_Grayscale8);
+        std::memcpy(image.bits(), frame->data->data(), frame->data->size());
+    } else if (frame->format == micecam::PixelFormat::UYVY422) {
+        cv::Mat yuv(frame->height, frame->width, CV_8UC2, static_cast<void*>(frame->data->data()));
+        cv::Mat rgb;
+        cv::cvtColor(yuv, rgb, cv::COLOR_YUV2RGB_UYVY);
+        image = QImage(rgb.data, rgb.cols, rgb.rows, rgb.step, QImage::Format_RGB888).copy();
+    } else if (frame->format == micecam::PixelFormat::RGB24) {
+        image = QImage(frame->width, frame->height, QImage::Format_RGB888);
+        std::memcpy(image.bits(), frame->data->data(), frame->data->size());
+    } else {
+        image.loadFromData(frame->data->data(), frame->data->size(), "JPEG");
+    }
+
+    if (image.isNull()) {
+        return;
+    }
+
+    const QImage scaled = image.scaled(640, 360, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QByteArray jpegBytes;
+    QBuffer buffer(&jpegBytes);
+    if (!buffer.open(QIODevice::WriteOnly) || !scaled.save(&buffer, "JPEG", 60)) {
+        return;
+    }
+
+    writeJsonLine({
+        {"type", "preview"},
+        {"jpegBase64", QString::fromLatin1(jpegBytes.toBase64())},
+    });
 }
 
 }  // namespace micecam_ui

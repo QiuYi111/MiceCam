@@ -44,6 +44,9 @@ class PipelineController : public QObject {
     Q_PROPERTY(bool hasDroppedFramesWarning READ hasDroppedFramesWarning NOTIFY statsUpdated)
     Q_PROPERTY(QString resolvedSessionPath READ getResolvedSessionPath NOTIFY sessionArchiveChanged)
     Q_PROPERTY(QString resolvedExportPath READ getResolvedExportPath NOTIFY sessionArchiveChanged)
+    Q_PROPERTY(bool previewAvailable READ previewAvailable NOTIFY sessionStateChanged)
+    Q_PROPERTY(QString previewMode READ previewMode NOTIFY sessionStateChanged)
+    Q_PROPERTY(QString previewDetail READ previewDetail NOTIFY sessionStateChanged)
     Q_PROPERTY(QStringList logMessages READ logMessages NOTIFY logMessagesChanged)
     Q_PROPERTY(double decodeProgress READ getDecodeProgress NOTIFY decodeProgressChanged)
     Q_PROPERTY(double currentFps READ getCurrentFps NOTIFY statsUpdated)
@@ -89,6 +92,9 @@ public:
     bool hasDroppedFramesWarning() const;
     QString getResolvedSessionPath() const;
     QString getResolvedExportPath() const;
+    bool previewAvailable() const;
+    QString previewMode() const;
+    QString previewDetail() const;
     QStringList logMessages() const;
     double getDecodeProgress() const;
 

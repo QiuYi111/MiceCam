@@ -31,6 +31,7 @@ private:
     void requestShutdown();
     void publishStatus(const QString& state, const QString& detail = QString(), double decodeProgress = -1.0);
     void publishActivity(const QString& severity, const QString& category, const QString& message, const QString& relatedPath = QString());
+    void publishPreviewFrame();
     void finishCompletedState();
 
     QFile* m_stdinFile = nullptr;
@@ -40,6 +41,7 @@ private:
     std::unique_ptr<micecam::ICameraBackend> m_cameraBackend;
     std::unique_ptr<micecam::IngestionPipeline> m_pipeline;
     int m_statsTimerId = 0;
+    int m_previewTimerId = 0;
     QString m_outputDir;
     QString m_sessionName;
     QString m_exportPath;

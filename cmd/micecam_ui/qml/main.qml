@@ -171,6 +171,9 @@ ApplicationWindow {
                 throughputValue: pipeline.mbps
                 droppedFrames: pipeline.droppedFrames
                 hasCamera: pipeline.hasAvailableCamera
+                previewAvailable: pipeline.previewAvailable
+                previewMode: pipeline.previewMode
+                previewDetail: pipeline.previewDetail
             }
 
             ScrollView {
@@ -213,6 +216,9 @@ ApplicationWindow {
                     throughputValue: pipeline.mbps
                     droppedFrames: pipeline.droppedFrames
                     hasCamera: pipeline.hasAvailableCamera
+                    previewAvailable: pipeline.previewAvailable
+                    previewMode: pipeline.previewMode
+                    previewDetail: pipeline.previewDetail
                 }
 
                 Loader {
@@ -582,8 +588,8 @@ ApplicationWindow {
 
                     StatusRow {
                         Layout.fillWidth: true
-                        dotColor: pipeline.isDecoding ? Theme.warning : Theme.success
-                        label: pipeline.isDecoding ? "Export in progress" : "Capture engine idle"
+                        dotColor: pipeline.previewAvailable ? Theme.success : Theme.warning
+                        label: pipeline.previewAvailable ? "Preview channel active" : pipeline.previewDetail
                     }
 
                     Rectangle {

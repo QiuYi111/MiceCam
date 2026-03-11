@@ -30,6 +30,15 @@ void VideoFrameProvider::setPipeline(micecam::IngestionPipeline* pipeline) {
     m_cv.notify_one();
 }
 
+void VideoFrameProvider::setPreviewImage(const QImage& image) {
+    if (image.isNull()) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_currentImage = image;
+}
+
 QImage VideoFrameProvider::requestImage(const QString &id, QSize *size, const QSize &requestedSize) {
     Q_UNUSED(id);
 

@@ -21,6 +21,7 @@ public:
 
     bool startSession(const micecam_ui::RecordingStartRequest& request, QString* errorMessage) override {
         lastRequest = request;
+        startCalls += 1;
         if (!startResult && errorMessage) {
             *errorMessage = startError;
         }
@@ -59,6 +60,10 @@ public:
         observer->onRuntimeExited(expected, reason);
     }
 
+    void emitPreview(const QByteArray& jpegBytes) {
+        observer->onRuntimePreview(jpegBytes);
+    }
+
     bool launchResult = true;
     QString launchError = "worker failed to launch";
     bool startResult = true;
@@ -68,6 +73,7 @@ public:
     bool shutdownResult = true;
     QString shutdownError = "worker rejected shutdown";
     bool launched = false;
+    int startCalls = 0;
     int stopCalls = 0;
     int shutdownCalls = 0;
     micecam_ui::RecordingStartRequest lastRequest;
@@ -146,7 +152,8 @@ TEST_F(RecordingSupervisorServiceTest, UnexpectedWorkerExitEntersRecoveringThenE
     runtimePtr->emitExited(false, "worker crashed");
 
     EXPECT_EQ(service->state(), "error");
-    EXPECT_EQ(service->lastErrorMessage(), "worker crashed");
+    EXPECT_EQ(service->lastErrorMessage(), "worker crashed Recovery resumed the session with a new worker.");
+    EXPECT_EQ(runtimePtr->startCalls, 2);
     EXPECT_FALSE(service->isRecording());
     ASSERT_GE(service->activityModel()->rowCount(), 1);
 }
@@ -174,6 +181,61 @@ TEST_F(RecordingSupervisorServiceTest, CloseDuringDecodeRequestsRuntimeShutdown)
     EXPECT_FALSE(service->canCloseSafely());
     EXPECT_TRUE(service->prepareForClose());
     EXPECT_EQ(runtimePtr->shutdownCalls, 1);
+}
+
+TEST_F(RecordingSupervisorServiceTest, TracksPreviewPolicyFromRuntimeStatus) {
+    ASSERT_TRUE(service->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
+
+    runtimePtr->emitState({
+        .state = "recording",
+        .detail = "Recording now",
+        .previewAvailable = false,
+        .previewMode = "disabled",
+        .previewDetail = "Preview IPC is disabled in the current worker-process slice."
+    });
+
+    EXPECT_FALSE(service->previewAvailable());
+    EXPECT_EQ(service->previewMode(), "disabled");
+    EXPECT_EQ(service->previewDetail(), "Preview IPC is disabled in the current worker-process slice.");
+}
+
+TEST_F(RecordingSupervisorServiceTest, EmitsPreviewSignalWhenRuntimePublishesFrame) {
+    QByteArray lastFrame;
+    QObject::connect(
+        service.get(),
+        &micecam_ui::RecordingSupervisorService::previewFrameReady,
+        [&lastFrame](const QByteArray& jpegBytes) { lastFrame = jpegBytes; }
+    );
+
+    runtimePtr->emitPreview("jpeg-bytes");
+    EXPECT_EQ(lastFrame, QByteArray("jpeg-bytes"));
+}
+
+TEST_F(RecordingSupervisorServiceTest, WorkerRestartFailureLeavesSupervisorInError) {
+    ASSERT_TRUE(service->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
+
+    runtimePtr->emitState({.state = "recording", .detail = "Recording now"});
+    runtimePtr->launchResult = false;
+    runtimePtr->launchError = "worker relaunch failed";
+    runtimePtr->emitExited(false, "worker crashed");
+
+    EXPECT_EQ(service->state(), "error");
+    EXPECT_EQ(service->lastErrorMessage(), "worker crashed Recovery failed: worker relaunch failed");
+    EXPECT_FALSE(service->canRequestStart());
+}
+
+TEST_F(RecordingSupervisorServiceTest, ResumeFailureFallsBackToRestartedReadyState) {
+    ASSERT_TRUE(service->startRecording(makeRequest(), "/tmp/micecam_ui_worker"));
+
+    runtimePtr->emitState({.state = "recording", .detail = "Recording now"});
+    runtimePtr->startResult = false;
+    runtimePtr->startError = "device re-acquire failed";
+    runtimePtr->emitExited(false, "worker crashed");
+
+    EXPECT_EQ(service->state(), "error");
+    EXPECT_EQ(service->lastErrorMessage(), "worker crashed Worker restarted but session resume failed: device re-acquire failed");
+    EXPECT_TRUE(service->canRequestStart());
+    EXPECT_EQ(runtimePtr->startCalls, 2);
 }
 
 }  // namespace

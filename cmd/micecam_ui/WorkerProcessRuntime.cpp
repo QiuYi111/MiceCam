@@ -133,6 +133,14 @@ void WorkerProcessRuntime::handleStdout() {
             continue;
         }
 
+        if (type == "preview") {
+            const QByteArray jpegBytes = QByteArray::fromBase64(
+                readJsonString(object, "jpegBase64").toUtf8()
+            );
+            m_observer->onRuntimePreview(jpegBytes);
+            continue;
+        }
+
         if (type == "status" || type == "hello") {
             RuntimeStatus status;
             status.state = type == "hello" ? QStringLiteral("worker_ready") : readJsonString(object, "state");
@@ -144,6 +152,9 @@ void WorkerProcessRuntime::handleStdout() {
             status.decodeProgress = object.contains("decodeProgress") ? object.value("decodeProgress").toDouble() : -1.0;
             status.resolvedSessionPath = readJsonString(object, "resolvedSessionPath");
             status.resolvedExportPath = readJsonString(object, "resolvedExportPath");
+            status.previewAvailable = object.value("previewAvailable").toBool(false);
+            status.previewMode = readJsonString(object, "previewMode");
+            status.previewDetail = readJsonString(object, "previewDetail");
             m_observer->onRuntimeStatus(status);
         }
     }

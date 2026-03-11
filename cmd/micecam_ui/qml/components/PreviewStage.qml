@@ -15,6 +15,9 @@ Rectangle {
     property real throughputValue: 0
     property int droppedFrames: 0
     property bool hasCamera: true
+    property bool previewAvailable: false
+    property string previewMode: "offline"
+    property string previewDetail: ""
 
     radius: Theme.radiusStage
     border.color: Theme.borderSubtle
@@ -30,7 +33,7 @@ Rectangle {
         asynchronous: false
         cache: false
         source: "image://live_camera/feed?t=" + frameTicker.tick
-        visible: root.isRecording
+        visible: root.isRecording && root.previewAvailable
     }
 
     Timer {
@@ -132,6 +135,7 @@ Rectangle {
             Text {
                 text: root.sessionState === "decoding" ? "Preparing export" :
                       root.sessionState === "completed" ? "Session complete" :
+                      root.isRecording && !root.previewAvailable ? "Preview unavailable" :
                       !root.hasCamera ? "Connect a camera" : "Live preview"
                 color: Theme.textPrimary
                 font.pixelSize: 22
@@ -140,7 +144,8 @@ Rectangle {
             }
 
             Text {
-                text: root.detail
+                text: root.isRecording && !root.previewAvailable && root.previewDetail.length > 0
+                      ? root.previewDetail : root.detail
                 color: Theme.textSecondary
                 font.pixelSize: 13
                 horizontalAlignment: Text.AlignHCenter
@@ -152,7 +157,7 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: 10
-            visible: root.isRecording || root.droppedFrames > 0
+            visible: root.isRecording || root.droppedFrames > 0 || (root.isRecording && !root.previewAvailable)
 
             Rectangle {
                 visible: root.isRecording
@@ -183,6 +188,23 @@ Rectangle {
                     text: Number(root.throughputValue).toFixed(2) + " Mbps"
                     color: "white"
                     font.pixelSize: 12
+                }
+            }
+
+            Rectangle {
+                visible: root.isRecording && !root.previewAvailable
+                radius: Theme.radiusPill
+                color: "#e7b95a"
+                implicitHeight: 34
+                implicitWidth: previewModeText.implicitWidth + Theme.space16 * 2
+
+                Text {
+                    id: previewModeText
+                    anchors.centerIn: parent
+                    text: root.previewMode === "disabled" ? "Preview disabled" : "Preview offline"
+                    color: "#2b1c00"
+                    font.pixelSize: 12
+                    font.weight: Font.Medium
                 }
             }
 

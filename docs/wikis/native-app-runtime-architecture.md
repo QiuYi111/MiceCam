@@ -253,12 +253,18 @@ The current implementation now has a concrete supervisor-worker slice in the nat
 - `RecordingSupervisorService` owns lifecycle state, failure mapping, close semantics, and structured activity events.
 - `WorkerProcessRuntime` launches the same `micecam_ui` binary in `--worker` mode through `QProcess` and exchanges JSON-line IPC messages.
 - `NativeWorkerRuntime` owns camera initialization, recording pipeline execution, decode progression, heartbeat-like stats publication, and safe shutdown sequencing.
+- Worker preview now follows an explicit budget policy:
+  - 5 FPS timer cap
+  - latest-frame-only pull from `IngestionPipeline::get_preview_frame()`
+  - downscaled JPEG transport back to the UI process
 
 This means the app now explicitly handles:
 
 - worker launch failure
 - runtime error propagation
 - unexpected worker exit
+- safe worker relaunch after unexpected exit, with fallback to fatal error if relaunch fails
+- automatic session resume attempt after worker relaunch by re-sending the last capture request
 - recording stop and decode transitions
 - close requests during decode or stop
 - resolved raw/export path reporting back into QML
@@ -267,8 +273,8 @@ This means the app now explicitly handles:
 
 The worker-process baseline is now present, but two production gaps still remain:
 
-- preview frames are not yet transported across the worker boundary, so preview currently degrades to an offline/idle experience under the isolated runtime path
-- recovery policy is explicit at the state machine level, but it does not yet attempt automatic worker restart or device re-acquisition
+- preview transport is now present, but still intentionally low-fidelity and best-effort so it cannot compete with recording stability
+- the current recovery policy attempts worker relaunch after an unexpected exit and re-sends the last capture request for device re-acquisition, but it still does not resume partial recorded data from the exact interruption point
 ## 11. What "Production-Ready" Means Here
 
 For this application, production-ready does not mean "the UI looks finished".

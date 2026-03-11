@@ -15,10 +15,16 @@ The native app now launches a headless worker mode of `micecam_ui`, supervises i
   - lifecycle transitions
   - stop / decode / close semantics
   - worker exit and error mapping
+  - automatic worker relaunch after unexpected exit when safe
+  - automatic session resume attempt by replaying the last start request after worker relaunch
   - structured activity accumulation
 - Added `ActivityEventModel` for typed operator-facing recent activity.
 - Added `WorkerProcessRuntime` to supervise a worker process over JSONL IPC.
 - Added `NativeWorkerRuntime` and wired `main.cpp --worker` to run the recording runtime in a headless process.
+- Added worker-side preview IPC with:
+  - 5 FPS budget
+  - latest-frame-only semantics
+  - downscaled JPEG transport into the UI image provider
 - Refactored `PipelineController` into a thinner QML adapter that now owns:
   - camera inventory refresh
   - capture setup and preflight
@@ -29,7 +35,10 @@ The native app now launches a headless worker mode of `micecam_ui`, supervises i
   - completed/error states expose an output-open action
   - recent activity is now backed by supervisor-generated structured events
 - Added acceptance-style app lifecycle tests in `tests/ui/recording_supervisor_service_test.cpp`.
+  - includes worker relaunch success/failure paths after crash
+  - includes session resume failure fallback after worker restart
 - Updated `project_index` and `docs/wikis/native-app-runtime-architecture.md` to reflect the new runtime shape.
+- Added `scripts/smoke_native_app.sh` and `docs/wikis/native-app-release-checklist.md` as the initial native app release gate artifacts.
 
 ## Verification
 
@@ -45,6 +54,7 @@ The native app now launches a headless worker mode of `micecam_ui`, supervises i
   - `make lint`
 - Smoke-tested worker mode:
   - `printf '{"type":"shutdown"}\n' | ./build/micecam_ui --worker`
+  - `scripts/smoke_native_app.sh`
 
 ## Review Notes
 
@@ -59,6 +69,6 @@ No blocking issues were found after the final verification pass.
 
 ## Remaining Gaps
 
-- Preview frames are not yet transported over the worker boundary, so the worker-process path currently prioritizes stability over live preview fidelity.
-- Automatic recovery currently stops at explicit error mapping; restart/reacquire policy is still a follow-up implementation.
+- Preview frames now cross the worker boundary through a capped latest-frame JPEG path, but the preview channel is still intentionally best-effort rather than recording-critical.
+- Automatic recovery now attempts worker relaunch and session restart, but it does not resume partial captured data from the exact interruption point.
 - Release packaging validation still needs a packaged-app launch check rather than only an in-tree executable smoke test.

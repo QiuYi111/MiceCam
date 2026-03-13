@@ -47,6 +47,10 @@ target_link_libraries(_micecam PRIVATE
     micecam_camera
 )
 
+if(TARGET micecam_oak)
+    target_link_libraries(_micecam PRIVATE micecam_oak)
+endif()
+
 # Pass OAK camera define if it was built with OAK support
 if(DEPTHAI_FOUND)
     target_compile_definitions(_micecam PRIVATE WITH_OAK_CAMERA=1)

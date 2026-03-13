@@ -135,6 +135,8 @@ class MainWindow(QMainWindow):
         self.recorder = None
         self.decoder = None
         self.is_recording = False
+        self.preview_labels = []
+        self.preview_titles = ["USB / CAM A", "CAM B", "CAM C", "CAM D"]
 
         # Setup UI
         self.init_ui()
@@ -294,14 +296,34 @@ class MainWindow(QMainWindow):
         self.chk_preview = QCheckBox("Enable Live Preview (Uses more CPU)")
         self.chk_preview.setChecked(True)
 
-        self.lbl_preview = QLabel("Preview will appear here while recording")
-        self.lbl_preview.setObjectName("PreviewLabel")
-        self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_preview.setMinimumHeight(240)
-        self.lbl_preview.setStyleSheet("color: #7f8c8d; background-color: #ecf0f1;")
-
         preview_layout.addWidget(self.chk_preview)
-        preview_layout.addWidget(self.lbl_preview)
+
+        preview_grid = QGridLayout()
+        preview_grid.setSpacing(10)
+
+        for idx, title in enumerate(self.preview_titles):
+            cell = QWidget()
+            cell_layout = QVBoxLayout(cell)
+            cell_layout.setContentsMargins(0, 0, 0, 0)
+            cell_layout.setSpacing(6)
+
+            title_label = QLabel(title)
+            title_label.setStyleSheet("color: #5f6368; font-size: 11px; font-weight: 600;")
+
+            preview_label = QLabel("Preview offline")
+            preview_label.setObjectName("PreviewLabel")
+            preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            preview_label.setMinimumSize(220, 160)
+            preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            preview_label.setStyleSheet("color: #7f8c8d; background-color: #ecf0f1;")
+
+            self.preview_labels.append(preview_label)
+
+            cell_layout.addWidget(title_label)
+            cell_layout.addWidget(preview_label)
+            preview_grid.addWidget(cell, idx // 2, idx % 2)
+
+        preview_layout.addLayout(preview_grid)
 
         content_layout.addWidget(preview_grp)
 
@@ -317,6 +339,8 @@ class MainWindow(QMainWindow):
 
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+        self.reset_preview_tiles(None)
 
         self.log("System Ready. SDK Available: " + str(SDK_AVAILABLE))
         if not SDK_AVAILABLE:
@@ -348,9 +372,11 @@ class MainWindow(QMainWindow):
         if data == "oak":
             self.cb_res.clear()
             self.cb_res.addItems(["1280x800", "1280x720"])
+            self.reset_preview_tiles("oak")
         else:
             self.cb_res.clear()
             self.cb_res.addItems(["1920x1080", "1280x720", "640x480"])
+            self.reset_preview_tiles("ffmpeg")
 
     def start_recording(self):
         if self.is_recording: return
@@ -370,7 +396,8 @@ class MainWindow(QMainWindow):
             "device_id": dev_id,
             "width": int(w),
             "height": int(h),
-            "fps": float(self.edt_fps.text())
+            "fps": float(self.edt_fps.text()),
+            "preview_enabled": self.chk_preview.isChecked(),
         }
 
         self.recorder = RecorderThread(cfg)
@@ -386,6 +413,7 @@ class MainWindow(QMainWindow):
         self.btn_start.setEnabled(False)
         self.btn_stop.setEnabled(True)
         self.cb_camera.setEnabled(False)
+        self.reset_preview_tiles(backend)
 
     def stop_recording(self):
         if self.recorder and self.is_recording:
@@ -417,9 +445,7 @@ class MainWindow(QMainWindow):
             self.refresh_session_name()
             self.log("Session finished (No decode).")
 
-        self.lbl_preview.clear()
-        self.lbl_preview.setText("Preview offline")
-        self.lbl_preview.setStyleSheet("color: #7f8c8d; background-color: #ecf0f1;")
+        self.reset_preview_tiles(None)
 
     def on_preview_updated(self, msg):
         if not self.chk_preview.isChecked():
@@ -430,6 +456,12 @@ class MainWindow(QMainWindow):
             img_b64 = msg.get("image")
             if not img_b64:
                 return
+
+            cam_index = int(msg.get("index", 0))
+            if cam_index < 0 or cam_index >= len(self.preview_labels):
+                cam_index = 0
+
+            target_label = self.preview_labels[cam_index]
 
             img_data = base64.b64decode(img_b64)
             fmt = msg.get("format", "jpeg")
@@ -447,15 +479,25 @@ class MainWindow(QMainWindow):
 
             # Scale it nicely for the label while keeping aspect ratio
             scaled_pixmap = pixmap.scaled(
-                self.lbl_preview.size(),
+                target_label.size(),
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation
             )
 
-            self.lbl_preview.setPixmap(scaled_pixmap)
-            self.lbl_preview.setStyleSheet("background-color: black;")
+            target_label.setPixmap(scaled_pixmap)
+            target_label.setStyleSheet("background-color: black;")
         except Exception as e:
             pass
+
+    def reset_preview_tiles(self, backend):
+        active_count = 4 if backend == "oak" else 1
+        for idx, label in enumerate(self.preview_labels):
+            label.clear()
+            if idx < active_count:
+                label.setText("Preview will appear here while recording")
+            else:
+                label.setText("Unused for current source")
+            label.setStyleSheet("color: #7f8c8d; background-color: #ecf0f1;")
 
     def start_decoding(self):
         self.lbl_decode.setVisible(True)

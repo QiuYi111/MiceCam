@@ -1,12 +1,14 @@
 #include "micecam/camera/oak_camera_backend.h"
-#include <depthai/depthai.hpp>
-#include <iostream>
-#include <vector>
-#include <queue>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
+
+#include "infrastructure/oak_runtime_session.h"
+
 #include <atomic>
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <string>
+#include <thread>
 
 namespace micecam {
 
@@ -15,7 +17,7 @@ public:
     VirtualOAKBackend(std::shared_ptr<OAKCameraBackend> master, int socket_index)
         : master_(std::move(master)), socket_index_(socket_index) {}
 
-    bool initialize(const CameraConfig& config) override { return true; }
+    bool initialize(const CameraConfig&) override { return true; }
     bool start() override { return true; }
     void stop() override {}
 
@@ -24,7 +26,7 @@ public:
     uint64_t get_frame_count() const override { return frame_count_; }
     bool is_running() const override { return master_ && master_->is_running(); }
     std::string get_backend_name() const override {
-        return "OAK_CAM_" + std::string(1, 'A' + socket_index_);
+        return "OAK_CAM_" + std::string(1, static_cast<char>('A' + socket_index_));
     }
 
 private:
@@ -35,39 +37,37 @@ private:
 };
 
 struct OAKCameraBackend::Impl {
-    dai::Pipeline pipeline;
-    std::shared_ptr<dai::MessageQueue> syncQueue;
-
+    std::unique_ptr<OAKRuntimeSession> session;
     std::atomic<bool> running_{false};
     std::atomic<uint64_t> total_groups_{0};
 
     std::mutex mtx;
     std::condition_variable cv;
-    std::queue<std::shared_ptr<dai::MessageGroup>> proxy_queues[4];
-    const size_t MAX_QUEUE_SIZE = 10;
+    std::queue<std::shared_ptr<OAKFrameGroup>> proxy_queues[4];
+    static constexpr size_t kMaxQueueSize = 10;
 
     std::thread distributor_thread;
 
     void distributor_loop() {
-        while (running_) {
-            try {
-                auto group = syncQueue->get<dai::MessageGroup>();
-                if (!group || !running_) break;
-
-                std::unique_lock<std::mutex> lock(mtx);
-                total_groups_++;
-                for (int i = 0; i < 4; ++i) {
-                    if (proxy_queues[i].size() >= MAX_QUEUE_SIZE) {
-                        proxy_queues[i].pop();
-                    }
-                    proxy_queues[i].push(group);
-                }
-                lock.unlock();
-                cv.notify_all();
-            } catch (...) {
+        while(running_) {
+            auto group = session ? session->get_group() : nullptr;
+            if(!group || !running_) {
                 break;
             }
+
+            std::unique_lock<std::mutex> lock(mtx);
+            total_groups_++;
+            for(int i = 0; i < 4; ++i) {
+                if(proxy_queues[i].size() >= kMaxQueueSize) {
+                    proxy_queues[i].pop();
+                }
+                proxy_queues[i].push(group);
+            }
+            lock.unlock();
+            cv.notify_all();
         }
+
+        cv.notify_all();
     }
 };
 
@@ -78,83 +78,55 @@ OAKCameraBackend::~OAKCameraBackend() {
 }
 
 bool OAKCameraBackend::initialize(const CameraConfig& config) {
-    try {
-        auto boardConfig = dai::BoardConfig();
-        boardConfig.gpio[42] = dai::BoardConfig::GPIO(
-            dai::BoardConfig::GPIO::Direction::INPUT,
-            dai::BoardConfig::GPIO::Level::HIGH,
-            dai::BoardConfig::GPIO::Pull::PULL_DOWN
-        );
-        impl_->pipeline.setBoardConfig(boardConfig);
-
-        auto sync = impl_->pipeline.create<dai::node::Sync>();
-        sync->setSyncThreshold(std::chrono::milliseconds(50));
-
-        std::vector<std::pair<dai::CameraBoardSocket, std::string>> sockets = {
-            {dai::CameraBoardSocket::CAM_A, "CAM_A"},
-            {dai::CameraBoardSocket::CAM_B, "CAM_B"},
-            {dai::CameraBoardSocket::CAM_C, "CAM_C"},
-            {dai::CameraBoardSocket::CAM_D, "CAM_D"}
-        };
-
-        for(const auto& [socket, name] : sockets) {
-            auto cam = impl_->pipeline.create<dai::node::ColorCamera>();
-            cam->setBoardSocket(socket);
-            cam->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
-            cam->setFps(config.fps);
-
-            if (socket == dai::CameraBoardSocket::CAM_A) {
-                cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::OUTPUT);
-            } else {
-                cam->initialControl.setFrameSyncMode(dai::CameraControl::FrameSyncMode::INPUT);
-            }
-
-            auto encoder = impl_->pipeline.create<dai::node::VideoEncoder>();
-            encoder->setDefaultProfilePreset(config.fps, dai::VideoEncoderProperties::Profile::MJPEG);
-
-            cam->video.link(encoder->input);
-            encoder->bitstream.link(sync->inputs[name]);
-        }
-
-        impl_->syncQueue = sync->out.createOutputQueue(8, false);
-
-        int retries = 3;
-        while (retries > 0) {
-            try {
-                impl_->pipeline.start();
-                break;
-            } catch (const std::exception& e) {
-                if (--retries == 0) throw;
-                std::this_thread::sleep_for(std::chrono::seconds(2));
-            }
-        }
-
-        return true;
-    } catch (const std::exception& e) {
-        std::cerr << "OAK Init Error: " << e.what() << "\n";
-        return false;
+    if(impl_->running_ || impl_->session) {
+        stop();
+        impl_->session.reset();
     }
+
+    impl_->session = std::make_unique<OAKRuntimeSession>();
+    OAKSessionConfig session_config;
+    session_config.width = config.width;
+    session_config.height = config.height;
+    session_config.fps = config.fps;
+    return impl_->session->initialize(session_config);
 }
 
 bool OAKCameraBackend::start() {
-    if (impl_->running_) return false;
+    if(impl_->running_ || !impl_->session) {
+        return false;
+    }
+
     impl_->running_ = true;
     impl_->distributor_thread = std::thread(&Impl::distributor_loop, impl_.get());
     return true;
 }
 
 void OAKCameraBackend::stop() {
-    if (!impl_->running_) return;
-    impl_->running_ = false;
-    if (impl_->syncQueue) impl_->syncQueue->close(); // Wake up get()
-    if (impl_->distributor_thread.joinable()) {
-        impl_->distributor_thread.join();
+    if(impl_->running_) {
+        impl_->running_ = false;
+        if(impl_->session) {
+            impl_->session->stop();
+        }
+        impl_->cv.notify_all();
+        if(impl_->distributor_thread.joinable()) {
+            impl_->distributor_thread.join();
+        }
+    } else if(impl_->session) {
+        impl_->session->stop();
     }
-    impl_->pipeline.stop();
+
+    {
+        std::lock_guard<std::mutex> lock(impl_->mtx);
+        for(auto& q : impl_->proxy_queues) {
+            while(!q.empty()) {
+                q.pop();
+            }
+        }
+    }
 }
 
 std::unique_ptr<Frame> OAKCameraBackend::get_frame() {
-    return nullptr; // Master doesn't produce frames directly in quad mode
+    return nullptr;
 }
 
 uint64_t OAKCameraBackend::get_frame_count() const {
@@ -170,31 +142,39 @@ std::shared_ptr<OAKCameraBackend> OAKCameraBackend::create_master() {
 }
 
 std::unique_ptr<ICameraBackend> OAKCameraBackend::create_proxy(int socket_index) {
-    if (socket_index < 0 || socket_index > 3) return nullptr;
+    if(socket_index < 0 || socket_index > 3) {
+        return nullptr;
+    }
     return std::make_unique<VirtualOAKBackend>(shared_from_this(), socket_index);
 }
 
 std::unique_ptr<Frame> VirtualOAKBackend::get_frame() {
-    if (!master_ || !master_->impl_->running_) return nullptr;
+    if(!master_ || !master_->impl_->running_) {
+        return nullptr;
+    }
+
     auto& impl = *master_->impl_;
-
     std::unique_lock<std::mutex> lock(impl.mtx);
-    impl.cv.wait(lock, [&]{ return !impl.running_ || !impl.proxy_queues[socket_index_].empty(); });
+    impl.cv.wait(lock, [&] {
+        return !impl.running_ || !impl.proxy_queues[socket_index_].empty();
+    });
 
-    if (!impl.running_ || impl.proxy_queues[socket_index_].empty()) return nullptr;
+    if(!impl.running_ || impl.proxy_queues[socket_index_].empty()) {
+        return nullptr;
+    }
 
     auto group = impl.proxy_queues[socket_index_].front();
     impl.proxy_queues[socket_index_].pop();
     lock.unlock();
 
-    std::string name = "CAM_" + std::string(1, 'A' + socket_index_);
-    auto imgFrame = group->get<dai::ImgFrame>(name);
-    if (!imgFrame) return nullptr;
+    auto encoded = group->frames[socket_index_];
+    if(!encoded || !encoded->data) {
+        return nullptr;
+    }
 
     frame_count_++;
-    auto data_span = imgFrame->getData();
-    auto data = std::make_unique<std::vector<uint8_t>>(data_span.begin(), data_span.end());
-    return std::make_unique<Frame>(frame_count_, std::move(data));
+    auto frame_data = std::make_unique<std::vector<uint8_t>>(*encoded->data);
+    return std::make_unique<Frame>(encoded->sequence_id, std::move(frame_data));
 }
 
-} // namespace micecam
+}  // namespace micecam

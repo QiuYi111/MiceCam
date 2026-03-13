@@ -1,41 +1,52 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <Product Id="*" Name="MiceCam" Language="1033" Version="1.0.0.0" Manufacturer="Neural-Grid" UpgradeCode="04ec1b7b-695f-4655-b4c6-e9ff35bc2bac">
-        <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+    Name="MiceCam"
+    Language="1033"
+    Version="1.0.0.0"
+    Manufacturer="Neural-Grid"
+    UpgradeCode="04ec1b7b-695f-4655-b4c6-e9ff35bc2bac"
+    InstallerVersion="500">
+    <SummaryInformation Description="MiceCam camera acquisition app" Manufacturer="Neural-Grid" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="MiceCamIcon.exe" SourceFile="D:\MiceCam\dist\MiceCam\MiceCam.exe" />
+    <Property Id="ARPPRODUCTICON" Value="MiceCamIcon.exe" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
-        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
-        <MediaTemplate EmbedCab="yes" />
+    <Feature Id="ProductFeature" Title="MiceCam" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+  </Package>
 
-        <Feature Id="ProductFeature" Title="MiceCam" Level="1">
-            <ComponentGroupRef Id="ProductComponents" />
-            <ComponentRef Id="ApplicationShortcut" />
-        </Feature>
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="MiceCam" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="MiceCam" />
+    </StandardDirectory>
+  </Fragment>
 
-        <Icon Id="MiceCamIcon" SourceFile="cmd/gui/gui/main_window.py" /> <!-- Replace with actual icon if available -->
-    </Product>
-
-    <Fragment>
-        <Directory Id="TARGETDIR" Name="SourceDir">
-            <Directory Id="ProgramFilesFolder">
-                <Directory Id="INSTALLFOLDER" Name="MiceCam" />
-            </Directory>
-            <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="MiceCam"/>
-            </Directory>
-        </Directory>
-    </Fragment>
-
-    <Fragment>
-        <DirectoryRef Id="ApplicationProgramsFolder">
-            <Component Id="ApplicationShortcut" Guid="*">
-                <Shortcut Id="ApplicationStartMenuShortcut"
-                          Name="MiceCam"
-                          Description="MiceCam High-speed Camera Acquisition"
-                          Target="[INSTALLFOLDER]MiceCam.exe"
-                          WorkingDirectory="INSTALLFOLDER"/>
-                <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall"/>
-                <RegistryValue Root="HKCU" Key="Software\Neural-Grid\MiceCam" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
-            </Component>
-        </DirectoryRef>
-    </Fragment>
+  <Fragment>
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ApplicationShortcut">
+        <Shortcut
+          Id="ApplicationStartMenuShortcut"
+          Name="MiceCam"
+          Description="MiceCam USB and OAK recorder"
+          Target="[INSTALLFOLDER]MiceCam.exe"
+          WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Neural-Grid\MiceCam"
+          Name="installed"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
 </Wix>

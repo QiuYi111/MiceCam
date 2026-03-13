@@ -28,6 +28,7 @@ struct SessionConfig {
 
     // Camera configuration (for metadata)
     std::string camera_backend_name = "unknown";
+    std::string pixel_format = "mjpeg";
     int width = 0;
     int height = 0;
     double fps = 0.0;
@@ -55,6 +56,7 @@ struct FrameMetadataRecord {
 struct SessionMetadata {
     std::string session_name;
     std::string camera_backend;
+    std::string pixel_format;
     int width;
     int height;
     double fps;
@@ -68,6 +70,7 @@ struct SessionMetadata {
         return {
             {"session_name", session_name},
             {"camera_backend", camera_backend},
+            {"pixel_format", pixel_format},
             {"width", width},
             {"height", height},
             {"fps", fps},
@@ -134,6 +137,7 @@ private:
     std::ofstream bin_file_;
 #endif
     std::string metadata_path_;
+    std::string bin_path_;
     std::ofstream metadata_file_;
     SessionMetadata session_metadata_;
     uint64_t session_start_ns_;
@@ -147,6 +151,7 @@ private:
     uint8_t* aggregation_buffer_ = nullptr;
     size_t current_buffer_pos_{0};
     uint64_t total_bytes_on_disk_{0};
+    uint64_t logical_bytes_base_{0};
     static constexpr size_t AGGREGATION_THRESHOLD = 128 * 1024 * 1024; // 128MB
 };
 

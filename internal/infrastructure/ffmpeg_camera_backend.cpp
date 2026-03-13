@@ -1,5 +1,6 @@
 #include "micecam/camera/ffmpeg_camera_backend.h"
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 extern "C" {
@@ -11,6 +12,68 @@ extern "C" {
 }
 
 namespace micecam {
+
+#if defined(_WIN32)
+namespace {
+
+std::vector<std::string> list_dshow_video_devices() {
+    std::vector<std::string> devices;
+
+    const AVInputFormat* ifmt = av_find_input_format("dshow");
+    if (!ifmt) {
+        return devices;
+    }
+
+    AVDeviceInfoList* device_list = nullptr;
+    if (avdevice_list_input_sources(ifmt, nullptr, nullptr, &device_list) < 0 || !device_list) {
+        return devices;
+    }
+
+    for (int i = 0; i < device_list->nb_devices; ++i) {
+        const auto* dev = device_list->devices[i];
+        if (!dev) {
+            continue;
+        }
+
+        bool has_video = dev->nb_media_types == 0;
+        for (int j = 0; j < dev->nb_media_types; ++j) {
+            if (dev->media_types[j] == AVMEDIA_TYPE_VIDEO) {
+                has_video = true;
+                break;
+            }
+        }
+
+        if (!has_video) {
+            continue;
+        }
+
+        if (dev->device_name && *dev->device_name) {
+            devices.emplace_back(dev->device_name);
+        } else if (dev->device_description && *dev->device_description) {
+            devices.emplace_back(dev->device_description);
+        }
+    }
+
+    avdevice_free_list_devices(&device_list);
+    return devices;
+}
+
+std::string pick_dshow_video_device(int requested_index) {
+    const auto devices = list_dshow_video_devices();
+    if (devices.empty()) {
+        return {};
+    }
+
+    int index = requested_index;
+    if (index < 0 || index >= static_cast<int>(devices.size())) {
+        index = 0;
+    }
+
+    return "video=" + devices[static_cast<size_t>(index)];
+}
+
+}  // namespace
+#endif
 
 FFmpegCameraBackend::FFmpegCameraBackend() {
     avdevice_register_all();
@@ -31,7 +94,11 @@ bool FFmpegCameraBackend::open_device() {
 
 #if defined(_WIN32)
     const char* format_name = "dshow";
-    std::string device_name = "video=@device_pnp_\\\\?\\usb#vid_1bcf&pid_2cd1&mi_00#6&197ce02b&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global";
+    std::string device_name = pick_dshow_video_device(config_.device_id);
+    if (device_name.empty()) {
+        std::cerr << "FFmpeg: No Windows dshow video devices found" << std::endl;
+        return false;
+    }
 #elif defined(__APPLE__)
     const char* format_name = "avfoundation";
     std::string device_name = config_.device_id == 0 ? "0" : std::to_string(config_.device_id);
@@ -46,6 +113,10 @@ bool FFmpegCameraBackend::open_device() {
         std::cerr << "FFmpeg: Failed to find " << format_name << " input format" << std::endl;
         return false;
     }
+
+#if defined(_WIN32)
+    std::cerr << "FFmpeg: Opening dshow device " << device_name << std::endl;
+#endif
 
     AVDictionary* options = nullptr;
     // Force MJPEG

@@ -33,6 +33,11 @@ option(BUILD_TESTS "Build test suite" OFF)
 option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings (requires pybind11)" OFF)
 option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
+option(MICECAM_USE_PREBUILT_DEPTHAI "Use a prebuilt depthai package instead of the git submodule" OFF)
+
+set(MICECAM_PREBUILT_DEPTHAI_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core-v3.4.0-win64"
+    CACHE PATH "Path to prebuilt depthai package root")
 
 # Dependencies
 find_package(Threads REQUIRED)
@@ -49,55 +54,50 @@ find_package(nlohmann_json CONFIG REQUIRED)
 # Luxonis DepthAI Core (Using FetchContent)
 option(WITH_OAK_CAMERA "Build with OAK camera support (requires depthai-core)" ON)
 if(WITH_OAK_CAMERA)
-    # The depthai-core submodule has HunterGate issues when added via add_subdirectory
-    # because HunterGate expects to run BEFORE the first project() call.
-    # To bypass this without modifying the submodule, we rely on FetchContent instead
-    # which manages this more gracefully, or simply define hunter vars.
-    # But since the submodule is in 3rdParty, we can just compile the library
-    # directly using standard cmake without hunter if we disable its tests
+    if(MICECAM_USE_PREBUILT_DEPTHAI)
+        list(PREPEND CMAKE_PREFIX_PATH "${MICECAM_PREBUILT_DEPTHAI_DIR}")
+        find_package(depthai CONFIG REQUIRED)
+        set(DEPTHAI_FOUND ON)
+    else()
+        set(DEPTHAI_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core")
 
-    set(DEPTHAI_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/depthai-core")
+        # Disable Hunter and examples/tests
+        set(HUNTER_ENABLED OFF CACHE BOOL "Disable Hunter package manager" FORCE)
+        set(DEPTHAI_BUILD_EXAMPLES OFF CACHE BOOL "Disable depthai-core examples" FORCE)
+        set(DEPTHAI_BUILD_TESTS OFF CACHE BOOL "Disable depthai-core tests" FORCE)
 
-    # Disable Hunter and examples/tests
-    set(HUNTER_ENABLED OFF CACHE BOOL "Disable Hunter package manager" FORCE)
-    set(DEPTHAI_BUILD_EXAMPLES OFF CACHE BOOL "Disable depthai-core examples" FORCE)
-    set(DEPTHAI_BUILD_TESTS OFF CACHE BOOL "Disable depthai-core tests" FORCE)
+        # Disable depthai-core's internal vcpkg bootstrap (we use our own project-level vcpkg)
+        set(DEPTHAI_BOOTSTRAP_VCPKG OFF CACHE BOOL "Disable depthai-core internal vcpkg" FORCE)
 
-    # Disable depthai-core's internal vcpkg bootstrap (we use our own project-level vcpkg)
-    set(DEPTHAI_BOOTSTRAP_VCPKG OFF CACHE BOOL "Disable depthai-core internal vcpkg" FORCE)
+        # Use external dependencies (vcpkg)
+        set(DEPTHAI_JSON_EXTERNAL ON CACHE BOOL "" FORCE)
+        set(DEPTHAI_LIBNOP_EXTERNAL OFF CACHE BOOL "" FORCE)
 
-    # Use external dependencies (vcpkg)
-    set(DEPTHAI_JSON_EXTERNAL ON CACHE BOOL "" FORCE)
-    # Let depthai-core fetch libnop internally since the vcpkg port lacks CMake configs
-    set(DEPTHAI_LIBNOP_EXTERNAL OFF CACHE BOOL "" FORCE)
+        # Disable unused features to reduce dependency bloat
+        set(DEPTHAI_ENABLE_CURL OFF CACHE BOOL "Disable depthai-core CURL support" FORCE)
+        set(DEPTHAI_ENABLE_MP4V2 OFF CACHE BOOL "Disable depthai-core MP4V2 support" FORCE)
+        set(DEPTHAI_ENABLE_APRIL_TAG OFF CACHE BOOL "Disable depthai-core AprilTag support" FORCE)
+        set(DEPTHAI_ENABLE_PROTOBUF OFF CACHE BOOL "Disable depthai-core Protobuf support" FORCE)
+        set(DEPTHAI_XTENSOR_SUPPORT ON CACHE BOOL "Enable depthai-core xtensor support" FORCE)
+        set(DEPTHAI_ENABLE_REMOTE_CONNECTION OFF CACHE BOOL "Disable depthai-core remote connection" FORCE)
 
-    # Disable unused features to reduce dependency bloat
-    set(DEPTHAI_ENABLE_CURL OFF CACHE BOOL "Disable depthai-core CURL support" FORCE)
-    set(DEPTHAI_ENABLE_MP4V2 OFF CACHE BOOL "Disable depthai-core MP4V2 support" FORCE)
-    set(DEPTHAI_ENABLE_APRIL_TAG OFF CACHE BOOL "Disable depthai-core AprilTag support" FORCE)
-    set(DEPTHAI_ENABLE_PROTOBUF OFF CACHE BOOL "Disable depthai-core Protobuf support" FORCE)
-    set(DEPTHAI_XTENSOR_SUPPORT ON CACHE BOOL "Enable depthai-core xtensor support" FORCE)
-    set(DEPTHAI_ENABLE_REMOTE_CONNECTION OFF CACHE BOOL "Disable depthai-core remote connection" FORCE)
+        set(XLINK_ENABLE_LIBUSB ON CACHE BOOL "" FORCE)
+        set(XLINK_LIBUSB_SYSTEM ON CACHE BOOL "Use system libusb via vcpkg" FORCE)
 
-    # Ensure libusb for XLink
-    set(XLINK_ENABLE_LIBUSB ON CACHE BOOL "" FORCE)
-    set(XLINK_LIBUSB_SYSTEM ON CACHE BOOL "Use system libusb via vcpkg" FORCE)
+        FetchContent_Declare(
+            httplib
+            GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+            GIT_TAG v0.18.3
+            GIT_SHALLOW TRUE
+            OVERRIDE_FIND_PACKAGE
+        )
+        FetchContent_MakeAvailable(httplib)
+        install(TARGETS httplib EXPORT depthaiDependencies)
 
-    # Provide cpp-httplib via FetchContent (vcpkg download has hash mismatch)
-    FetchContent_Declare(
-        httplib
-        GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-        GIT_TAG v0.18.3
-        GIT_SHALLOW TRUE
-        OVERRIDE_FIND_PACKAGE
-    )
-    FetchContent_MakeAvailable(httplib)
-    # Required for depthai-core's target export
-    install(TARGETS httplib EXPORT depthaiDependencies)
+        add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
 
-    add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
-
-    set(DEPTHAI_FOUND ON)
+        set(DEPTHAI_FOUND ON)
+    endif()
 endif()
 
 
@@ -129,8 +129,24 @@ if(WITH_OAK_CAMERA)
 endif()
 
 message(STATUS "DEPTHAI_FOUND: ${DEPTHAI_FOUND}")
+message(STATUS "MICECAM_USE_PREBUILT_DEPTHAI: ${MICECAM_USE_PREBUILT_DEPTHAI}")
 message(STATUS "FFMPEG_FOUND: ${FFMPEG_FOUND}")
 message(STATUS "OpenCV_FOUND: ${OpenCV_FOUND}")
+
+function(micecam_copy_prebuilt_depthai_runtime target_name)
+    if(NOT MICECAM_USE_PREBUILT_DEPTHAI)
+        return()
+    endif()
+
+    add_custom_command(TARGET ${target_name} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MICECAM_PREBUILT_DEPTHAI_DIR}/bin/depthai-core.dll"
+            "$<TARGET_FILE_DIR:${target_name}>/depthai-core.dll"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${MICECAM_PREBUILT_DEPTHAI_DIR}/bin/dynamic_calibration.dll"
+            "$<TARGET_FILE_DIR:${target_name}>/dynamic_calibration.dll"
+    )
+endfunction()
 
 if(BUILD_TESTS)
     FetchContent_Declare(
@@ -165,14 +181,12 @@ target_link_libraries(micecam_core PUBLIC
 
 # Camera backend (optional)
 if(WITH_CAMERA_BACKEND)
-    set(CAMERA_SOURCES internal/infrastructure/camera_backend.cpp)
+    set(CAMERA_SOURCES
+        internal/infrastructure/camera_backend.cpp
+    )
 
     if(FFMPEG_FOUND)
         list(APPEND CAMERA_SOURCES internal/infrastructure/ffmpeg_camera_backend.cpp)
-    endif()
-
-    if(DEPTHAI_FOUND)
-        list(APPEND CAMERA_SOURCES internal/infrastructure/oak_camera_backend.cpp)
     endif()
 
     add_library(micecam_camera ${CAMERA_SOURCES})
@@ -184,7 +198,6 @@ if(WITH_CAMERA_BACKEND)
 
     if(DEPTHAI_FOUND)
         target_compile_definitions(micecam_camera PUBLIC WITH_OAK_CAMERA)
-        target_link_libraries(micecam_camera PUBLIC depthai::core)
     endif()
 
 
@@ -199,12 +212,6 @@ if(WITH_CAMERA_BACKEND)
         target_link_libraries(micecam_camera PUBLIC ${OpenCV_LIBS})
     endif()
 
-    if(DEPTHAI_FOUND)
-        target_link_libraries(micecam_camera PUBLIC depthai::core)
-    endif()
-
-
-
     if(FFMPEG_FOUND)
         target_link_libraries(micecam_camera PUBLIC ${FFMPEG_LIBRARIES})
         target_compile_definitions(micecam_camera PRIVATE WITH_FFMPEG)
@@ -213,32 +220,92 @@ if(WITH_CAMERA_BACKEND)
         endif()
     endif()
 
+    if(DEPTHAI_FOUND)
+        add_library(micecam_oak_runtime
+            internal/infrastructure/oak_runtime_session.cpp
+        )
+
+        target_include_directories(micecam_oak_runtime PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/api
+            ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        )
+
+        target_link_libraries(micecam_oak_runtime PUBLIC depthai::core)
+
+        add_library(micecam_oak
+            internal/infrastructure/oak_camera_backend.cpp
+        )
+
+        target_include_directories(micecam_oak PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/api
+            ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        )
+
+        target_compile_definitions(micecam_oak PUBLIC WITH_OAK_CAMERA)
+        target_link_libraries(micecam_oak PUBLIC micecam_core micecam_oak_runtime)
+        target_link_libraries(micecam_camera PUBLIC micecam_oak)
+    endif()
+
     # OAK Camera Targets
     if(DEPTHAI_FOUND)
         if(APPLE)
             set(MAC_FRAMEWORKS "-framework CoreFoundation" "-framework IOKit")
-            target_link_libraries(micecam_camera PUBLIC ${MAC_FRAMEWORKS})
+            target_link_libraries(micecam_oak_runtime PUBLIC ${MAC_FRAMEWORKS})
+            target_link_libraries(micecam_oak PUBLIC ${MAC_FRAMEWORKS})
         endif()
         if(BUILD_TESTS)
             add_executable(oak_camera_test tests/oak_camera_test.cpp)
-            target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
-            target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
+            target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_oak depthai::core)
             if(APPLE)
                 target_link_libraries(oak_camera_test PRIVATE ${MAC_FRAMEWORKS})
             endif()
         endif()
 
         add_executable(oak_quad_recorder cmd/examples/oak_quad_recorder.cpp)
-        target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera depthai::core)
-        target_compile_definitions(oak_quad_recorder PRIVATE WITH_OAK_CAMERA)
+        target_link_libraries(oak_quad_recorder PRIVATE micecam_core micecam_camera micecam_oak depthai::core)
         if(APPLE)
             target_link_libraries(oak_quad_recorder PRIVATE ${MAC_FRAMEWORKS})
         endif()
+        micecam_copy_prebuilt_depthai_runtime(oak_quad_recorder)
 
         add_executable(oak_diagnostic cmd/examples/oak_diagnostic.cpp)
         target_link_libraries(oak_diagnostic PRIVATE depthai::core micecam_core ${OpenCV_LIBS})
         if(APPLE)
             target_link_libraries(oak_diagnostic PRIVATE ${MAC_FRAMEWORKS})
+        endif()
+        micecam_copy_prebuilt_depthai_runtime(oak_diagnostic)
+
+        add_executable(oak_backend_probe cmd/examples/oak_backend_probe.cpp)
+        target_link_libraries(oak_backend_probe PRIVATE micecam_core micecam_oak depthai::core)
+        if(APPLE)
+            target_link_libraries(oak_backend_probe PRIVATE ${MAC_FRAMEWORKS})
+        endif()
+        micecam_copy_prebuilt_depthai_runtime(oak_backend_probe)
+
+        add_executable(oak_runtime_probe cmd/examples/oak_runtime_probe.cpp)
+        target_link_libraries(oak_runtime_probe PRIVATE micecam_oak_runtime depthai::core)
+        if(APPLE)
+            target_link_libraries(oak_runtime_probe PRIVATE ${MAC_FRAMEWORKS})
+        endif()
+        micecam_copy_prebuilt_depthai_runtime(oak_runtime_probe)
+
+        add_executable(oak_backend_inline_probe cmd/examples/oak_backend_inline_probe.cpp)
+        target_link_libraries(oak_backend_inline_probe PRIVATE depthai::core)
+        if(APPLE)
+            target_link_libraries(oak_backend_inline_probe PRIVATE ${MAC_FRAMEWORKS})
+        endif()
+        micecam_copy_prebuilt_depthai_runtime(oak_backend_inline_probe)
+
+        add_executable(oak_feature_probe cmd/examples/oak_feature_probe.cpp)
+        target_link_libraries(oak_feature_probe PRIVATE depthai::core)
+        if(APPLE)
+            target_link_libraries(oak_feature_probe PRIVATE ${MAC_FRAMEWORKS})
+        endif()
+
+        add_executable(depthai_link_probe cmd/examples/depthai_link_probe.cpp)
+        target_link_libraries(depthai_link_probe PRIVATE depthai::core)
+        if(APPLE)
+            target_link_libraries(depthai_link_probe PRIVATE ${MAC_FRAMEWORKS})
         endif()
     endif()
 
@@ -314,6 +381,14 @@ install(DIRECTORY api/micecam DESTINATION include)
 
 if(WITH_CAMERA_BACKEND)
     install(TARGETS micecam_camera
+        RUNTIME DESTINATION bin
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+    )
+endif()
+
+if(DEPTHAI_FOUND)
+    install(TARGETS micecam_oak
         RUNTIME DESTINATION bin
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib

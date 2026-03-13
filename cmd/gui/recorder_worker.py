@@ -1,11 +1,51 @@
 import sys
 import os
+from pathlib import Path
 
-# Ensure the C++ extension in build/bindings/python is found during dev
-base_dir = os.path.dirname(os.path.abspath(__file__))
-dev_lib_path = os.path.abspath(os.path.join(base_dir, "..", "..", "build", "bindings", "python"))
-if os.path.exists(dev_lib_path) and dev_lib_path not in sys.path:
-    sys.path.insert(0, dev_lib_path)
+
+def configure_extension_search_path():
+    base_dir = Path(__file__).resolve().parent
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        packaged_dirs = [
+            exe_dir / "_internal",
+            Path(getattr(sys, "_MEIPASS", "")) / "_internal" if getattr(sys, "_MEIPASS", None) else None,
+            Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "_MEIPASS", None) else None,
+            exe_dir,
+        ]
+
+        for candidate in packaged_dirs:
+            if not candidate or not candidate.exists():
+                continue
+            candidate_str = str(candidate)
+            if candidate_str not in sys.path:
+                sys.path.insert(0, candidate_str)
+            try:
+                os.add_dll_directory(candidate_str)
+            except (AttributeError, FileNotFoundError):
+                pass
+        return
+
+    # Make source-mode execution robust across VS multi-config builds by looking
+    # for the compiled extension in the common Release/Debug output directories.
+    project_root = base_dir.parent.parent
+    candidates = [
+        project_root / "build-codex-oak-py314" / "bindings" / "python" / "Release",
+        project_root / "build-feat-winpkg" / "bindings" / "python" / "Release",
+        project_root / "build" / "bindings" / "python" / "Release",
+        project_root / "build" / "bindings" / "python" / "Debug",
+        project_root / "build" / "bindings" / "python",
+        project_root / "build-native-win230" / "bindings" / "python" / "Release",
+        project_root / "build-native-win4" / "bindings" / "python" / "Release",
+    ]
+
+    for candidate in candidates:
+        candidate_str = str(candidate)
+        if candidate.exists() and candidate_str not in sys.path:
+            sys.path.append(candidate_str)
+
+
+configure_extension_search_path()
 
 import time
 import json
@@ -26,6 +66,7 @@ try:
     import debug_utils
     debug_utils.hook_exceptions()
     debug_utils.log("WORKER", "Module Loaded")
+    debug_utils.log("WORKER", f"_micecam from: {getattr(_micecam, '__file__', 'unknown')}")
 except ImportError:
     # Fallback if debug_utils not found (should be there)
     pass
@@ -39,6 +80,7 @@ def signal_handler(sig, frame):
     stop_requested = True
 
 preview_queue = queue.Queue(maxsize=1)
+PREVIEW_ENABLED = os.environ.get("MICECAM_ENABLE_PREVIEW", "0") == "1"
 
 def preview_worker_loop():
     while not stop_requested:
@@ -154,79 +196,81 @@ def main():
             p = _micecam.Pipeline(output_dir, session_name, backend, width, height, fps, dev_idx, append_mode)
             pipelines.append(p)
 
-        # Start preview worker thread
-        preview_thread = threading.Thread(target=preview_worker_loop, daemon=True)
-        preview_thread.start()
+        if PREVIEW_ENABLED:
+            preview_thread = threading.Thread(target=preview_worker_loop, daemon=True)
+            preview_thread.start()
 
         for i, p in enumerate(pipelines):
-            # Attach a callback to extract preview frames
-            min_interval = 1.0 / 5.0 # 5 FPS preview
-            last_time = {"t": 0.0}
+            if PREVIEW_ENABLED:
+                # Attach a callback to extract preview frames
+                min_interval = 1.0 / 5.0 # 5 FPS preview
+                last_time = {"t": 0.0}
 
-            # We need to capture variables
-            def make_cb(cam_index, w, h, t_state):
-                def cb(data_view, seq_id, timestamp):
-                    now = time.time()
-                    if now - t_state["t"] < min_interval:
-                        return
-                    t_state["t"] = now
+                # We need to capture variables
+                def make_cb(cam_index, w, h, t_state):
+                    def cb(data_view, seq_id, timestamp):
+                        now = time.time()
+                        if now - t_state["t"] < min_interval:
+                            return
+                        t_state["t"] = now
 
-                    try:
-                        # The stream may be MJPEG or Raw YUV
-                        raw_data = data_view.tobytes()
-
-                        # Detect format
-                        is_jpeg = raw_data.startswith(b'\xff\xd8')
-
-                        if is_jpeg:
-                            # Use full JPEG for preview (compressed)
-                            final_bytes = raw_data
-                            final_w, final_h = w, h
-                        elif NUMPY_AVAILABLE:
-                            # Handle Raw YUV - Extract Y Channel
-                            arr = np.frombuffer(raw_data, dtype=np.uint8)
-                            expected_len = w * h
-
-                            # UYVY or YUYV (2 bytes per pixel)
-                            if len(arr) == expected_len * 2:
-                                # UYVY: Y is at index 1, 3, 5...
-                                # YUYV: Y is at index 0, 2, 4...
-                                # Based on header 7E 99 80 9A -> U Y V Y likely
-                                y_channel = arr[1::2].reshape((h, w))
-                            elif len(arr) >= expected_len:
-                                # NV12 or similar (Y is the first W*H bytes)
-                                y_channel = arr[:expected_len].reshape((h, w))
-                            else:
-                                return # Unknown or partial frame
-
-                            # Downsample to save CPU/IPC
-                            scale = max(1, w // 320)
-                            small_y = y_channel[::scale, ::scale]
-                            final_h, final_w = small_y.shape
-                            if not small_y.flags['C_CONTIGUOUS']:
-                                small_y = np.ascontiguousarray(small_y)
-                            final_bytes = small_y.tobytes()
-                        else:
-                            return # Cannot handle raw without numpy
-
-                        # Put to queue, replace if full
                         try:
-                            preview_queue.put_nowait((final_w, final_h, final_bytes, cam_index))
-                        except queue.Full:
-                            # drain and replace
-                            try:
-                                preview_queue.get_nowait()
-                            except:
-                                pass
+                            # The stream may be MJPEG or Raw YUV
+                            raw_data = data_view.tobytes()
+
+                            # Detect format
+                            is_jpeg = raw_data.startswith(b'\xff\xd8')
+
+                            if is_jpeg:
+                                # Use full JPEG for preview (compressed)
+                                final_bytes = raw_data
+                                final_w, final_h = w, h
+                            elif NUMPY_AVAILABLE:
+                                # Handle Raw YUV - Extract Y Channel
+                                arr = np.frombuffer(raw_data, dtype=np.uint8)
+                                expected_len = w * h
+
+                                # UYVY or YUYV (2 bytes per pixel)
+                                if len(arr) == expected_len * 2:
+                                    # UYVY: Y is at index 1, 3, 5...
+                                    # YUYV: Y is at index 0, 2, 4...
+                                    # Based on header 7E 99 80 9A -> U Y V Y likely
+                                    y_channel = arr[1::2].reshape((h, w))
+                                elif len(arr) >= expected_len:
+                                    # NV12 or similar (Y is the first W*H bytes)
+                                    y_channel = arr[:expected_len].reshape((h, w))
+                                else:
+                                    return # Unknown or partial frame
+
+                                # Downsample to save CPU/IPC
+                                scale = max(1, w // 320)
+                                small_y = y_channel[::scale, ::scale]
+                                final_h, final_w = small_y.shape
+                                if not small_y.flags['C_CONTIGUOUS']:
+                                    small_y = np.ascontiguousarray(small_y)
+                                final_bytes = small_y.tobytes()
+                            else:
+                                return # Cannot handle raw without numpy
+
+                            # Put to queue, replace if full
                             try:
                                 preview_queue.put_nowait((final_w, final_h, final_bytes, cam_index))
-                            except: pass
+                            except queue.Full:
+                                # drain and replace
+                                try:
+                                    preview_queue.get_nowait()
+                                except:
+                                    pass
+                                try:
+                                    preview_queue.put_nowait((final_w, final_h, final_bytes, cam_index))
+                                except:
+                                    pass
 
-                    except Exception as e:
-                        pass
-                return cb
+                        except Exception:
+                            pass
+                    return cb
 
-            p.attach_callback(make_cb(i, width, height, last_time))
+                p.attach_callback(make_cb(i, width, height, last_time))
 
             p.start()
 

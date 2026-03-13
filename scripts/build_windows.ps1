@@ -1,57 +1,147 @@
-# Build script for Windows packaging
-# This script is intended to be run on a Windows machine with PowerShell.
+[CmdletBinding()]
+param(
+    [switch]$SkipNativeBuild,
+    [switch]$SkipPyInstaller,
+    [switch]$SkipMsi
+)
 
-$ProjectRoot = Get-Location
-$BuildDir = "$ProjectRoot\build"
-$DistDir = "$ProjectRoot\dist"
-$PythonEnv = "$ProjectRoot\.venv"
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
-echo "🔨 Initializing Windows Environment..."
-if (!(Test-Path "vcpkg")) {
-    echo "📦 vcpkg not found. Cloning vcpkg..."
-    git clone https://github.com/microsoft/vcpkg.git vcpkg
-    .\vcpkg\bootstrap-vcpkg.bat
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $ProjectRoot
+
+$DistRoot = Join-Path $ProjectRoot "dist"
+$AppDistDir = Join-Path $DistRoot "MiceCam"
+$WorkerStageRoot = Join-Path $ProjectRoot "dist_worker_stage"
+$WorkerStageDir = Join-Path $WorkerStageRoot "MiceCamWorker"
+$WorkerInstallDir = Join-Path $AppDistDir "tools\\MiceCamWorker"
+$PyInstallerWorkDir = Join-Path $ProjectRoot "build_pyinstaller"
+$WorkerPyInstallerWorkDir = Join-Path $ProjectRoot "build_pyinstaller_worker"
+$PackagingDir = Join-Path $ProjectRoot "packaging\\windows"
+$ComponentsFile = Join-Path $PackagingDir "components.wxs"
+$InstallerPath = Join-Path $DistRoot "MiceCam-Installer.msi"
+$VenvPython = Join-Path $ProjectRoot ".venv\\Scripts\\python.exe"
+$WixExe = Join-Path $ProjectRoot ".tools\\wix.exe"
+
+function Require-Command {
+    param([string]$Name)
+
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        throw "Required command '$Name' was not found in PATH."
+    }
 }
 
-# 1. Build C++ Backend
-echo "🔨 Building C++ SDK and Bindings..."
-cmake -B $BuildDir -S . `
-    -DCMAKE_TOOLCHAIN_FILE="$ProjectRoot\vcpkg\scripts\buildsystems\vcpkg.cmake" `
-    -DCMAKE_BUILD_TYPE=Release `
-    -DWITH_PYTHON_BINDINGS=ON
-cmake --build $BuildDir --config Release -j$env:NUMBER_OF_PROCESSORS
+function Find-BindingsReleaseDir {
+    $candidates = @(
+        "build-codex-oak-py314\\bindings\\python\\Release",
+        "build\\bindings\\python\\Release",
+        "build-feat-winpkg\\bindings\\python\\Release",
+        "build-native-win230\\bindings\\python\\Release",
+        "build-native-win4\\bindings\\python\\Release"
+    ) | ForEach-Object { Join-Path $ProjectRoot $_ }
 
-# 2. Setup Python environment
-echo "🐍 Setting up Python environment..."
-uv sync --all-extras
-uv pip install pyinstaller
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            $pyd = Get-ChildItem -LiteralPath $candidate -Filter "_micecam*.pyd" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($pyd) {
+                return $candidate
+            }
+        }
+    }
 
-# 3. Package to EXE
-echo "📦 Packaging GUI to EXE..."
-# Note: We need to include the build artifacts (.pyd and required DLLs)
-# Assuming micecam module is in 'internal/' as per pyproject.toml
-# and compiled .pyd is in 'build/Release' or similar.
-
-$PydFile = Get-ChildItem -Path "$BuildDir" -Filter "micecam*.pyd" -Recurse | Select-Object -First 1
-if ($null -eq $PydFile) {
-    Write-Error "❌ Could not find compiled .pyd file. Build might have failed."
-    exit 1
+    return $null
 }
 
-# PyInstaller command
-# --noconsole: Prevents terminal window from opening
-# --add-data: Adds the compiled backend
-& uv run pyinstaller --noconsole --clean `
-    --add-data "$($PydFile.FullName);internal/micecam" `
-    --name "MiceCam" `
-    --workpath "$ProjectRoot\build\pyinstaller_work" `
-    --distpath "$DistDir" `
-    cmd/gui/gui/main_window.py
+Write-Host "Using project root: $ProjectRoot"
 
-echo "✅ EXE created in $DistDir\MiceCam"
+Require-Command -Name "uv"
+Require-Command -Name "dotnet"
 
-# 4. Packaging to MSI (Requires WiX Toolset)
-# This is a placeholder for WiX integration.
-# To generate a real MSI, one would typically use a .wxs file.
-echo "ℹ️  MSI generation requires WiX Toolset installed on Windows."
-echo "   See: https://wixtoolset.org/"
+if (-not (Test-Path $VenvPython)) {
+    throw "Expected virtualenv Python at $VenvPython"
+}
+
+$bindingsReleaseDir = Find-BindingsReleaseDir
+if (-not $bindingsReleaseDir -and -not $SkipNativeBuild) {
+    Require-Command -Name "cmake"
+    $toolchain = Join-Path $ProjectRoot "vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
+    if (-not (Test-Path $toolchain)) {
+        throw "vcpkg toolchain not found at $toolchain"
+    }
+
+    Write-Host "Native bindings not found. Building Release bindings..."
+    cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
+    if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
+
+    cmake --build build --config Release
+    if ($LASTEXITCODE -ne 0) { throw "CMake build failed." }
+
+    $bindingsReleaseDir = Find-BindingsReleaseDir
+}
+
+if (-not $bindingsReleaseDir) {
+    throw "Could not find a compiled _micecam binding. Build it first or rerun without -SkipNativeBuild."
+}
+
+Write-Host "Using bindings from: $bindingsReleaseDir"
+
+if (-not $SkipPyInstaller) {
+    Write-Host "Syncing Python environment..."
+    uv sync --all-extras
+    if ($LASTEXITCODE -ne 0) { throw "uv sync failed." }
+
+    Write-Host "Ensuring PyInstaller is available..."
+    uv pip install pyinstaller
+    if ($LASTEXITCODE -ne 0) { throw "Failed to install PyInstaller." }
+
+    Write-Host "Building one-folder application via PyInstaller..."
+    if (Test-Path $AppDistDir) {
+        Remove-Item -LiteralPath $AppDistDir -Recurse -Force
+    }
+    if (Test-Path $WorkerStageRoot) {
+        Remove-Item -LiteralPath $WorkerStageRoot -Recurse -Force
+    }
+
+    uv run pyinstaller .\MiceCam.spec --clean --distpath "$DistRoot" --workpath "$PyInstallerWorkDir"
+    if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
+
+    Write-Host "Building dedicated worker executable..."
+    uv run pyinstaller .\MiceCamWorker.spec --clean --distpath "$WorkerStageRoot" --workpath "$WorkerPyInstallerWorkDir"
+    if ($LASTEXITCODE -ne 0) { throw "Worker PyInstaller build failed." }
+
+    New-Item -ItemType Directory -Force -Path $WorkerInstallDir | Out-Null
+    Copy-Item -Path (Join-Path $WorkerStageDir "*") -Destination $WorkerInstallDir -Recurse -Force
+}
+
+if (-not (Test-Path (Join-Path $AppDistDir "MiceCam.exe"))) {
+    throw "Packaged application not found at $AppDistDir\\MiceCam.exe"
+}
+if (-not (Test-Path (Join-Path $WorkerInstallDir "MiceCamWorker.exe"))) {
+    throw "Packaged worker not found at $WorkerInstallDir\\MiceCamWorker.exe"
+}
+
+if ($SkipMsi) {
+    Write-Host "Skipping MSI generation as requested."
+    exit 0
+}
+
+if (-not (Test-Path $WixExe)) {
+    Write-Host "Installing WiX CLI locally..."
+    dotnet tool install wix --tool-path (Join-Path $ProjectRoot ".tools")
+    if ($LASTEXITCODE -ne 0) { throw "Failed to install WiX CLI." }
+}
+
+Write-Host "Generating WiX component manifest..."
+& powershell -ExecutionPolicy Bypass -File .\scripts\generate_wix_components.ps1 -SourceDir "$AppDistDir" -OutputFile "$ComponentsFile"
+if ($LASTEXITCODE -ne 0) { throw "Failed to generate WiX component manifest." }
+
+Write-Host "Building MSI..."
+if (Test-Path $InstallerPath) {
+    Remove-Item -LiteralPath $InstallerPath -Force
+}
+
+& $WixExe build .\packaging\windows\micecam.wxs .\packaging\windows\components.wxs -ext WixToolset.UI.wixext -arch x64 -o "$InstallerPath"
+if ($LASTEXITCODE -ne 0) { throw "WiX build failed." }
+
+Write-Host "MSI created: $InstallerPath"

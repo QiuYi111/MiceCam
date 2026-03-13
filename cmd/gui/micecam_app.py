@@ -5,6 +5,41 @@ import os
 # This allows running from the project root while maintaining internal module resolution
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+
+def configure_packaged_runtime():
+    # PyInstaller one-folder builds place binary dependencies under _internal.
+    # Register that directory early so worker-mode imports can load _micecam and
+    # its dependent DLLs before any dynamic imports happen.
+    meipass = getattr(sys, "_MEIPASS", None)
+    exe_dir = os.path.dirname(sys.executable)
+    if not meipass and not getattr(sys, "frozen", False):
+        return
+
+    dll_dirs = []
+    for candidate in [
+        meipass,
+        os.path.join(meipass, "_internal") if meipass else None,
+        exe_dir,
+        os.path.join(exe_dir, "_internal"),
+    ]:
+        if candidate and candidate not in dll_dirs:
+            dll_dirs.append(candidate)
+
+    for dll_dir in dll_dirs:
+        if not dll_dir or not os.path.isdir(dll_dir):
+            continue
+        if dll_dir not in sys.path:
+            sys.path.insert(0, dll_dir)
+        try:
+            os.add_dll_directory(dll_dir)
+        except (AttributeError, FileNotFoundError):
+            pass
+
+    os.environ["PATH"] = os.pathsep.join(dll_dirs + [os.environ.get("PATH", "")])
+
+
+configure_packaged_runtime()
+
 # --- DEBUGGING HOOK ---
 try:
     import debug_utils

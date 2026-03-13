@@ -57,6 +57,8 @@ bool DiskWriter::start() {
     }
 
     const fs::path bin_path = fs::path(config_.output_dir) / (config_.session_name + ".bin");
+    bin_path_ = bin_path.string();
+    logical_bytes_base_ = 0;
 
 #ifdef _WIN32
     h_file_ = CreateFileA(
@@ -82,6 +84,7 @@ bool DiskWriter::start() {
             std::cerr << "Failed to seek to end of file\n";
         }
         total_bytes_on_disk_ = li.QuadPart;
+        logical_bytes_base_ = li.QuadPart;
     }
 #else
     bin_file_.open(bin_path, std::ios::binary | (config_.append ? std::ios::app : std::ios::trunc));
@@ -92,6 +95,7 @@ bool DiskWriter::start() {
     if (config_.append) {
         bin_file_.seekp(0, std::ios::end);
         total_bytes_on_disk_ = bin_file_.tellp();
+        logical_bytes_base_ = total_bytes_on_disk_;
     }
 #endif
 
@@ -129,6 +133,7 @@ bool DiskWriter::start() {
     bytes_written_.store(0);
     if (!config_.append) {
         total_bytes_on_disk_ = 0;
+        logical_bytes_base_ = 0;
     }
     // frame_records_.clear(); removed
     current_buffer_pos_ = 0;
@@ -273,21 +278,6 @@ void DiskWriter::flush_aggregation_buffer() {
             current_buffer_pos_ = remainder;
         } else {
             current_buffer_pos_ = 0;
-
-            // If this is the final flush, we must truncate the physical file padding bytes
-            // so the logical size precisely matches the payload bytes.
-            if (!writing_.load() && remainder != 0) {
-                size_t padding = 4096 - remainder;
-                LARGE_INTEGER li;
-                // Move pointer back by padding amount
-                li.QuadPart = total_bytes_on_disk_ - padding;
-                if (SetFilePointerEx(h_file_, li, NULL, FILE_BEGIN)) {
-                    SetEndOfFile(h_file_);
-                    total_bytes_on_disk_ = li.QuadPart; // Reflect exact logical size
-                } else {
-                    std::cerr << "Error truncating file padding: " << GetLastError() << "\n";
-                }
-            }
         }
     }
 #else
@@ -310,6 +300,30 @@ bool DiskWriter::finalize() {
     if (h_file_ != INVALID_HANDLE_VALUE) {
         CloseHandle(h_file_);
         h_file_ = INVALID_HANDLE_VALUE;
+    }
+
+    const uint64_t logical_file_size = logical_bytes_base_ + bytes_written_.load();
+    HANDLE truncate_handle = CreateFileA(
+        bin_path_.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (truncate_handle == INVALID_HANDLE_VALUE) {
+        std::cerr << "Error reopening file for final truncate: " << GetLastError() << "\n";
+    } else {
+        LARGE_INTEGER li;
+        li.QuadPart = static_cast<LONGLONG>(logical_file_size);
+        if (!SetFilePointerEx(truncate_handle, li, NULL, FILE_BEGIN) || !SetEndOfFile(truncate_handle)) {
+            std::cerr << "Error truncating file padding: " << GetLastError() << "\n";
+        } else {
+            total_bytes_on_disk_ = logical_file_size;
+        }
+        CloseHandle(truncate_handle);
     }
 #else
     if (bin_file_.is_open()) {

@@ -134,6 +134,7 @@ class RecorderThread(QObject):
         env.remove("PYTHONHOME")
         env.remove("PYTHONPATH")
         env.insert("MICECAM_STOP_FILE", self.stop_file)
+        env.insert("MICECAM_ENABLE_PREVIEW", "1" if cfg.get("preview_enabled", False) else "0")
 
         # If we wanted to copy from a clean dict, we'd iterate and insert,
         # but systemEnvironment() gives us everything.

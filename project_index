@@ -33,6 +33,7 @@
 - Native production phase plan: `docs/plan/phase-native-app-integration.md`
 - Native runtime architecture notes: `docs/wikis/native-app-runtime-architecture.md`
 - Native release checklist: `docs/wikis/native-app-release-checklist.md`
+- Windows development pitfalls and packaging gotchas: `docs/wikis/windows-dev-pitfalls.md`
 - Native app dev merge review: `docs/reports/reviews/native-app-dev-merge-review-03-11-19.md`
 
 ## Notable Constraints

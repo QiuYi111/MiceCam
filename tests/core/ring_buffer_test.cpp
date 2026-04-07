@@ -1,4 +1,4 @@
-#include "micecam/core/ring_buffer.h"
+#include "domain/ring_buffer.h"
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>

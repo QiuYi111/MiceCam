@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+src/micecam.egg-info/PKG-INFO
+src/micecam.egg-info/SOURCES.txt
+src/micecam.egg-info/dependency_links.txt
+src/micecam.egg-info/requires.txt
+src/micecam.egg-info/top_level.txt

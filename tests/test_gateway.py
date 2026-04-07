@@ -9,10 +9,10 @@ API_URL = "http://127.0.0.1:18080/api"
 def test_oak_recording():
     session_name = "test_auto_resume"
     print(f"--- Starting OAK Stress Test: {session_name} ---")
-    
+
     # Cooldown
     time.sleep(2)
-    
+
     # 1. Start Recording
     payload = {
         "device_index": "oak",
@@ -24,14 +24,14 @@ def test_oak_recording():
     if not resp.json().get("success"):
         print(f"FAILED to start: {resp.json()}")
         return
-    
+
     print("Recording started. Waiting 10s for activity...")
     time.sleep(10)
-    
+
     # Check status
     stats = requests.get(f"{API_URL}/status").json()
     print(f"Initial Stats: {stats}")
-    
+
     if not stats.get("is_recording") or stats.get("error"):
         print(f"ERROR: Recording failed or inactive: {stats.get('error')}")
         return
@@ -50,10 +50,10 @@ def test_oak_recording():
 
     print("Worker killed. Waiting for Gateway to auto-resume (approx 3-5s)...")
     time.sleep(10)
-    
+
     stats = requests.get(f"{API_URL}/status").json()
     print(f"Stats after resume: {stats}")
-    
+
     captured = stats.get("captured")
     if stats.get("is_recording") and captured is not None and captured >= 0:
         print("SUCCESS: Auto-resume verified.")
@@ -64,7 +64,7 @@ def test_oak_recording():
     # 3. Stop and Verify Decoding
     print("Stopping recording...")
     requests.post(f"{API_URL}/stop")
-    
+
     print("Waiting for decoding to complete...")
     for _ in range(30):
         time.sleep(2)
@@ -73,7 +73,7 @@ def test_oak_recording():
         if prog.get("status") == "completed":
             print("Decoding finished.")
             break
-            
+
     # 4. Final Directory Check
     target_dir = os.path.join("recordings", f"{session_name}_images")
     subfolders = ["CAM_A", "CAM_B", "CAM_C", "CAM_D"]
@@ -85,7 +85,7 @@ def test_oak_recording():
         else:
             print(f"Folder {sf}: FAILED (Missing or empty)")
             all_ok = False
-            
+
     if all_ok:
         print("--- ALL OAK FEATURES VERIFIED SUCCESSFULLY ---")
     else:

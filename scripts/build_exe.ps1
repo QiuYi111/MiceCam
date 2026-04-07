@@ -80,17 +80,16 @@ Write-Host "Done! Distribution Ready at: $release_dir"
 # --- 4. Build MSI (Optional) ---
 if (Test-Path "scripts/setup.wxs") {
    Write-Host "Building MSI..."
-   
+
    # Ensure Release Directory
    if (!(Test-Path "release")) { New-Item -ItemType Directory -Force -Path "release" | Out-Null }
 
    # Clean recordings from release before packing
    if (Test-Path "$release_dir\recordings") { Remove-Item -Recurse -Force "$release_dir\recordings" }
-   
+
    & "C:\Program Files (x86)\WiX Toolset v3.14\bin\heat.exe" dir "$release_dir" -cg MiceCamGroup -dr INSTALLFOLDER -scom -sreg -sfrag -srd -gg -out files.wxs
    & "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe" scripts/setup.wxs files.wxs -ext WixUIExtension
    & "C:\Program Files (x86)\WiX Toolset v3.14\bin\light.exe" -out "release/MiceCam.msi" setup.wixobj files.wixobj -b "$release_dir" -ext WixUIExtension
-   
+
    Write-Host "MSI Created: release/MiceCam.msi"
 }
-

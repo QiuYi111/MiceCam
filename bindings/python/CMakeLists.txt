@@ -1,6 +1,44 @@
 # Python bindings for MiceCam using Pybind11
 # This module is only built when BUILD_PYTHON_BINDINGS=ON
 
+# If the caller pins Python3_EXECUTABLE (for example to a local uv-managed
+# CPython), pre-seed the include/lib hints so FindPython3 can resolve the
+# matching development artifacts instead of falling back to vcpkg's Python.
+if(DEFINED Python3_EXECUTABLE AND NOT DEFINED Python3_LIBRARY)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c
+                "import sysconfig; print(sysconfig.get_path('include')); print(sysconfig.get_config_var('LIBDIR') or ''); print(sysconfig.get_config_var('LDLIBRARY') or '')"
+        OUTPUT_VARIABLE MICECAM_PYTHON3_PATH_INFO
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE MICECAM_PYTHON3_INFO_RESULT
+    )
+
+    if(MICECAM_PYTHON3_INFO_RESULT EQUAL 0)
+        string(REPLACE "\r\n" "\n" MICECAM_PYTHON3_PATH_INFO "${MICECAM_PYTHON3_PATH_INFO}")
+        string(REPLACE "\n" ";" MICECAM_PYTHON3_PATH_INFO "${MICECAM_PYTHON3_PATH_INFO}")
+        list(LENGTH MICECAM_PYTHON3_PATH_INFO MICECAM_PYTHON3_PATH_COUNT)
+
+        if(MICECAM_PYTHON3_PATH_COUNT GREATER 0)
+            list(GET MICECAM_PYTHON3_PATH_INFO 0 MICECAM_PYTHON3_INCLUDE_DIR)
+            if(EXISTS "${MICECAM_PYTHON3_INCLUDE_DIR}")
+                set(Python3_INCLUDE_DIR "${MICECAM_PYTHON3_INCLUDE_DIR}" CACHE PATH "Pinned Python include dir" FORCE)
+            endif()
+        endif()
+
+        if(MICECAM_PYTHON3_PATH_COUNT GREATER 2)
+            list(GET MICECAM_PYTHON3_PATH_INFO 1 MICECAM_PYTHON3_LIBDIR)
+            list(GET MICECAM_PYTHON3_PATH_INFO 2 MICECAM_PYTHON3_LIBNAME)
+            if(MICECAM_PYTHON3_LIBDIR AND MICECAM_PYTHON3_LIBNAME)
+                set(MICECAM_PYTHON3_LIBRARY "${MICECAM_PYTHON3_LIBDIR}/${MICECAM_PYTHON3_LIBNAME}")
+                if(EXISTS "${MICECAM_PYTHON3_LIBRARY}")
+                    set(Python3_LIBRARY "${MICECAM_PYTHON3_LIBRARY}" CACHE FILEPATH "Pinned Python library" FORCE)
+                    set(Python3_LIBRARY_RELEASE "${MICECAM_PYTHON3_LIBRARY}" CACHE FILEPATH "Pinned Python release library" FORCE)
+                endif()
+            endif()
+        endif()
+    endif()
+endif()
+
 # Find Python first
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 message(STATUS "Python3 found: ${Python3_EXECUTABLE}")
@@ -16,7 +54,7 @@ if(NOT pybind11_FOUND)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE PYBIND11_RESULT
     )
-    
+
     if(PYBIND11_RESULT EQUAL 0 AND EXISTS "${PYBIND11_CMAKE_DIR}")
         message(STATUS "Found pip-installed pybind11: ${PYBIND11_CMAKE_DIR}")
         list(APPEND CMAKE_PREFIX_PATH "${PYBIND11_CMAKE_DIR}")
@@ -47,6 +85,10 @@ target_link_libraries(_micecam PRIVATE
     micecam_camera
 )
 
+if(TARGET micecam_oak)
+    target_link_libraries(_micecam PRIVATE micecam_oak)
+endif()
+
 # Pass OAK camera define if it was built with OAK support
 if(DEPTHAI_FOUND)
     target_compile_definitions(_micecam PRIVATE WITH_OAK_CAMERA=1)
@@ -63,7 +105,8 @@ if(WITH_CAMERA_BACKEND)
 endif()
 
 target_include_directories(_micecam PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/api
+    ${CMAKE_SOURCE_DIR}/internal
 )
 
 # Set the output name without lib prefix

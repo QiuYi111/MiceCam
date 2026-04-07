@@ -1,0 +1,45 @@
+# MiceCam Project Index
+
+## Overview
+- `cmd/micecam_ui/`: Native Qt/QML desktop application entry, QML scene, and UI-facing controller.
+- `cmd/gui/`: Legacy Python/PyQt and web-based UI implementations kept for reference and fallback.
+- `internal/`: Core C++ capture, pipeline, storage, and decoder logic.
+- `bindings/`: Python bindings for the native C++ core.
+- `tests/`: C++ and Python automated tests.
+- `docs/requirements/`: Product requirements and acceptance criteria.
+- `docs/adr/`: Architecture decision records.
+- `docs/plan/`: Phase-level implementation plans.
+- `docs/reports/`: Review and implementation reports.
+- `docs/wikis/`: Architecture and design knowledge base.
+
+## Current UI Stack
+- Current shipping native UI entry: `cmd/micecam_ui/main.cpp`
+- Current QML scene: `cmd/micecam_ui/qml/main.qml`
+- Shared QML components: `cmd/micecam_ui/qml/components/`
+- QML theme tokens: `cmd/micecam_ui/qml/theme/`
+- UI state bridge: `cmd/micecam_ui/PipelineController.h`
+- Supervisor lifecycle service: `cmd/micecam_ui/RecordingSupervisorService.h`
+- Worker process runtime bridge: `cmd/micecam_ui/WorkerProcessRuntime.h`
+- Headless native worker entry/runtime: `cmd/micecam_ui/NativeWorkerRuntime.h`
+- Camera inventory model: `cmd/micecam_ui/CameraInventoryModel.h`
+- Recording setup and preflight helpers: `cmd/micecam_ui/RecordingSetup.h`
+- Structured activity feed model: `cmd/micecam_ui/ActivityEventModel.h`
+- Live preview provider: `cmd/micecam_ui/VideoFrameProvider.h`
+- Native app preflight tests: `tests/ui/native_app_preflight_test.cpp`
+- Native app supervisor lifecycle tests: `tests/ui/recording_supervisor_service_test.cpp`
+- Legacy desktop UI reference: `cmd/gui/gui/main_window.py`
+- Native production integration requirements: `docs/requirements/native-app-production-integration.md`
+- Native worker runtime ADR: `docs/adr/0001-native-worker-process-runtime.md`
+- Native production phase plan: `docs/plan/phase-native-app-integration.md`
+- Native runtime architecture notes: `docs/wikis/native-app-runtime-architecture.md`
+- Native release checklist: `docs/wikis/native-app-release-checklist.md`
+- Native app dev merge review: `docs/reports/reviews/native-app-dev-merge-review-03-11-19.md`
+
+## Notable Constraints
+- Active QML UI has been refactored into a preview-first workspace with reusable components and a tokenized theme layer.
+- Camera inventory, capability-driven selection, controller-side preflight, and worker-process supervision now exist in the native UI path.
+- USB camera selection now needs a shared FFmpeg-backed inventory source so the UI and worker resolve the same backend-native device identity on Windows test machines.
+- Preview transport now runs through a capped worker-to-UI JPEG path with latest-frame-only semantics; further optimization is still possible but the isolation boundary is in place.
+- Native worker smoke script: `scripts/smoke_native_app.sh`
+- Legacy Python UI remains the strongest reference for worker isolation and preview budget strategy.
+- Existing git worktree contains unrelated local changes under `3rdParty/depthai-core`.

@@ -30,6 +30,9 @@ public:
     [[nodiscard]] std::string get_backend_name() const override {
         return "FakeCamera";
     }
+    [[nodiscard]] PixelFormat get_current_format() const override {
+        return PixelFormat::RGB24;
+    }
 
     // Test controls
     void set_max_frames(uint64_t max) { max_frames_ = max; }

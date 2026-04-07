@@ -44,23 +44,23 @@ def http_get(url_path, params=None):
 def run_test():
     session_name = f"test_auto_{int(time.time())}"
     log(f"Starting test for session: {session_name}")
-    
+
     # 1. Start
     payload = {
-        "session_name": session_name, 
-        "output_dir": "recordings", 
+        "session_name": session_name,
+        "output_dir": "recordings",
         "auto_decode": True,
         "device_index": 0,
-        "resolution": "1920x1080", 
+        "resolution": "1920x1080",
         "fps": 30
     }
-    
+
     status, res = http_post("/api/start", payload)
     if status != 200:
         log(f"Start failed: {res}")
         return
     log("Start request sent. Waiting 5s for stability check...")
-    
+
     # 2. Wait and Check
     for i in range(5):
         time.sleep(1)
@@ -70,18 +70,18 @@ def run_test():
         except:
             log("❌ Gateway unreachable!")
             return
-            
+
         log(f"Checking status: {msg}")
         if not msg.get("is_recording"):
             log("❌ Recording stopped unexpectedly! Crash detected.")
             return
-    
+
     log("✅ Stability Check Passed (5s).")
 
     # 3. Stop
     log("Stopping recording...")
     http_post("/api/stop")
-    
+
     # 4. Poll
     log("Polling decode progress (Auto-decode check)...")
     timeout = 30
@@ -90,7 +90,7 @@ def run_test():
     while time.time() - start < timeout:
         status, prog = http_get("/api/decode_progress", {"session_name": session_name})
         log(f"Decode progress: {prog}")
-        
+
         stat = prog.get("status")
         if stat == "completed":
             log("✅ Decode completed!")
@@ -99,7 +99,7 @@ def run_test():
         elif stat == "failed":
             log(f"❌ Decode failed: {prog.get('error')}")
             break
-            
+
         time.sleep(1)
 
     if not success:
@@ -109,7 +109,7 @@ def run_test():
     log("Checking isolation (querying wrong session)...")
     _, prog = http_get("/api/decode_progress", {"session_name": "wrong_session"})
     log(f"Wrong session result: {prog}")
-    
+
     if prog.get("status") == "idle" or prog.get("reason") == "session_mismatch":
          log("✅ Session isolation confirmed.")
     else:

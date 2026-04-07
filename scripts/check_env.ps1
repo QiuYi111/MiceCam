@@ -15,7 +15,7 @@ $checksPassed = $true
 
 function Test-CommandExists {
     param($Command, $DisplayName)
-    
+
     $result = Get-Command $Command -ErrorAction SilentlyContinue
     if ($result) {
         Write-Host "  [OK] $DisplayName" -ForegroundColor Green
@@ -67,7 +67,7 @@ if (Test-Path $vsWhere) {
     if ($vsInfo) {
         $vsVersion = $vsInfo.installationVersion
         Write-Host "  [OK] Visual Studio $vsVersion detected" -ForegroundColor Green
-        
+
         # VS 2019 (16.x) and later support C++20
         $majorVersion = [int]($vsVersion.Split('.')[0])
         if ($majorVersion -ge 16) {
@@ -95,21 +95,21 @@ $buffer = New-Object byte[] $bufferSize
 
 try {
     Write-Host "  Testing write speed ($fileSizeMB MB)..." -ForegroundColor DarkGray
-    
+
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $fs = [System.IO.File]::OpenWrite($tempFile)
-    
+
     for ($i = 0; $i -lt $fileSizeMB; $i++) {
         $fs.Write($buffer, 0, $buffer.Length)
     }
-    
+
     $fs.Flush()
     $fs.Close()
     $sw.Stop()
-    
+
     $elapsedSeconds = $sw.ElapsedMilliseconds / 1000
     $speedMBps = [math]::Round($fileSizeMB / $elapsedSeconds, 1)
-    
+
     if ($speedMBps -ge 200) {
         Write-Host "  [OK] Write speed: $speedMBps MB/s (meets 200 MB/s target)" -ForegroundColor Green
     } elseif ($speedMBps -ge 100) {
@@ -119,7 +119,7 @@ try {
         Write-Host "  [X]  Write speed: $speedMBps MB/s (too slow for high-speed capture)" -ForegroundColor Red
         $script:checksPassed = $false
     }
-} 
+}
 catch {
     Write-Host "  [X]  Disk test failed: $_" -ForegroundColor Red
 }
@@ -165,7 +165,7 @@ Write-Host "   --------------"
 try {
     $mem = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
     $totalMemGB = [math]::Round($mem.TotalPhysicalMemory / 1GB, 1)
-    
+
     if ($totalMemGB -ge 4) {
         Write-Host "  [OK] Total RAM: $totalMemGB GB" -ForegroundColor Green
     } elseif ($totalMemGB -ge 2) {

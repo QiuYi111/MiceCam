@@ -14,14 +14,14 @@ protected:
     void SetUp() override {
         test_dir_ = "test_stream_output";
         std::filesystem::create_directories(test_dir_);
-        
+
         // Clean previous
         fs::remove_all(test_dir_);
         fs::create_directories(test_dir_);
     }
 
     void TearDown() override {
-        // fs::remove_all(test_dir_); 
+        // fs::remove_all(test_dir_);
     }
 
     std::string test_dir_;
@@ -40,9 +40,15 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
 
     DiskWriter writer(config);
     RingBuffer buffer(10);
-    
+
     // 1. Initial Start -> Should create file and write header
+    const auto before_start_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
     ASSERT_TRUE(writer.start());
+    const auto after_start_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
 
     fs::path jsonl_path = fs::path(test_dir_) / "stream_test_metadata.jsonl";
     ASSERT_TRUE(fs::exists(jsonl_path));
@@ -55,6 +61,8 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
         auto j = nlohmann::json::parse(line);
         EXPECT_EQ(j["type"], "session_start");
         EXPECT_EQ(j["camera_backend"], "MockBackend");
+        EXPECT_GE(j["start_timestamp_ns"].get<uint64_t>(), before_start_ns);
+        EXPECT_LE(j["start_timestamp_ns"].get<uint64_t>(), after_start_ns);
     }
 
     // 2. Consume Frames
@@ -67,9 +75,10 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
         Frame frame;
         frame.data = std::move(data_ptr);
         frame.sequence_id = i;
-        frame.timestamp = std::chrono::time_point_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now()
+        const auto fixed_timestamp = std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>(
+            std::chrono::nanoseconds(1710000000000000000LL + i)
         );
+        frame.timestamp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(fixed_timestamp);
         buffer.push(std::move(frame));
     }
 
@@ -80,10 +89,10 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
     {
         std::ifstream f(jsonl_path);
         std::string line;
-        
+
         // Header
-        std::getline(f, line); 
-        
+        std::getline(f, line);
+
         // Frames
         int count = 0;
         while(std::getline(f, line)) {
@@ -92,6 +101,14 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
             if (j["type"] == "frame") {
                 count++;
                 EXPECT_EQ(j["sequence_id"], count);
+                const auto expected_timestamp = std::chrono::time_point_cast<std::chrono::nanoseconds>(
+                    std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                        std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds>(
+                            std::chrono::nanoseconds(1710000000000000000LL + count)
+                        )
+                    )
+                ).time_since_epoch().count();
+                EXPECT_EQ(j["timestamp_ns"], expected_timestamp);
             }
         }
         EXPECT_EQ(count, 3) << "Should have streamed 3 frames to disk";
@@ -102,6 +119,9 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
 
     // Verify Footer
     {
+        const auto before_stop_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
         std::ifstream f(jsonl_path);
         std::string line;
         std::string last_line;
@@ -111,6 +131,10 @@ TEST_F(DiskWriterStreamTest, StreamsMetadataToJsonl) {
         auto j = nlohmann::json::parse(last_line);
         EXPECT_EQ(j["type"], "session_end");
         EXPECT_EQ(j["total_frames"], 3);
+        EXPECT_GE(j["start_timestamp_ns"].get<uint64_t>(), before_start_ns);
+        EXPECT_LE(j["start_timestamp_ns"].get<uint64_t>(), after_start_ns);
+        EXPECT_GE(j["end_timestamp_ns"].get<uint64_t>(), j["start_timestamp_ns"].get<uint64_t>());
+        EXPECT_LE(j["end_timestamp_ns"].get<uint64_t>(), before_stop_ns);
     }
 }
 

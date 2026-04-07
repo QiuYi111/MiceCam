@@ -1,0 +1,14 @@
+LICENSE
+README.md
+pyproject.toml
+internal/micecam/__init__.py
+internal/micecam.egg-info/PKG-INFO
+internal/micecam.egg-info/SOURCES.txt
+internal/micecam.egg-info/dependency_links.txt
+internal/micecam.egg-info/requires.txt
+internal/micecam.egg-info/top_level.txt
+tests/test_crash.py
+tests/test_gateway.py
+tests/test_oak_python.py
+tests/test_pipeline.py
+tests/test_webcam_4k.py

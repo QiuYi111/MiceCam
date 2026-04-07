@@ -27,7 +27,7 @@ def main():
              print("Initialized Master Hardware.")
         else:
              print("Failed Init.")
-             
+
         master.start()
         print("Started.")
         time.sleep(2)

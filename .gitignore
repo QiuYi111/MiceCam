@@ -1,6 +1,8 @@
 build/
 .clangd/
 .cache/
+.DS_Store
+__pycache__/
 *.bin
 *.json
 *.h5
@@ -9,6 +11,8 @@ test_output/
 .vscode/
 .idea/
 3rdParty/*
+!3rdParty/depthai-core
+!3rdParty/engineering_framework
 *.log
 recordings/
 *_images/
@@ -29,3 +33,9 @@ build_pyinstaller/
 *.wixpdb
 files.wxs
 *.msi
+build_test/
+build_test/*
+vcpkg/
+vcpkg_installed/
+build_test_vcpkg/
+build/

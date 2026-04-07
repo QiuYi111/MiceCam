@@ -1,0 +1,12 @@
+numpy>=1.24.0
+
+[dev]
+pytest>=7.0.0
+ruff>=0.1.0
+mypy>=1.0.0
+pre-commit>=3.0.0
+
+[gui]
+PyQt6>=6.5.0
+pyqtgraph>=0.13.0
+pyqtdarktheme>=2.1.0

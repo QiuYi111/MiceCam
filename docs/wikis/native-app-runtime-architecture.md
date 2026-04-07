@@ -184,6 +184,16 @@ These services own:
 - inventory refresh
 - backend-specific translation
 
+For USB cameras, the inventory source should match the runtime source of truth.
+
+That means:
+
+- the UI should not enumerate USB cameras through Qt while the worker opens them through FFmpeg
+- the FFmpeg worker and the UI should share the same enumeration logic and backend-native device identity
+- operator-visible refresh should re-run that shared inventory query and preserve the current selection only when the same backend device is still present
+
+This avoids machine-specific failures where Qt can see a webcam but FFmpeg/dshow cannot reopen the same device reliably by index on a different process or test rig.
+
 ### 7.4 Preview Channel
 
 The preview channel should have an explicit contract:

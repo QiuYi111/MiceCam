@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
+$NativeBuildDir = Join-Path $ProjectRoot "build-python-package"
 $DistRoot = Join-Path $ProjectRoot "dist"
 $AppDistDir = Join-Path $DistRoot "MiceCam"
 $WorkerStageRoot = Join-Path $ProjectRoot "dist_worker_stage"
@@ -22,7 +23,8 @@ $PackagingDir = Join-Path $ProjectRoot "packaging\\windows"
 $ComponentsFile = Join-Path $PackagingDir "components.wxs"
 $InstallerPath = Join-Path $DistRoot "MiceCam-Installer.msi"
 $VenvPython = Join-Path $ProjectRoot ".venv\\Scripts\\python.exe"
-$WixExe = Join-Path $ProjectRoot ".tools\\wix.exe"
+$WixToolPath = Join-Path $ProjectRoot ".wix-tools"
+$WixExe = Join-Path $WixToolPath "wix.exe"
 
 function Require-Command {
     param([string]$Name)
@@ -32,8 +34,30 @@ function Require-Command {
     }
 }
 
+function Find-CMakeExe {
+    $candidates = @(
+        "cmake",
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe",
+        "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+    )
+
+    foreach ($candidate in $candidates) {
+        $command = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($command) {
+            return $command.Source
+        }
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Required command 'cmake' was not found in PATH or common Visual Studio locations."
+}
+
 function Find-BindingsReleaseDir {
     $candidates = @(
+        "build-python-package\\bindings\\python\\Release",
         "build-codex-oak-py314\\bindings\\python\\Release",
         "build\\bindings\\python\\Release",
         "build-feat-winpkg\\bindings\\python\\Release",
@@ -63,18 +87,18 @@ if (-not (Test-Path $VenvPython)) {
 }
 
 $bindingsReleaseDir = Find-BindingsReleaseDir
-if (-not $bindingsReleaseDir -and -not $SkipNativeBuild) {
-    Require-Command -Name "cmake"
+if (-not $SkipNativeBuild) {
+    $cmakeExe = Find-CMakeExe
     $toolchain = Join-Path $ProjectRoot "vcpkg\\scripts\\buildsystems\\vcpkg.cmake"
     if (-not (Test-Path $toolchain)) {
         throw "vcpkg toolchain not found at $toolchain"
     }
 
-    Write-Host "Native bindings not found. Building Release bindings..."
-    cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON
+    Write-Host "Building fresh native bindings in $NativeBuildDir ..."
+    & $cmakeExe -B $NativeBuildDir -S . -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DCMAKE_BUILD_TYPE=Release -DBUILD_PYTHON_BINDINGS=ON -DBUILD_QT_UI=OFF -DMICECAM_BUILD_TESTS=OFF -DBUILD_TESTS=OFF -DPython3_EXECUTABLE="$VenvPython" -DPython3_ROOT_DIR="$($VenvPython | Split-Path -Parent | Split-Path -Parent)"
     if ($LASTEXITCODE -ne 0) { throw "CMake configure failed." }
 
-    cmake --build build --config Release
+    & $cmakeExe --build $NativeBuildDir --config Release
     if ($LASTEXITCODE -ne 0) { throw "CMake build failed." }
 
     $bindingsReleaseDir = Find-BindingsReleaseDir
@@ -128,7 +152,7 @@ if ($SkipMsi) {
 
 if (-not (Test-Path $WixExe)) {
     Write-Host "Installing WiX CLI locally..."
-    dotnet tool install wix --tool-path (Join-Path $ProjectRoot ".tools")
+    dotnet tool install wix --tool-path $WixToolPath
     if ($LASTEXITCODE -ne 0) { throw "Failed to install WiX CLI." }
 }
 

@@ -41,6 +41,7 @@ class RecorderThread(QObject):
         self._byte_buffer = bytearray()
         import tempfile
         self.stop_file = os.path.join(tempfile.gettempdir(), f"micecam_stop_{id(self)}.txt")
+        self.status_file = os.path.join(tempfile.gettempdir(), f"micecam_status_{id(self)}.json")
 
     def start(self):
         if self._is_running: return
@@ -134,6 +135,7 @@ class RecorderThread(QObject):
         env.remove("PYTHONHOME")
         env.remove("PYTHONPATH")
         env.insert("MICECAM_STOP_FILE", self.stop_file)
+        env.insert("MICECAM_STATUS_FILE", self.status_file)
         env.insert("MICECAM_ENABLE_PREVIEW", "1" if cfg.get("preview_enabled", False) else "0")
 
         # If we wanted to copy from a clean dict, we'd iterate and insert,

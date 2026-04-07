@@ -10,6 +10,16 @@ namespace fs = std::filesystem;
 
 namespace micecam {
 
+namespace {
+
+uint64_t system_time_now_ns() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
+}
+
+}  // namespace
+
 // Simple CRC32 implementation (can be replaced with faster version if needed)
 uint32_t DiskWriter::compute_crc32(const uint8_t* data, size_t length) {
     uint32_t crc = 0xFFFFFFFF;
@@ -27,10 +37,6 @@ uint32_t DiskWriter::compute_crc32(const uint8_t* data, size_t length) {
 
 DiskWriter::DiskWriter(const SessionConfig& config)
     : config_(config), rolling_checksum_(0) {
-    session_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()
-    ).count();
-
 #ifdef _WIN32
     // Allocate sector-aligned memory for unbuffered I/O
     aggregation_buffer_ = static_cast<uint8_t*>(VirtualAlloc(NULL, AGGREGATION_THRESHOLD, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
@@ -108,6 +114,7 @@ bool DiskWriter::start() {
     }
 
     // Initialize session metadata
+    session_start_ns_ = system_time_now_ns();
     session_metadata_ = SessionMetadata{
         .session_name = config_.session_name,
         .camera_backend = config_.camera_backend_name,
@@ -332,9 +339,7 @@ bool DiskWriter::finalize() {
 #endif
 
     // Update session metadata
-    const uint64_t session_end_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::high_resolution_clock::now().time_since_epoch()
-    ).count();
+    const uint64_t session_end_ns = system_time_now_ns();
 
     session_metadata_.end_timestamp_ns = session_end_ns;
     session_metadata_.total_frames = frames_written_.load();

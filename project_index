@@ -38,6 +38,7 @@
 ## Notable Constraints
 - Active QML UI has been refactored into a preview-first workspace with reusable components and a tokenized theme layer.
 - Camera inventory, capability-driven selection, controller-side preflight, and worker-process supervision now exist in the native UI path.
+- USB camera selection now needs a shared FFmpeg-backed inventory source so the UI and worker resolve the same backend-native device identity on Windows test machines.
 - Preview transport now runs through a capped worker-to-UI JPEG path with latest-frame-only semantics; further optimization is still possible but the isolation boundary is in place.
 - Native worker smoke script: `scripts/smoke_native_app.sh`
 - Legacy Python UI remains the strongest reference for worker isolation and preview budget strategy.

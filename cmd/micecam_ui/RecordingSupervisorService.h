@@ -12,6 +12,7 @@ namespace micecam_ui {
 struct RecordingStartRequest {
     QString backendId;
     int deviceIndex = -1;
+    QString deviceName;
     QString sessionName;
     QString outputDir;
     QSize resolution;

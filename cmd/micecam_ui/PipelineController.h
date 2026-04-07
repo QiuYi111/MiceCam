@@ -142,6 +142,7 @@ private:
     void refreshReadiness();
     QString currentBackendId() const;
     int currentDeviceIndex() const;
+    QString currentDeviceName() const;
     void syncFromSupervisor();
     void rebuildLogMessages();
 

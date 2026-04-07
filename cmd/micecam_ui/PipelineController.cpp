@@ -113,6 +113,22 @@ QList<CaptureDeviceDescriptor> enumerateDevices() {
         fallbackFps.push_back(fps);
     }
 
+#if defined(_WIN32)
+    const auto cameras = micecam::FFmpegCameraBackend::enumerate_video_devices();
+    for (int i = 0; i < static_cast<int>(cameras.size()); ++i) {
+        const auto& camera = cameras.at(static_cast<size_t>(i));
+        CaptureDeviceDescriptor device;
+        device.deviceId = QStringLiteral("ffmpeg:%1").arg(i);
+        device.backendId = "ffmpeg";
+        device.displayName = QString::fromStdString(camera.display_name);
+        device.backendDeviceName = QString::fromStdString(camera.input_name);
+        device.deviceIndex = i;
+        device.available = true;
+        device.supportedResolutions = fallbackResolutions;
+        device.supportedFps = fallbackFps;
+        devices.push_back(device);
+    }
+#else
     const auto cameras = QMediaDevices::videoInputs();
     for (int i = 0; i < cameras.size(); ++i) {
         QStringList cameraResolutions;
@@ -123,12 +139,14 @@ QList<CaptureDeviceDescriptor> enumerateDevices() {
         device.deviceId = QStringLiteral("ffmpeg:%1").arg(i);
         device.backendId = "ffmpeg";
         device.displayName = cameras.at(i).description();
+        device.backendDeviceName = cameras.at(i).description();
         device.deviceIndex = i;
         device.available = true;
         device.supportedResolutions = cameraResolutions.isEmpty() ? fallbackResolutions : cameraResolutions;
         device.supportedFps = cameraFps.isEmpty() ? fallbackFps : cameraFps;
         devices.push_back(device);
     }
+#endif
 #endif
 
     return devices;
@@ -367,14 +385,38 @@ void PipelineController::setRequestedFps(double fps) {
 }
 
 void PipelineController::refreshCameraInventory() {
+    const auto previousDevices = m_cameraInventoryModel->devices();
+    const CaptureDeviceDescriptor previousSelection =
+        (m_selectedCameraIndex >= 0 && m_selectedCameraIndex < previousDevices.size())
+            ? previousDevices.at(m_selectedCameraIndex)
+            : CaptureDeviceDescriptor{};
+
     const QList<CaptureDeviceDescriptor> devices = enumerateDevices();
     m_cameraInventoryModel->setDevices(devices);
 
     int nextIndex = m_selectedCameraIndex;
     if (devices.isEmpty()) {
         nextIndex = -1;
-    } else if (nextIndex < 0 || nextIndex >= devices.size()) {
-        nextIndex = 0;
+    } else {
+        nextIndex = -1;
+        for (int index = 0; index < devices.size(); ++index) {
+            const auto& device = devices.at(index);
+            const bool sameBackend = !previousSelection.backendId.isEmpty() &&
+                device.backendId == previousSelection.backendId;
+            const bool sameDeviceName = !previousSelection.backendDeviceName.isEmpty() &&
+                device.backendDeviceName == previousSelection.backendDeviceName;
+            const bool sameDeviceId = !previousSelection.deviceId.isEmpty() &&
+                device.deviceId == previousSelection.deviceId;
+
+            if ((sameBackend && sameDeviceName) || sameDeviceId) {
+                nextIndex = index;
+                break;
+            }
+        }
+
+        if (nextIndex < 0 || nextIndex >= devices.size()) {
+            nextIndex = 0;
+        }
     }
 
     m_selectedCameraIndex = nextIndex;
@@ -416,6 +458,7 @@ void PipelineController::startRecording() {
     RecordingStartRequest request;
     request.backendId = currentBackendId();
     request.deviceIndex = currentDeviceIndex();
+    request.deviceName = currentDeviceName();
     request.sessionName = m_sanitizedSessionName;
     request.outputDir = m_outputDir;
     request.resolution = QSize(resolutionParts.at(0).toInt(), resolutionParts.at(1).toInt());
@@ -511,6 +554,14 @@ int PipelineController::currentDeviceIndex() const {
         return -1;
     }
     return devices.at(m_selectedCameraIndex).deviceIndex;
+}
+
+QString PipelineController::currentDeviceName() const {
+    const auto devices = m_cameraInventoryModel->devices();
+    if (m_selectedCameraIndex < 0 || m_selectedCameraIndex >= devices.size()) {
+        return {};
+    }
+    return devices.at(m_selectedCameraIndex).backendDeviceName;
 }
 
 void PipelineController::syncFromSupervisor() {

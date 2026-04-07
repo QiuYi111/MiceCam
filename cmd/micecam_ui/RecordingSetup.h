@@ -10,6 +10,7 @@ struct CaptureDeviceDescriptor {
     QString deviceId;
     QString backendId;
     QString displayName;
+    QString backendDeviceName;
     int deviceIndex = -1;
     bool available = false;
     QStringList supportedResolutions;

@@ -129,6 +129,20 @@ void IngestionPipeline::camera_thread_func() {
             latest_preview_frame_ = frame->clone();
         }
 
+        // Push the same frame to any attached observers (for example Python-side
+        // preview IPC) before ownership moves into the disk-write ring buffer.
+        const FrameView view{
+            .data = frame->data ? frame->data->data() : nullptr,
+            .size = frame->size(),
+            .sequence_id = frame->sequence_id,
+            .timestamp = std::chrono::duration<double>(frame->timestamp.time_since_epoch()).count(),
+            .format = frame->format,
+            .width = frame->width,
+            .height = frame->height,
+            .metadata_json = nullptr,
+        };
+        dispatcher_.dispatch(view);
+
         // Critical path: push to ring buffer for disk write
         if (!buffer_.try_push(std::move(*frame))) {
             frames_dropped_.fetch_add(1);

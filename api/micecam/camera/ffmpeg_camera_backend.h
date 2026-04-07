@@ -14,6 +14,11 @@ struct AVInputFormat;
 
 namespace micecam {
 
+struct FFmpegVideoDeviceInfo {
+    std::string input_name;
+    std::string display_name;
+};
+
 class FFmpegCameraBackend : public ICameraBackend {
 public:
     FFmpegCameraBackend();
@@ -45,6 +50,8 @@ public:
     [[nodiscard]] std::vector<int> get_supported_fps() const override {
         return {30, 60};
     }
+
+    [[nodiscard]] static std::vector<FFmpegVideoDeviceInfo> enumerate_video_devices();
 
 private:
     CameraConfig config_;

@@ -73,6 +73,7 @@ bool WorkerProcessRuntime::startSession(const RecordingStartRequest& request, QS
     command.insert("type", "start");
     command.insert("backendId", request.backendId);
     command.insert("deviceIndex", request.deviceIndex);
+    command.insert("deviceName", request.deviceName);
     command.insert("sessionName", request.sessionName);
     command.insert("outputDir", request.outputDir);
     command.insert("width", request.resolution.width());

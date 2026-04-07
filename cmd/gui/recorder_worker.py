@@ -1,6 +1,7 @@
 import sys
 import os
 from pathlib import Path
+import tempfile
 
 
 def configure_extension_search_path():
@@ -164,7 +165,10 @@ def main():
 
     print(f"[Worker] Starting recording session: {session_name} ({backend}) {'(Append Mode)' if append_mode else ''}")
 
-    status_file = "recorder_status.json"
+    status_file = os.environ.get("MICECAM_STATUS_FILE")
+    if not status_file:
+        status_file = os.path.join(tempfile.gettempdir(), f"{session_name}_recorder_status.json")
+    status_tmp_file = status_file + ".tmp"
     pipelines = []
     oak_master = None
 
@@ -356,10 +360,17 @@ def main():
                 last_ts = now
                 last_total_bytes = current_total_bytes
 
-                # Update status file atomically
-                with open(status_file + ".tmp", "w") as f:
-                    json.dump(summary_stats, f)
-                os.replace(status_file + ".tmp", status_file)
+                # Update status file atomically when possible, but never let
+                # status publishing kill an otherwise healthy recording session.
+                try:
+                    status_dir = os.path.dirname(status_file)
+                    if status_dir:
+                        os.makedirs(status_dir, exist_ok=True)
+                    with open(status_tmp_file, "w", encoding="utf-8") as f:
+                        json.dump(summary_stats, f)
+                    os.replace(status_tmp_file, status_file)
+                except Exception as status_error:
+                    print(f"[Worker] Status update warning: {status_error}", flush=True)
 
                 # IPC for Qt (Print to stdout)
                 print(f"STATUS_UPDATE:{json.dumps(summary_stats)}", flush=True)

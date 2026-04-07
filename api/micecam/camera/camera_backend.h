@@ -3,6 +3,7 @@
 #include "domain/frame.h"
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace micecam {
 
@@ -11,6 +12,7 @@ struct CameraConfig {
     int height = 480;
     double fps = 30.0;
     int device_id = 0;
+    std::string device_name;
 
     // Validate configuration
     [[nodiscard]] bool validate() const noexcept {

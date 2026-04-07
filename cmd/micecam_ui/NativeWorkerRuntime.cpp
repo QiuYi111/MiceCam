@@ -130,6 +130,7 @@ void NativeWorkerRuntime::startRecording(const QJsonObject& command) {
     camConfig.height = command.value("height").toInt();
     camConfig.fps = command.value("fps").toDouble();
     camConfig.device_id = command.value("deviceIndex").toInt();
+    camConfig.device_name = command.value("deviceName").toString().toStdString();
 
     try {
         if (m_backendId == "oak") {

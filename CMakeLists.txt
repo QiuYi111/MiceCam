@@ -37,6 +37,7 @@ endif()
 option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings (requires pybind11)" OFF)
 option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
+option(BUILD_QT_UI "Build the Qt6 native UI targets" ON)
 option(MICECAM_USE_PREBUILT_DEPTHAI "Use a prebuilt depthai package instead of the git submodule" OFF)
 
 set(MICECAM_PREBUILT_DEPTHAI_DIR
@@ -85,6 +86,19 @@ if(WITH_OAK_CAMERA)
         set(DEPTHAI_XTENSOR_SUPPORT ON CACHE BOOL "Enable depthai-core xtensor support" FORCE)
         set(DEPTHAI_ENABLE_REMOTE_CONNECTION OFF CACHE BOOL "Disable depthai-core remote connection" FORCE)
 
+        if(NOT DEFINED DEPTHAI_XLINK_LOCAL OR DEPTHAI_XLINK_LOCAL STREQUAL "")
+            set(MICECAM_LOCAL_XLINK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build-native-win230/_deps/xlink-src")
+            if(EXISTS "${MICECAM_LOCAL_XLINK_DIR}/CMakeLists.txt")
+                set(DEPTHAI_XLINK_LOCAL "${MICECAM_LOCAL_XLINK_DIR}" CACHE PATH "Local XLink source for depthai-core" FORCE)
+            endif()
+        endif()
+        if(NOT DEFINED PKG_CONFIG_EXECUTABLE OR PKG_CONFIG_EXECUTABLE STREQUAL "")
+            set(MICECAM_PKGCONF_EXE "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/tools/pkgconf/pkgconf.exe")
+            if(EXISTS "${MICECAM_PKGCONF_EXE}")
+                set(PKG_CONFIG_EXECUTABLE "${MICECAM_PKGCONF_EXE}" CACHE FILEPATH "pkg-config executable" FORCE)
+            endif()
+        endif()
+
         set(XLINK_ENABLE_LIBUSB ON CACHE BOOL "" FORCE)
         set(XLINK_LIBUSB_SYSTEM ON CACHE BOOL "Use system libusb via vcpkg" FORCE)
 
@@ -100,17 +114,8 @@ if(WITH_OAK_CAMERA)
 
         add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
 
-<<<<<<< HEAD
-    set(MICECAM_THIRDPARTY_BUILD_TESTS ${BUILD_TESTS})
-    set(BUILD_TESTS OFF CACHE BOOL "Disable third-party test suites" FORCE)
-    add_subdirectory(${DEPTHAI_SUBMODULE_DIR} ${CMAKE_BINARY_DIR}/depthai-core EXCLUDE_FROM_ALL)
-    set(BUILD_TESTS ${MICECAM_THIRDPARTY_BUILD_TESTS} CACHE BOOL "Restore MiceCam test toggle" FORCE)
-
-    set(DEPTHAI_FOUND ON)
-=======
         set(DEPTHAI_FOUND ON)
     endif()
->>>>>>> feat/windows-packaging
 endif()
 
 
@@ -146,9 +151,6 @@ message(STATUS "MICECAM_USE_PREBUILT_DEPTHAI: ${MICECAM_USE_PREBUILT_DEPTHAI}")
 message(STATUS "FFMPEG_FOUND: ${FFMPEG_FOUND}")
 message(STATUS "OpenCV_FOUND: ${OpenCV_FOUND}")
 
-<<<<<<< HEAD
-if(MICECAM_BUILD_TESTS)
-=======
 function(micecam_copy_prebuilt_depthai_runtime target_name)
     if(NOT MICECAM_USE_PREBUILT_DEPTHAI)
         return()
@@ -164,8 +166,7 @@ function(micecam_copy_prebuilt_depthai_runtime target_name)
     )
 endfunction()
 
-if(BUILD_TESTS)
->>>>>>> feat/windows-packaging
+if(MICECAM_BUILD_TESTS)
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
@@ -175,16 +176,18 @@ if(BUILD_TESTS)
     enable_testing()
 endif()
 
-# ----- Qt6 configuration -----
-# Hint to find Qt6 installed via Homebrew when using vcpkg toolchain
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
+if(BUILD_QT_UI)
+    # ----- Qt6 configuration -----
+    # Hint to find Qt6 installed via Homebrew when using vcpkg toolchain
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
 
-find_package(Qt6 COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia REQUIRED)
-# Require C++17 or C++20 for Qt6 usually
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
-# -----------------------------
+    find_package(Qt6 COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia REQUIRED)
+    # Require C++17 or C++20 for Qt6 usually
+    set(CMAKE_AUTOMOC ON)
+    set(CMAKE_AUTORCC ON)
+    set(CMAKE_AUTOUIC ON)
+    # -----------------------------
+endif()
 
 # Core library (always built)
 add_library(micecam_core
@@ -213,10 +216,7 @@ target_link_libraries(micecam_core PUBLIC
 if(WITH_CAMERA_BACKEND)
     set(CAMERA_SOURCES
         internal/infrastructure/camera_backend.cpp
-<<<<<<< HEAD
         internal/infrastructure/ffmpeg_device_selector.cpp
-=======
->>>>>>> feat/windows-packaging
     )
 
     if(FFMPEG_FOUND)
@@ -287,16 +287,10 @@ if(WITH_CAMERA_BACKEND)
             target_link_libraries(micecam_oak_runtime PUBLIC ${MAC_FRAMEWORKS})
             target_link_libraries(micecam_oak PUBLIC ${MAC_FRAMEWORKS})
         endif()
-<<<<<<< HEAD
-    if(MICECAM_BUILD_TESTS)
-        add_executable(oak_camera_test tests/oak_camera_test.cpp)
-        target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
-        target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
-=======
-        if(BUILD_TESTS)
+        if(MICECAM_BUILD_TESTS)
             add_executable(oak_camera_test tests/oak_camera_test.cpp)
-            target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_oak depthai::core)
->>>>>>> feat/windows-packaging
+            target_link_libraries(oak_camera_test PRIVATE micecam_core micecam_camera depthai::core)
+            target_compile_definitions(oak_camera_test PRIVATE WITH_OAK_CAMERA)
             if(APPLE)
                 target_link_libraries(oak_camera_test PRIVATE ${MAC_FRAMEWORKS})
             endif()
@@ -337,16 +331,20 @@ if(WITH_CAMERA_BACKEND)
         endif()
         micecam_copy_prebuilt_depthai_runtime(oak_backend_inline_probe)
 
-        add_executable(oak_feature_probe cmd/examples/oak_feature_probe.cpp)
-        target_link_libraries(oak_feature_probe PRIVATE depthai::core)
-        if(APPLE)
-            target_link_libraries(oak_feature_probe PRIVATE ${MAC_FRAMEWORKS})
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmd/examples/oak_feature_probe.cpp")
+            add_executable(oak_feature_probe cmd/examples/oak_feature_probe.cpp)
+            target_link_libraries(oak_feature_probe PRIVATE depthai::core)
+            if(APPLE)
+                target_link_libraries(oak_feature_probe PRIVATE ${MAC_FRAMEWORKS})
+            endif()
         endif()
 
-        add_executable(depthai_link_probe cmd/examples/depthai_link_probe.cpp)
-        target_link_libraries(depthai_link_probe PRIVATE depthai::core)
-        if(APPLE)
-            target_link_libraries(depthai_link_probe PRIVATE ${MAC_FRAMEWORKS})
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmd/examples/depthai_link_probe.cpp")
+            add_executable(depthai_link_probe cmd/examples/depthai_link_probe.cpp)
+            target_link_libraries(depthai_link_probe PRIVATE depthai::core)
+            if(APPLE)
+                target_link_libraries(depthai_link_probe PRIVATE ${MAC_FRAMEWORKS})
+            endif()
         endif()
     endif()
 
@@ -424,32 +422,34 @@ if(WITH_CAMERA_BACKEND)
     target_link_libraries(micecam PRIVATE micecam_camera)
 endif()
 
-# Qt QML UI executable
-add_executable(micecam_ui
-    cmd/micecam_ui/main.cpp
-    cmd/micecam_ui/ActivityEventModel.cpp
-    cmd/micecam_ui/NativeWorkerRuntime.cpp
-    cmd/micecam_ui/PipelineController.cpp
-    cmd/micecam_ui/RecordingSupervisorService.cpp
-    cmd/micecam_ui/VideoFrameProvider.cpp
-    cmd/micecam_ui/WorkerProcessRuntime.cpp
-    cmd/micecam_ui/RecordingSetup.cpp
-    cmd/micecam_ui/CameraInventoryModel.cpp
-    cmd/micecam_ui/qml/qml.qrc
-)
+if(BUILD_QT_UI)
+    # Qt QML UI executable
+    add_executable(micecam_ui
+        cmd/micecam_ui/main.cpp
+        cmd/micecam_ui/ActivityEventModel.cpp
+        cmd/micecam_ui/NativeWorkerRuntime.cpp
+        cmd/micecam_ui/PipelineController.cpp
+        cmd/micecam_ui/RecordingSupervisorService.cpp
+        cmd/micecam_ui/VideoFrameProvider.cpp
+        cmd/micecam_ui/WorkerProcessRuntime.cpp
+        cmd/micecam_ui/RecordingSetup.cpp
+        cmd/micecam_ui/CameraInventoryModel.cpp
+        cmd/micecam_ui/qml/qml.qrc
+    )
 
-target_link_libraries(micecam_ui PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Qml
-    Qt6::Quick
-    Qt6::QuickControls2
-    Qt6::Multimedia
-    micecam_core
-)
+    target_link_libraries(micecam_ui PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::Multimedia
+        micecam_core
+    )
 
-if(WITH_CAMERA_BACKEND)
-    target_link_libraries(micecam_ui PRIVATE micecam_camera)
+    if(WITH_CAMERA_BACKEND)
+        target_link_libraries(micecam_ui PRIVATE micecam_camera)
+    endif()
 endif()
 
 

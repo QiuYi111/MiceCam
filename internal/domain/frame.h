@@ -10,17 +10,17 @@ namespace micecam {
 
 struct Frame {
     uint64_t sequence_id;
-    std::chrono::high_resolution_clock::time_point timestamp;
+    std::chrono::system_clock::time_point timestamp;
     std::unique_ptr<std::vector<uint8_t>> data;
     PixelFormat format = PixelFormat::MJPEG;
     uint32_t width = 0;
     uint32_t height = 0;
 
-    Frame() : sequence_id(0), timestamp(std::chrono::high_resolution_clock::now()) {}
+    Frame() : sequence_id(0), timestamp(std::chrono::system_clock::now()) {}
 
     Frame(uint64_t seq, std::unique_ptr<std::vector<uint8_t>> frame_data)
         : sequence_id(seq),
-          timestamp(std::chrono::high_resolution_clock::now()),
+          timestamp(std::chrono::system_clock::now()),
           data(std::move(frame_data)) {}
 
     // Non-copyable (ownership transfer)

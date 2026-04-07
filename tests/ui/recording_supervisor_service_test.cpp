@@ -6,7 +6,16 @@
 #include <QDir>
 #include <QTemporaryDir>
 
+#include <type_traits>
+#include <utility>
+
 namespace {
+
+template <typename T, typename = void>
+struct HasDeviceNameMember : std::false_type {};
+
+template <typename T>
+struct HasDeviceNameMember<T, std::void_t<decltype(std::declval<T>().deviceName)>> : std::true_type {};
 
 class FakeRecordingRuntime final : public micecam_ui::IRecordingRuntime {
 public:
@@ -95,6 +104,7 @@ protected:
         micecam_ui::RecordingStartRequest request;
         request.backendId = "ffmpeg";
         request.deviceIndex = 0;
+        request.deviceName = "HD USB Camera";
         request.sessionName = "session_001";
         request.outputDir = dir.path();
         request.resolution = QSize(1920, 1080);
@@ -263,6 +273,18 @@ TEST_F(RecordingSupervisorServiceTest, ResumeFailureFallsBackToRestartedReadySta
     EXPECT_EQ(service->lastErrorMessage(), "worker crashed Worker restarted but session resume failed: device re-acquire failed");
     EXPECT_TRUE(service->canRequestStart());
     EXPECT_EQ(runtimePtr->startCalls, 2);
+}
+
+TEST_F(RecordingSupervisorServiceTest, RecordingStartRequestShouldCarryUsbCameraDisplayName) {
+    EXPECT_TRUE(HasDeviceNameMember<micecam_ui::RecordingStartRequest>::value);
+}
+
+TEST_F(RecordingSupervisorServiceTest, ForwardsUsbCameraDisplayNameToRuntime) {
+    const auto request = makeRequest();
+
+    ASSERT_TRUE(service->startRecording(request, "/tmp/micecam_ui_worker"));
+
+    EXPECT_EQ(runtimePtr->lastRequest.deviceName, "HD USB Camera");
 }
 
 }  // namespace

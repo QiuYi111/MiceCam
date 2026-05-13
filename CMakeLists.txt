@@ -38,6 +38,7 @@ option(BUILD_BENCHMARKS "Build performance benchmarks" ON)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings (requires pybind11)" OFF)
 option(BUILD_GPU_PREVIEW "Build GPU preview module (requires CUDA)" OFF)
 option(BUILD_QT_UI "Build the Qt6 native UI targets" ON)
+option(BUILD_SPIKE "Build spike feasibility tests (headless)" OFF)
 option(MICECAM_USE_PREBUILT_DEPTHAI "Use a prebuilt depthai package instead of the git submodule" OFF)
 
 set(MICECAM_PREBUILT_DEPTHAI_DIR
@@ -509,4 +510,9 @@ endif()
 # GPU preview module (optional)
 if(BUILD_GPU_PREVIEW)
     add_subdirectory(src/gpu)
+endif()
+
+# Spike feasibility tests (optional, headless)
+if(BUILD_SPIKE)
+    add_subdirectory(cmd/spike)
 endif()

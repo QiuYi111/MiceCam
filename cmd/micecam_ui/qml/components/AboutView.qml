@@ -21,7 +21,7 @@ Item {
         
         Text {
             text: "Version 2.0.0 (Build 2026-05-13)"
-            font.family: "SF Pro Text"
+            font.family: Theme.fontPrimary
             font.pixelSize: 18
             color: Theme.textSecondary
             Layout.alignment: Qt.AlignHCenter
@@ -29,7 +29,7 @@ Item {
         
         Text {
             text: "High-performance scientific camera capture system.\nDesigned for reliable, continuous observation and recording."
-            font.family: "SF Pro Text"
+            font.family: Theme.fontPrimary
             font.pixelSize: 14
             color: Theme.textSecondary
             horizontalAlignment: Text.AlignHCenter
@@ -56,7 +56,7 @@ Item {
         
         Text {
             text: parent.text
-            font.family: "SF Pro Text"
+            font.family: Theme.fontPrimary
             font.pixelSize: 14
             color: Theme.navyPrimary
         }

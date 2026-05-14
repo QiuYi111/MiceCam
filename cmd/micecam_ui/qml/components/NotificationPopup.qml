@@ -21,7 +21,7 @@ Popup {
         
         RowLayout {
             Layout.margins: 16
-            Text { text: "Alerts"; font.family: "SF Pro Text"; font.pixelSize: 16; font.weight: Font.Bold }
+            Text { text: "Alerts"; font.family: Theme.fontPrimary; font.pixelSize: 16; font.weight: Font.Bold }
             Item { Layout.fillWidth: true }
             Text { text: "Clear All"; color: Theme.textSecondary; font.pixelSize: 12 }
         }
@@ -63,7 +63,7 @@ Popup {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 2
-                        Text { text: modelData.title; font.family: "SF Pro Text"; font.pixelSize: 12; font.weight: Font.DemiBold; elide: Text.ElideRight }
+                        Text { text: modelData.title; font.family: Theme.fontPrimary; font.pixelSize: 12; font.weight: Font.DemiBold; elide: Text.ElideRight }
                         Text { text: "System"; color: Theme.textSecondary; font.pixelSize: 10 }
                     }
                     
@@ -86,7 +86,7 @@ Popup {
             Layout.fillWidth: true
             height: 40
             color: "transparent"
-            Text { anchors.centerIn: parent; text: "Show All Alerts"; color: Theme.navyPrimary; font.family: "SF Pro Text"; font.pixelSize: 12 }
+            Text { anchors.centerIn: parent; text: "Show All Alerts"; color: Theme.navyPrimary; font.family: Theme.fontPrimary; font.pixelSize: 12 }
         }
     }
 }

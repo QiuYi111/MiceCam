@@ -34,7 +34,8 @@ Rectangle {
         property bool isRecording: true // Mock state
         
         StatusSegment {
-            Layout.preferredWidth: 120
+            Layout.minimumWidth: 130
+            Layout.preferredWidth: 130
             icon: "clock"
             text: "00:42:17"
             textColor: Theme.statusRed
@@ -44,7 +45,8 @@ Rectangle {
         Divider {}
         
         StatusSegment {
-            Layout.preferredWidth: 120
+            Layout.minimumWidth: 130
+            Layout.preferredWidth: 130
             icon: "camera"
             text: "5 cameras"
         }
@@ -52,7 +54,8 @@ Rectangle {
         Divider {}
         
         StatusSegment {
-            Layout.preferredWidth: 140
+            Layout.minimumWidth: 150
+            Layout.preferredWidth: 150
             icon: "film"
             text: "76,230 frames"
         }
@@ -60,14 +63,16 @@ Rectangle {
         Divider {}
         
         StatusSegment {
-            Layout.preferredWidth: 140
+            Layout.minimumWidth: 150
+            Layout.preferredWidth: 150
             icon: "chart"
             text: "29.97 fps avg"
         }
         
-        Item { Layout.fillWidth: true } // Spacer
+        Item { Layout.fillWidth: true }
         
         StatusSegment {
+            Layout.minimumWidth: 100
             Layout.preferredWidth: 100
             icon: "disk"
             text: "3.2 GB"
@@ -76,7 +81,8 @@ Rectangle {
         Divider {}
         
         StatusSegment {
-            Layout.preferredWidth: 160
+            Layout.minimumWidth: 170
+            Layout.preferredWidth: 170
             icon: "chart"
             text: "45% disk remaining"
             textColor: Theme.statusAmber
@@ -89,9 +95,9 @@ Rectangle {
         property string text: ""
         property color textColor: Theme.textPrimary
         property color iconColor: Theme.textPrimary
-        Layout.preferredWidth: 160
         Layout.fillHeight: true
-        spacing: 12
+        spacing: 8
+        clip: false
         
         AppIcon {
             name: icon
@@ -101,11 +107,12 @@ Rectangle {
         }
         Text {
             text: text
-            font.family: "SF Pro Text"
+            font.family: Theme.fontPrimary
             font.pixelSize: 13
             font.weight: Font.Medium
             color: textColor
             Layout.alignment: Qt.AlignVCenter
+            clip: false
         }
     }
     

@@ -7,217 +7,194 @@ Flickable {
     id: root
     contentHeight: mainCol.height
     clip: true
-    
+
+    ScrollBar.vertical: ScrollBar {}
+
     ColumnLayout {
         id: mainCol
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.margins: 32
-        spacing: 24
-        
-        // Header
+        spacing: 16
+
         RowLayout {
+            Layout.fillWidth: true
             spacing: 12
             Text {
-                text: "<  Cameras"
-                font.family: "SF Pro Text"
+                text: "\u2039 Cameras"
+                font.family: Theme.fontPrimary
                 font.pixelSize: 14
                 color: Theme.navyPrimary
-                MouseArea { anchors.fill: parent; onClicked: root.parent.parent.currentViewIndex = 0 }
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.parent.parent.currentViewIndex = 0 }
             }
         }
-        
+
         RowLayout {
-            Text { text: "Alerts"; font.family: "SF Pro Text"; font.pixelSize: 28; font.weight: Font.Bold; color: Theme.textPrimary }
+            Layout.fillWidth: true
+            Text { text: "Alerts"; font.family: Theme.fontPrimary; font.pixelSize: 28; font.weight: Font.Bold; color: Theme.textPrimary }
             Item { Layout.fillWidth: true }
             Row {
-                spacing: 8
-                Text { text: "✓"; color: Theme.statusGreen; font.pixelSize: 16 }
-                Text { text: "All changes saved automatically"; color: Theme.textSecondary; font.family: "SF Pro Text"; font.pixelSize: 12 }
+                spacing: 6
+                AppIcon {
+                    name: "check"
+                    size: 12
+                    color: Theme.statusGreen
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text { text: "All changes saved automatically"; color: Theme.statusGreen; font.family: Theme.fontPrimary; font.pixelSize: 12; font.weight: Font.Medium }
             }
         }
-        
-        // Settings List
+
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: listCol.implicitHeight + 32
+            implicitHeight: listCol.implicitHeight + 24
             color: "white"
-            radius: 12
-            border.color: Theme.bgTertiary
-            
+            radius: 10
+            border.color: Theme.borderColor
+            border.width: 1
+
             ColumnLayout {
                 id: listCol
                 anchors.fill: parent
-                anchors.margins: 16
+                anchors.topMargin: 12
+                anchors.bottomMargin: 12
                 spacing: 0
-                
-                // Feishu Webhook
+
                 SettingRow {
                     title: "Feishu webhook URL"
                     description: "Send alert notifications to a Feishu group via incoming webhook."
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-                        TextField { 
-                            id: webhookField
-                            Layout.fillWidth: true
-                            text: "••••••••••••••••••••••••••••••••••••••••••••" 
-                            echoMode: TextInput.Password
-                            font.pixelSize: 13
-                            leftPadding: 12
-                            rightPadding: 40
-                            background: Rectangle { 
-                                border.color: Theme.bgTertiary; border.width: 1; radius: 8; color: "white" 
-                                AppIcon { 
-                                    name: "eye"; size: 16; color: Theme.textSecondary
-                                    anchors.right: parent.right; anchors.rightMargin: 12; anchors.verticalCenter: parent.verticalCenter
-                                }
+                    Layout.fillWidth: true
+                    controlItem: TextField {
+                        id: webhookField
+                        width: 320
+                        height: 32
+                        text: ""
+                        placeholderText: "Enter webhook URL"
+                        echoMode: TextInput.Password
+                        font.family: Theme.fontPrimary
+                        font.pixelSize: 13
+                        leftPadding: 10
+                        rightPadding: 36
+                        verticalAlignment: Text.AlignVCenter
+                        background: Rectangle {
+                            radius: 6
+                            border.color: webhookField.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                            border.width: 1
+                            color: "white"
+                            AppIcon {
+                                name: "eye"
+                                size: 14
+                                color: Theme.textTertiary
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
                             }
                         }
                     }
-                    Text { text: "Your webhook URL is stored securely and never shared."; font.pixelSize: 11; color: Theme.textTertiary; Layout.topMargin: -4 }
+                    extraText: "Your webhook URL is stored securely and never shared."
                 }
-                
-                Divider {}
-                
-                // Watchdog
+
+                SettingDivider {}
+
                 SettingRow {
                     title: "Watchdog timeout"
                     description: "Trigger an alert if a camera stops sending frames for the specified time."
-                    RowLayout {
-                        spacing: 12
-                        Rectangle {
-                            width: 144; height: 36
-                            radius: 8
-                            border.color: Theme.bgTertiar
-                            border.width: 1
-                            clip: true
-                            Row {
-                                anchors.fill: parent
-                                spacing: 0
-                                Rectangle { width: 36; height: 36; color: "#F9FAFB"; 
-                                    Text { anchors.centerIn: parent; text: "—"; font.pixelSize: 12; color: Theme.textPrimary }
-                                }
-                                Rectangle { width: 1; height: 36; color: Theme.bgTertiary }
-                                Rectangle { width: 70; height: 36; color: "white"; 
-                                    Text { anchors.centerIn: parent; text: "3"; font.family: "SF Pro Text"; font.pixelSize: 14; font.weight: Font.Bold; color: Theme.textPrimary }
-                                }
-                                Rectangle { width: 1; height: 36; color: Theme.bgTertiary }
-                                Rectangle { width: 36; height: 36; color: "#F9FAFB"; 
-                                    Text { anchors.centerIn: parent; text: "+"; font.pixelSize: 16; color: Theme.textPrimary }
-                                }
-                            }
+                    Layout.fillWidth: true
+                    controlItem: Row {
+                        spacing: 8
+                        StepperControl {
+                            id: watchdogStepper
+                            value: 3
+                            minValue: 1
+                            maxValue: 120
                         }
-                        Text { text: "seconds"; font.pixelSize: 13; color: Theme.textSecondary; font.family: "SF Pro Text" }
-                    }
-                }
-                
-                Divider {}
-                
-                // Thresholds
-                SettingRow {
-                    title: "Yellow threshold (drop rate)"
-                    description: "Trigger a warning alert when drop rate is above this threshold."
-                    subtext: "Range: 0.0% — 5.0%"
-                    RowLayout {
-                        spacing: 16
-                        Slider { 
-                            id: yellowSlider
-                            Layout.fillWidth: true; value: 0.1; from: 0.0; to: 5.0
-                            background: Rectangle {
-                                x: yellowSlider.leftPadding
-                                y: yellowSlider.topPadding + yellowSlider.availableHeight / 2 - height / 2
-                                width: yellowSlider.availableWidth
-                                height: 4; radius: 2; color: Theme.bgTertiary
-                                Rectangle { 
-                                    width: yellowSlider.visualPosition * parent.width
-                                    height: parent.height; color: Theme.statusAmber; radius: 2 
-                                }
-                            }
-                            handle: Rectangle {
-                                x: yellowSlider.leftPadding + yellowSlider.visualPosition * (yellowSlider.availableWidth - width)
-                                y: yellowSlider.topPadding + yellowSlider.availableHeight / 2 - height / 2
-                                width: 20; height: 20; radius: 10; color: "white"; border.color: Theme.bgTertiary; border.width: 1
-                            }
-                        }
-                        Rectangle {
-                            width: 72; height: 36; radius: 8; border.color: Theme.bgTertiary; border.width: 1; color: "white"
-                            Text { anchors.centerIn: parent; text: "0.1"; font.family: "SF Pro Text"; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.textPrimary }
-                        }
-                        Text { text: "%"; color: Theme.textSecondary; font.pixelSize: 13; font.family: "SF Pro Text" }
-                    }
-                }
-                
-                Divider {}
-                
-                SettingRow {
-                    title: "Red threshold (drop rate)"
-                    description: "Trigger a critical alert when drop rate is above this threshold."
-                    subtext: "Range: 0.0% — 10.0%"
-                    RowLayout {
-                        spacing: 16
-                        Slider { 
-                            id: redSlider
-                            Layout.fillWidth: true; value: 1.0; from: 0.0; to: 10.0
-                            background: Rectangle {
-                                x: redSlider.leftPadding
-                                y: redSlider.topPadding + redSlider.availableHeight / 2 - height / 2
-                                width: redSlider.availableWidth
-                                height: 4; radius: 2; color: Theme.bgTertiary
-                                Rectangle { 
-                                    width: redSlider.visualPosition * parent.width
-                                    height: parent.height; color: Theme.statusRed; radius: 2 
-                                }
-                            }
-                            handle: Rectangle {
-                                x: redSlider.leftPadding + redSlider.visualPosition * (redSlider.availableWidth - width)
-                                y: redSlider.topPadding + redSlider.availableHeight / 2 - height / 2
-                                width: 20; height: 20; radius: 10; color: "white"; border.color: Theme.bgTertiary; border.width: 1
-                            }
-                        }
-                        Rectangle {
-                            width: 72; height: 36; radius: 8; border.color: Theme.bgTertiary; border.width: 1; color: "white"
-                            Text { anchors.centerIn: parent; text: "1.0"; font.family: "SF Pro Text"; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.textPrimary }
-                        }
-                        Text { text: "%"; color: Theme.textSecondary; font.pixelSize: 13; font.family: "SF Pro Text" }
+                        Text { text: "seconds"; font.family: Theme.fontPrimary; font.pixelSize: 13; color: Theme.textSecondary; anchors.verticalCenter: parent.verticalCenter }
                     }
                 }
 
-                Divider {}
-                
-                // Notifications Switch
+                SettingDivider {}
+
+                SettingRow {
+                    title: "Yellow threshold (drop rate)"
+                    description: "Warning alert when drop rate exceeds this value."
+                    Layout.fillWidth: true
+                    controlItem: ThresholdControl {
+                        id: yellowThreshold
+                        initialValue: 0.1
+                        sliderFrom: 0.0
+                        sliderTo: 5.0
+                        sliderStep: 0.1
+                        trackColor: Theme.statusAmber
+                        rangeText: "Range: 0.0% \u2013 5.0%"
+                    }
+                }
+
+                SettingDivider {}
+
+                SettingRow {
+                    title: "Red threshold (drop rate)"
+                    description: "Critical alert when drop rate exceeds this value."
+                    Layout.fillWidth: true
+                    controlItem: ThresholdControl {
+                        id: redThreshold
+                        initialValue: 1.0
+                        sliderFrom: 0.0
+                        sliderTo: 10.0
+                        sliderStep: 0.1
+                        trackColor: Theme.statusRed
+                        rangeText: "Range: 0.0% \u2013 10.0%"
+                    }
+                }
+
+                SettingDivider {}
+
                 SettingRow {
                     title: "Desktop notifications"
                     description: "Show system notifications for alert events."
-                    Switch { checked: true; Layout.alignment: Qt.AlignRight }
+                    Layout.fillWidth: true
+                    controlItem: HigSwitch { checked: true }
                 }
 
-                Divider {}
-                
+                SettingDivider {}
+
                 SettingRow {
                     title: "Sound alerts"
                     description: "Play a sound when an alert is triggered."
-                    Switch { checked: true; Layout.alignment: Qt.AlignRight }
+                    Layout.fillWidth: true
+                    controlItem: HigSwitch { checked: true }
                 }
 
-                Divider {}
+                SettingDivider {}
 
                 SettingRow {
                     title: "Test notification"
-                    description: "Send a test alert to verify your notification settings."
-                    Button {
-                        text: "Send test notification"
-                        Layout.alignment: Qt.AlignRight
-                        contentItem: Text {
-                            text: parent.text
-                            font: parent.font
-                            color: Theme.navyPrimary
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                    description: "Send a test alert to verify your settings."
+                    Layout.fillWidth: true
+                    controlItem: Button {
+                        contentItem: Row {
+                            spacing: 6
+                            anchors.centerIn: parent
+                            AppIcon {
+                                name: "fullscreen"
+                                size: 12
+                                color: Theme.navyPrimary
+                                anchors.verticalCenter: parent.verticalCenter
+                                rotation: -45
+                            }
+                            Text {
+                                text: "Send test notification"
+                                font.family: Theme.fontPrimary
+                                font.pixelSize: 13
+                                color: Theme.navyPrimary
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
                         }
                         background: Rectangle {
-                            radius: 8
-                            border.color: Theme.bgTertiary
+                            implicitWidth: 200
+                            implicitHeight: 32
+                            radius: 6
+                            border.color: Theme.borderColor
+                            border.width: 1
                             color: parent.down ? Theme.bgSecondary : "white"
                         }
                     }
@@ -225,29 +202,249 @@ Flickable {
             }
         }
     }
-    
-    // Internal Helper Components
-    component SettingRow : ColumnLayout {
+
+    component StepperControl : Rectangle {
+        id: stepperRoot
+        width: 144
+        height: 36
+        radius: 8
+        color: Theme.bgSecondary
+        border.color: Theme.borderColor
+        border.width: 1
+
+        property int value: 3
+        property int minValue: 1
+        property int maxValue: 120
+
+        Row {
+            anchors.fill: parent
+            spacing: 0
+
+            Rectangle {
+                width: stepperRoot.height
+                height: stepperRoot.height
+                radius: 8
+                color: minusArea.pressed ? Theme.bgTertiary : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: "\u2212"
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 18
+                    font.weight: Font.Medium
+                    color: Theme.textSecondary
+                }
+                MouseArea {
+                    id: minusArea
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: stepperRoot.value = Math.max(stepperRoot.minValue, stepperRoot.value - 1)
+                }
+            }
+
+            Rectangle {
+                width: stepperRoot.width - 2 * stepperRoot.height
+                height: stepperRoot.height
+                color: "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: stepperRoot.value
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 15
+                    font.weight: Font.Medium
+                    color: Theme.textPrimary
+                }
+            }
+
+            Rectangle {
+                width: stepperRoot.height
+                height: stepperRoot.height
+                radius: 8
+                color: plusArea.pressed ? Theme.bgTertiary : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: "+"
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 18
+                    font.weight: Font.Medium
+                    color: Theme.textSecondary
+                }
+                MouseArea {
+                    id: plusArea
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: stepperRoot.value = Math.min(stepperRoot.maxValue, stepperRoot.value + 1)
+                }
+            }
+        }
+    }
+
+    component HigSwitch : Rectangle {
+        id: switchRoot
+        width: 52
+        height: 30
+        radius: 15
+        property bool checked: false
+        color: checked ? Theme.navyPrimary : Theme.bgTertiary
+        Behavior on color { ColorAnimation { duration: 150 } }
+
+        Rectangle {
+            id: knob
+            width: 26
+            height: 26
+            radius: 13
+            color: "white"
+            border.color: "#C0C0C0"
+            border.width: 0.5
+            x: switchRoot.checked ? switchRoot.width - width - 2 : 2
+            y: 2
+            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: switchRoot.checked = !switchRoot.checked
+        }
+    }
+
+    component ThresholdControl : Row {
+        id: tcRoot
+        spacing: 12
+        height: 36
+
+        property real initialValue: 0.1
+        property real sliderFrom: 0.0
+        property real sliderTo: 5.0
+        property real sliderStep: 0.1
+        property color trackColor: Theme.statusAmber
+        property string rangeText: ""
+
+        property real _ratio: (initialValue - sliderFrom) / (sliderTo - sliderFrom)
+        property real _displayValue: initialValue
+
+        Rectangle {
+            id: trackBg
+            width: 340
+            height: 4
+            radius: 2
+            color: Theme.bgTertiary
+            anchors.verticalCenter: parent.verticalCenter
+
+            Rectangle {
+                width: thumb.x + thumb.width / 2
+                height: parent.height
+                radius: 2
+                color: tcRoot.trackColor
+            }
+
+            Rectangle {
+                id: thumb
+                width: 18
+                height: 18
+                radius: 9
+                color: "white"
+                border.color: tcRoot.trackColor
+                border.width: 2
+                anchors.verticalCenter: parent.verticalCenter
+                x: tcRoot._ratio * (trackBg.width - width)
+
+                onXChanged: {
+                    if (dragArea.drag.active) {
+                        var r = x / (trackBg.width - width)
+                        var val = tcRoot.sliderFrom + r * (tcRoot.sliderTo - tcRoot.sliderFrom)
+                        val = Math.round(val / tcRoot.sliderStep) * tcRoot.sliderStep
+                        tcRoot._displayValue = val
+                    }
+                }
+
+                MouseArea {
+                    id: dragArea
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    drag.target: thumb
+                    drag.axis: Drag.XAxis
+                    drag.minimumX: 0
+                    drag.maximumX: trackBg.width - thumb.width
+                    drag.smoothed: true
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+        }
+
+        Rectangle {
+            width: 72
+            height: 36
+            radius: 6
+            border.color: Theme.borderColor
+            border.width: 1
+            color: "white"
+            anchors.verticalCenter: parent.verticalCenter
+
+            Text {
+                anchors.centerIn: parent
+                text: tcRoot._displayValue.toFixed(1)
+                font.family: Theme.fontPrimary
+                font.pixelSize: 13
+                font.weight: Font.Medium
+                color: Theme.textPrimary
+            }
+        }
+
+        Text {
+            text: "%"
+            color: Theme.textSecondary
+            font.family: Theme.fontPrimary
+            font.pixelSize: 13
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Text {
+            text: tcRoot.rangeText
+            color: Theme.textTertiary
+            font.family: Theme.fontPrimary
+            font.pixelSize: 11
+            anchors.verticalCenter: parent.verticalCenter
+        }
+    }
+
+    component SettingRow : RowLayout {
+        id: settingRow
         property string title: ""
         property string description: ""
-        property string subtext: ""
+        property string extraText: ""
+        property alias controlItem: controlSlot.data
         Layout.fillWidth: true
-        Layout.margins: 16
-        spacing: 8
-        Text { text: title; font.weight: Font.Bold; font.pixelSize: 14; color: Theme.textPrimary }
-        Text { text: description; font.pixelSize: 12; color: Theme.textSecondary; Layout.fillWidth: true }
-        Text { 
-            text: subtext
-            font.pixelSize: 11
-            color: Theme.textTertiary
-            visible: text !== ""
-            Layout.fillWidth: true
+        Layout.leftMargin: 16
+        Layout.rightMargin: 16
+        Layout.topMargin: 4
+        Layout.bottomMargin: 4
+        spacing: 24
+
+        ColumnLayout {
+            Layout.preferredWidth: 300
+            Layout.maximumWidth: 300
+            Layout.minimumWidth: 300
+            spacing: 2
+            Text { text: settingRow.title; font.family: Theme.fontPrimary; font.weight: Font.Bold; font.pixelSize: 13; color: Theme.textPrimary; Layout.fillWidth: true }
+            Text { text: settingRow.description; font.family: Theme.fontPrimary; font.pixelSize: 12; color: Theme.textSecondary; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text { text: settingRow.extraText; font.family: Theme.fontPrimary; font.pixelSize: 11; color: Theme.textTertiary; Layout.fillWidth: true; wrapMode: Text.WordWrap; visible: settingRow.extraText !== "" }
         }
-        default property alias content: innerContent.data
-        Item { id: innerContent; Layout.fillWidth: true; implicitHeight: childrenRect.height; Layout.topMargin: 4 }
+
+        Item {
+            id: controlSlot
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+            Layout.preferredWidth: 560
+            Layout.minimumWidth: 560
+            implicitWidth: childrenRect.width
+            implicitHeight: childrenRect.height
+        }
     }
-    
-    component Divider : Rectangle {
-        Layout.fillWidth: true; height: 1; color: Theme.bgTertiary
+
+    component SettingDivider : Rectangle {
+        Layout.fillWidth: true
+        Layout.leftMargin: 16
+        Layout.rightMargin: 16
+        height: 1
+        color: Theme.divider
     }
 }

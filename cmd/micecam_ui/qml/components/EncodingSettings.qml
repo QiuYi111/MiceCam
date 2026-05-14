@@ -20,7 +20,7 @@ Flickable {
             spacing: 12
             Text {
                 text: "<  Cameras"
-                font.family: "SF Pro Text"
+                font.family: Theme.fontPrimary
                 font.pixelSize: 14
                 color: Theme.navyPrimary
                 MouseArea { anchors.fill: parent; onClicked: root.parent.parent.currentViewIndex = 0 }
@@ -28,12 +28,12 @@ Flickable {
         }
         
         RowLayout {
-            Text { text: "Encoding"; font.family: "SF Pro Text"; font.pixelSize: 28; font.weight: Font.Bold; color: Theme.textPrimary }
+            Text { text: "Encoding"; font.family: Theme.fontPrimary; font.pixelSize: 28; font.weight: Font.Bold; color: Theme.textPrimary }
             Item { Layout.fillWidth: true }
             Row {
                 spacing: 8
                 Text { text: "✓"; color: Theme.statusGreen; font.pixelSize: 16 }
-                Text { text: "Saved automatically"; color: Theme.textSecondary; font.family: "SF Pro Text"; font.pixelSize: 12 }
+                Text { text: "Saved automatically"; color: Theme.textSecondary; font.family: Theme.fontPrimary; font.pixelSize: 12 }
             }
         }
         
@@ -78,7 +78,7 @@ Flickable {
                         }
                         Rectangle {
                             width: 80; height: 36; radius: 8; border.color: Theme.bgTertiary; border.width: 1; color: "white"
-                            Text { anchors.centerIn: parent; text: "6 Mbps"; font.family: "SF Pro Text"; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.textPrimary }
+                            Text { anchors.centerIn: parent; text: "6 Mbps"; font.family: Theme.fontPrimary; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.textPrimary }
                         }
                     }
                 }
@@ -102,7 +102,7 @@ Flickable {
                                 Rectangle { width: 36; height: 36; color: "#F9FAFB"; Text { anchors.centerIn: parent; text: "+"; color: Theme.textPrimary } }
                             }
                         }
-                        Text { text: "frames"; font.pixelSize: 13; color: Theme.textSecondary; font.family: "SF Pro Text" }
+                        Text { text: "frames"; font.pixelSize: 13; color: Theme.textSecondary; font.family: Theme.fontPrimary }
                     }
                 }
                 
@@ -128,7 +128,7 @@ Flickable {
                                             anchors.centerIn: parent
                                             text: modelData
                                             color: modelData === "Medium" ? "white" : Theme.textPrimary
-                                            font.pixelSize: 11; font.family: "SF Pro Text"
+                                            font.pixelSize: 11; font.family: Theme.fontPrimary
                                         }
                                         Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.bgTertiary; visible: index < 4 }
                                     }
@@ -169,7 +169,7 @@ Flickable {
                                             anchors.centerIn: parent
                                             text: modelData
                                             color: modelData === "Medium" ? "white" : Theme.textPrimary
-                                            font.pixelSize: 12; font.family: "SF Pro Text"
+                                            font.pixelSize: 12; font.family: Theme.fontPrimary
                                         }
                                         Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.bgTertiary; visible: index < 2 }
                                     }

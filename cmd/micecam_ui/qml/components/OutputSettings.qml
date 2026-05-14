@@ -20,7 +20,7 @@ Flickable {
             spacing: 12
             Text {
                 text: "<  Cameras"
-                font.family: "SF Pro Text"
+                font.family: Theme.fontPrimary
                 font.pixelSize: 14
                 color: Theme.navyPrimary
                 MouseArea { anchors.fill: parent; onClicked: root.parent.parent.currentViewIndex = 0 }
@@ -28,7 +28,7 @@ Flickable {
         }
         
         RowLayout {
-            Text { text: "Output"; font.family: "SF Pro Text"; font.pixelSize: 28; font.weight: Font.Bold; color: Theme.textPrimary }
+            Text { text: "Output"; font.family: Theme.fontPrimary; font.pixelSize: 28; font.weight: Font.Bold; color: Theme.textPrimary }
         }
         
         // Settings Card

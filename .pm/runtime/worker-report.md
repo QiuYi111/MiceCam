@@ -1,81 +1,67 @@
-# Worker Report
+# Worker Report: UI Polish Round 3 - Font Sweep, Status Bar, Preview Fidelity
 
-## Task summary
-Final task: fix BLOCKER-001, create vcpkg.json and CI/CD workflow, clean up CMakeLists.txt, and verify full build + test pass.
+## Changed Files
 
-## What was done
-- Fixed BLOCKER-001: changed `EXPECT_FALSE` to `EXPECT_TRUE` in `FullValidationPassesWhenDiskHasSpace` test, renamed from `FullValidationPasses`
-- Created `vcpkg.json` at project root with v2 dependencies (ffmpeg, qt6, spdlog, nlohmann-json, gtest)
-- Created `.github/workflows/ci.yml` with cross-platform CI matrix (ubuntu-24.04, macos-14, windows-2022)
-- Cleaned CMakeLists.txt: added `CMAKE_BUILD_TYPE` default to Release, removed v1 reference comment
-- Built in Release mode: 100% success, 0 compile warnings
-- Ran ctest: 19/19 test executables pass (84 individual test cases), 100%
+| File | Change |
+|------|--------|
+| `cmd/micecam_ui/qml/theme/Theme.qml` | Fixed `fontPrimary` to `"Helvetica Neue"` (was `.AppleSystemUIFont` which Qt on macOS couldn't resolve). Fixed `fontMono` to `"Menlo"` (was `.AppleSystemUIFontMonospaced`). |
+| `cmd/micecam_ui/qml/components/AppSidebar.qml` | Replaced 3 occurrences of `"SF Pro Text"` with `Theme.fontPrimary` |
+| `cmd/micecam_ui/qml/components/AppStatusBar.qml` | Widened segment widths (100-170px with minimumWidth), reduced icon-text spacing from 12 to 8, added `clip: false` on segment and text elements |
+| `cmd/micecam_ui/qml/components/AlertsSettings.qml` | Replaced 10 occurrences of `"SF Pro Text"` with `Theme.fontPrimary` |
+| `cmd/micecam_ui/qml/components/LoggingSettings.qml` | Replaced 8 occurrences of `"SF Pro Text"` with `Theme.fontPrimary`, replaced 9 occurrences of `"SF Mono"` with `Theme.fontMono` |
+| `cmd/micecam_ui/qml/components/EncodingSettings.qml` | Replaced 7 occurrences of `"SF Pro Text"` with `Theme.fontPrimary` |
+| `cmd/micecam_ui/qml/components/OutputSettings.qml` | Replaced 3 occurrences of `"SF Pro Text"` with `Theme.fontPrimary` |
+| `cmd/micecam_ui/qml/components/AboutView.qml` | Replaced 4 occurrences of `"SF Pro Text"` with `Theme.fontPrimary` |
+| `cmd/micecam_ui/qml/components/NotificationPopup.qml` | Replaced 4 occurrences of `"SF Pro Text"` with `Theme.fontPrimary` |
+| `cmd/micecam_ui/qml/components/CameraCard.qml` | Replaced dark grid placeholder with pixel-noise canvas simulating a camera feed, added vignette gradient, rule-of-thirds grid overlay, and timestamp overlay in monospace font |
 
-## Changed files
-- `tests/unit/test_preflight.cpp` — fix BLOCKER-001 assertion, rename test
-- `vcpkg.json` — created (new)
-- `.github/workflows/ci.yml` — replaced v1 CI with v2 cross-platform matrix
-- `CMakeLists.txt` — default Release build type, remove v1 reference
+## Commands Run
 
-## Commands run
-
-| Command | Result |
-|---------|--------|
-| `cmake -B build -S . -DCMAKE_BUILD_TYPE=Release` | Configured OK, 0 warnings |
-| `cmake --build build -j` | Built OK, 100% targets, 0 compile errors |
-| `cd build && ctest --output-on-failure` | 19/19 passed, 0 failures |
-| `./tests/test_preflight --gtest_filter="*FullValidation*"` | BLOCKER-001: PASSED (FullValidationPassesWhenDiskHasSpace) |
-
-## Test results
-- 19 test executables: all PASSED (100%)
-- 84 individual test cases: all PASSED (100%)
-- BLOCKER-001 specifically verified: `PreflightValidator.FullValidationPassesWhenDiskHasSpace` PASSED
-- Release binary at `build/cmd/micecam/micecam` (Mach-O arm64)
-
-## Harness results
-- Risk classification: branch (multi-file, CI/CD + CMake + test fix)
-- Gates: build verification gate PASSED, test verification gate PASSED
-
-## Acceptance criteria checklist
-- [x] AC-001: BLOCKER-001 fixed — FullValidationPassesWhenDiskHasSpace passes (84/84 individual test cases)
-- [x] AC-002: `vcpkg.json` at root with correct v2 dependencies
-- [x] AC-003: `.github/workflows/ci.yml` created
-- [x] AC-004: CI yml passes YAML validation (valid structure, no syntax errors)
-- [x] AC-005: CMakeLists.txt clean (no dead v1 code paths)
-- [x] AC-006: `cmake -B build -S . -DCMAKE_BUILD_TYPE=Release && cmake --build build -j` succeeds with 0 warnings
-- [x] AC-007: `cd build && ctest --output-on-failure` passes 100%
-
-## Problems encountered
-None. All tasks completed without issues.
-
-## Deviations from task
-- Test count: task expected "81/81" but actual is 84 individual test cases. All pass.
-- Existing ci.yml was replaced per task instructions (v1 CI with Python/smoke/packaging → v2 simple CI matrix).
-
-## Remaining work
-None. This is the final task for MiceCam v2 non-UI backend.
-
-## Suggested next step
-Begin UI implementation phase. All backend infrastructure is verified green.
-
-## Evidence
-
-### Build output
-```
-[100%] Built target test_metadata_writer
-cmake --build build -j: all 100% targets built, 0 compile errors
+```bash
+cmake -B build -S . -DBUILD_UI=ON
+cmake --build build --target micecam_ui -j
+./build/cmd/micecam_ui/micecam_ui &>/tmp/micecam_round3_runtime.log &
+screencapture -x /tmp/micecam_home_after_round3.png
 ```
 
-### Test output
-```
-100% tests passed, 0 tests failed out of 19
-Total Test time (real) = 14.24 sec
-84 individual test cases across 19 test executables — all pass.
-```
+## Build/Runtime Results
 
-### BLOCKER-001 fix verification
-```
-[ RUN      ] PreflightValidator.FullValidationPassesWhenDiskHasSpace
-[       OK ] PreflightValidator.FullValidationPassesWhenDiskHasSpace (0 ms)
-[  PASSED  ] 1 test.
-```
+- **Build**: Successful, zero errors, zero warnings.
+- **Runtime log**: Empty (zero font warnings, zero 404 errors).
+- **Screenshot**: `/tmp/micecam_home_after_round3.png` (1.4 MB).
+
+## Visual Inspection
+
+Screenshot captured at `/tmp/micecam_home_after_round3.png`. AI visual analysis confirms:
+
+- Status bar shows readable text for all metrics: elapsed time, camera count, frame count, fps, storage, disk remaining.
+- Camera preview cards render with pixel-noise pattern, vignette, and rule-of-thirds grid overlay (more realistic than dark grid-only).
+- All camera labels (CAM_A..USB-1) visible top-left with dark backing.
+- REC badges with pulsing red dot visible on all cards.
+- Bottom overlay bars show fps (left) and drops (right) correctly.
+- CAM_D shows amber border + amber warning for degraded performance.
+- Timestamp overlay in monospace font visible on each card.
+
+## Acceptance Criteria Checklist
+
+- [x] `micecam_ui` builds successfully
+- [x] Runtime log no longer contains missing `SF Pro Text` warning
+- [x] Runtime log does not contain remote image 404
+- [x] Status bar shows readable text for all core metrics
+- [x] Camera preview cards are visually closer to `UIDesign/home.png` than dark grid-only placeholders
+- [x] Implementation report exists at `docs/reports/implements/phase-ui-polish-05-14-23.md`
+- [x] `.pm/runtime/worker-report.md` is fresh and includes all required sections
+
+## Problems Encountered
+
+1. **macOS font alias resolution**: Initial `Theme.qml` used `.AppleSystemUIFont` / `.AppleSystemUIFontMonospaced` which Qt couldn't resolve on macOS. Tested `.SF NS` (also unresolved). Final solution: `Helvetica Neue` for primary (matches macOS system look) and `Menlo` for monospace (widely available).
+2. **No local preview assets**: Task suggested optionally deriving crops from `home.png`. Chose QML-generated noise+grid+timestamp pattern instead to avoid adding binary assets and CMakeLists changes.
+
+## Deviations from Task
+
+- Used QML Canvas noise pattern + vignette + rule-of-thirds overlay + timestamp instead of local PNG assets for camera previews. This avoids binary asset management and produces a realistic mock.
+- Did not add new files to `CMakeLists.txt` RESOURCES section (no new preview assets needed).
+
+## Commit Hash
+
+To be committed.

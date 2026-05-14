@@ -15,6 +15,7 @@ endif()
 option(BUILD_SPIKE "Build spike feasibility tests (headless)" OFF)
 option(BUILD_UI "Build Qt/QML UI executable (requires Qt6)" ON)
 option(BUILD_HIL "Build hardware-in-the-loop tests (requires real camera)" OFF)
+option(BUILD_STRESS "Build 1-hour stress test binary" OFF)
 
 # macOS: add Homebrew paths for finding libraries
 if(APPLE)
@@ -213,4 +214,24 @@ endif()
 # Spike subdirectory (headless feasibility tests)
 if(BUILD_SPIKE)
     add_subdirectory(cmd/spike)
+endif()
+
+# 1-hour stress test binary
+if(BUILD_STRESS)
+    add_executable(stress_1h_120fps cmd/stress_1h/main.cpp)
+    target_include_directories(stress_1h_120fps PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+    )
+    target_link_libraries(stress_1h_120fps PRIVATE
+        micecam_encoding
+        PkgConfig::FFMPEG
+        PkgConfig::spdlog
+        PkgConfig::nlohmann_json
+    )
+    target_compile_options(stress_1h_120fps PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
 endif()

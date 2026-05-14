@@ -46,13 +46,23 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Test-Path "${{ github.workspace }}/vcpkg")) {
-            git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ github.workspace }}/vcpkg"
-            & "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat"
+          $vcpkgRoot = "${{ github.workspace }}/vcpkg"
+          if (-not (Test-Path $vcpkgRoot)) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgRoot
+            & "$vcpkgRoot/bootstrap-vcpkg.bat"
           }
-          echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-binary-cache" >> $env:GITHUB_ENV
 
-      - name: Install dependencies (Windows)
+      - name: Cache vcpkg binaries
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Install vcpkg deps (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |

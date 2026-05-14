@@ -11,7 +11,7 @@ namespace {
 
 #ifdef _WIN32
 constexpr const char* TEST_DIR = ".";
-constexpr const char* TEST_OUTPUT = ".\\test_output";
+constexpr const char* TEST_OUTPUT = "./test_output";
 #else
 constexpr const char* TEST_DIR = "/tmp";
 constexpr const char* TEST_OUTPUT = "/tmp/output";

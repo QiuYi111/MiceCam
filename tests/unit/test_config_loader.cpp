@@ -1,0 +1,89 @@
+#include <gtest/gtest.h>
+
+#include <cstdio>
+#include <fstream>
+
+#include "infrastructure/ConfigLoader.h"
+
+using namespace micecam;
+
+namespace {
+
+std::string write_temp_json(const std::string& content) {
+    std::string path = "/tmp/micecam_test_config_" + std::to_string(std::rand()) + ".json";
+    std::ofstream f(path);
+    f << content;
+    f.close();
+    return path;
+}
+
+} // namespace
+
+TEST(ConfigLoader, LoadValidConfig) {
+    std::string json = R"({
+        "watchdog_timeout_s": 5,
+        "drop_rate_yellow_pct": 0.5,
+        "drop_rate_red_pct": 2.0,
+        "webhook_url": "https://example.com/webhook",
+        "default_bitrate_kbps": 8000,
+        "output_dir": "/tmp/output",
+        "log_level": "debug"
+    })";
+    std::string path = write_temp_json(json);
+
+    infrastructure::ConfigLoader loader;
+    ASSERT_TRUE(loader.load(path));
+
+    EXPECT_EQ(loader.watchdog_timeout_s(), 5);
+    EXPECT_DOUBLE_EQ(loader.drop_rate_yellow_pct(), 0.5);
+    EXPECT_DOUBLE_EQ(loader.drop_rate_red_pct(), 2.0);
+    EXPECT_EQ(loader.webhook_url(), "https://example.com/webhook");
+    EXPECT_EQ(loader.default_bitrate_kbps(), 8000);
+    EXPECT_EQ(loader.output_dir(), "/tmp/output");
+    EXPECT_EQ(loader.log_level(), "debug");
+
+    std::remove(path.c_str());
+}
+
+TEST(ConfigLoader, MissingFileReturnsDefaults) {
+    infrastructure::ConfigLoader loader;
+    ASSERT_TRUE(loader.load("/nonexistent/path/config.json"));
+
+    EXPECT_EQ(loader.watchdog_timeout_s(), 3);
+    EXPECT_DOUBLE_EQ(loader.drop_rate_yellow_pct(), 0.1);
+    EXPECT_DOUBLE_EQ(loader.drop_rate_red_pct(), 1.0);
+    EXPECT_TRUE(loader.webhook_url().empty());
+    EXPECT_EQ(loader.default_bitrate_kbps(), 5000);
+    EXPECT_TRUE(loader.output_dir().empty());
+    EXPECT_EQ(loader.log_level(), "info");
+}
+
+TEST(ConfigLoader, PartialConfigMergesWithDefaults) {
+    std::string json = R"({
+        "watchdog_timeout_s": 10,
+        "output_dir": "/custom/output"
+    })";
+    std::string path = write_temp_json(json);
+
+    infrastructure::ConfigLoader loader;
+    ASSERT_TRUE(loader.load(path));
+
+    EXPECT_EQ(loader.watchdog_timeout_s(), 10);
+    EXPECT_EQ(loader.output_dir(), "/custom/output");
+    EXPECT_DOUBLE_EQ(loader.drop_rate_yellow_pct(), 0.1);
+    EXPECT_EQ(loader.default_bitrate_kbps(), 5000);
+    EXPECT_TRUE(loader.webhook_url().empty());
+    EXPECT_EQ(loader.log_level(), "info");
+
+    std::remove(path.c_str());
+}
+
+TEST(ConfigLoader, InvalidJsonReturnsFalse) {
+    std::string json = "{ not valid json }";
+    std::string path = write_temp_json(json);
+
+    infrastructure::ConfigLoader loader;
+    EXPECT_FALSE(loader.load(path));
+
+    std::remove(path.c_str());
+}

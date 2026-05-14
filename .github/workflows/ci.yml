@@ -66,6 +66,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}/vcpkg-binary-cache"
           & "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows
 
       # ====== Configure ======

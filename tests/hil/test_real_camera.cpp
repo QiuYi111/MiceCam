@@ -89,9 +89,15 @@ TEST(RealCameraHIL, OpenAndCaptureFrames) {
     avdevice_list_input_sources(fmt, nullptr, nullptr, &dev_list);
     ASSERT_GT(dev_list->nb_devices, 0);
 
-    CameraTestContext cam;
-    ASSERT_TRUE(open_camera(cam, dev_list->devices[0]->device_name, 640, 480, 30))
-        << "Cannot open camera: " << dev_list->devices[0]->device_name;
+    // Try each device until one opens successfully (first may be metadata)
+    bool opened = false;
+    for (int i = 0; i < static_cast<int>(dev_list->nb_devices); ++i) {
+        opened = open_camera(cam, dev_list->devices[i]->device_name, 640, 480, 30);
+        if (opened) break;
+        spdlog::warn("Skipping {} (cannot open for capture)", dev_list->devices[i]->device_name);
+    }
+    ASSERT_TRUE(opened) << "Cannot open any camera for capture out of "
+                        << dev_list->nb_devices << " devices";
 
     int captured = 0;
     AVPacket* pkt = av_packet_alloc();
@@ -122,23 +128,29 @@ TEST(RealCameraHIL, FullEncodePipeline) {
     AVDeviceInfoList* dev_list = nullptr;
     avdevice_list_input_sources(fmt, nullptr, nullptr, &dev_list);
     ASSERT_GT(dev_list->nb_devices, 0);
-    std::string dev_name(dev_list->devices[0]->device_name);
+    std::string dev_name;
 
-    // Open camera 1280x720@30
-    AVDictionary* opts = nullptr;
-    av_dict_set(&opts, "input_format", "mjpeg", 0);
-    av_dict_set(&opts, "video_size", "1280x720", 0);
-    av_dict_set(&opts, "framerate", "30", 0);
+    // Try each device until one opens
     AVFormatContext* cam_ctx = nullptr;
-    int ret = avformat_open_input(&cam_ctx, dev_name.c_str(), fmt, &opts);
-    av_dict_free(&opts);
-    ASSERT_GE(ret, 0) << "Failed to open: " << dev_name;
+    for (int i = 0; i < static_cast<int>(dev_list->nb_devices); ++i) {
+        dev_name = dev_list->devices[i]->device_name;
+        AVDictionary* opts = nullptr;
+        av_dict_set(&opts, "input_format", "mjpeg", 0);
+        av_dict_set(&opts, "video_size", "1280x720", 0);
+        av_dict_set(&opts, "framerate", "30", 0);
+        int ret = avformat_open_input(&cam_ctx, dev_name.c_str(), fmt, &opts);
+        av_dict_free(&opts);
+        if (ret >= 0) break;
+        spdlog::warn("Skipping {} (cannot open)", dev_name);
+    }
+    ASSERT_NE(cam_ctx, nullptr) << "Cannot open any camera";
     spdlog::info("Camera opened: {} at 1280x720@30", dev_name);
 
     // Detect encoder
     auto enc_name = infrastructure::HardwareEncoderSelector::detect_platform_encoder();
     spdlog::info("Platform encoder: {}", enc_name);
-    bool is_hw = infrastructure::HardwareEncoderSelector::is_hardware_encoder(enc_name);
+    spdlog::info("Is hardware: {}",
+        infrastructure::HardwareEncoderSelector::is_hardware_encoder(enc_name) ? "yes" : "no");
 
     // Initialize encoder
     domain::EncoderConfig cfg;
@@ -191,7 +203,8 @@ TEST(RealCameraHIL, FullEncodePipeline) {
     }
 
     av_packet_free(&pkt);
-    close_camera({cam_ctx, fmt, dev_name});
+    CameraTestContext cam_close{cam_ctx, fmt, dev_name};
+    close_camera(cam_close);
     writer.close();
     srt.close();
     avdevice_free_list_devices(&dev_list);
@@ -212,7 +225,24 @@ TEST(RealCameraHIL, PerformanceStressTest) {
     AVDeviceInfoList* dev_list = nullptr;
     avdevice_list_input_sources(fmt, nullptr, nullptr, &dev_list);
     ASSERT_GT(dev_list->nb_devices, 0);
-    std::string dev_name(dev_list->devices[0]->device_name);
+
+    // Find working device
+    std::string dev_name;
+    for (int i = 0; i < static_cast<int>(dev_list->nb_devices); ++i) {
+        AVDictionary* test_opts = nullptr;
+        av_dict_set(&test_opts, "input_format", "mjpeg", 0);
+        av_dict_set(&test_opts, "video_size", "640x480", 0);
+        AVFormatContext* test_ctx = nullptr;
+        int test_ret = avformat_open_input(&test_ctx, dev_list->devices[i]->device_name, fmt, &test_opts);
+        av_dict_free(&test_opts);
+        if (test_ret >= 0) {
+            dev_name = dev_list->devices[i]->device_name;
+            avformat_close_input(&test_ctx);
+            break;
+        }
+    }
+    ASSERT_FALSE(dev_name.empty()) << "No working camera found";
+    spdlog::info("Using camera: {}", dev_name);
 
     // Test multiple resolution/framerate combos
     struct ConfigPair { int w; int h; int fps; const char* label; };
@@ -268,7 +298,6 @@ TEST(RealCameraHIL, PerformanceStressTest) {
         double actual_fps = (captured * 1e6) / total_us;
         double expected_fps = static_cast<double>(cfg.fps);
         double drop_rate = 1.0 - (captured / (expected_fps * 3.0));
-        double avg_frame_bytes = captured > 0 ? 0.0 : 0; // estimate from expected MJPEG size
 
         spdlog::info("  Frames: {}/{} ({:.1f}% drop rate)", captured, cfg.fps * 3, drop_rate * 100);
         spdlog::info("  Actual FPS: {:.1f} / Target: {:.1f}", actual_fps, expected_fps);

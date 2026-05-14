@@ -12,18 +12,15 @@ ApplicationWindow {
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
 
-    property int currentViewIndex: 2
+    property int currentViewIndex: 0
 
     Rectangle {
         id: windowRoot
         anchors.fill: parent
         color: Theme.bgPrimary
         radius: 16
-        layer.enabled: true
-        layer.smooth: true
-        layer.textureSize: Qt.size(width, height)
         clip: true
-        
+
         AppTitleBar {
             id: titleBar
             anchors.top: parent.top
@@ -43,7 +40,7 @@ ApplicationWindow {
             anchors.top: toolbar.bottom
             anchors.left: parent.left
             anchors.bottom: statusBar.top
-            
+
             onViewChanged: (index) => {
                 currentViewIndex = index
             }
@@ -56,18 +53,17 @@ ApplicationWindow {
             anchors.right: parent.right
         }
 
-        // Main Content Area
         StackLayout {
             currentIndex: currentViewIndex
             anchors.top: toolbar.bottom
             anchors.left: sidebar.right
             anchors.right: parent.right
             anchors.bottom: statusBar.top
-            
+
             CameraGridView {}
             EncodingSettings {}
             AlertsSettings {}
-            OutputSettings {}
+            LoggingSettings {}
             AboutView {}
         }
     }

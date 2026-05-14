@@ -27,7 +27,7 @@ Rectangle {
     
     // Drag handler for moving the window
     DragHandler {
-        onActiveChanged: if (active) Window.window.startSystemMove()
+        onActiveChanged: if (active && Window.window) Window.window.startSystemMove()
     }
     
     // Window controls (macOS style on left)
@@ -77,7 +77,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         text: "MiceCam v2"
-        font.family: "SF Pro Text"
+        font.family: Theme.fontPrimary
         font.pixelSize: 13
         font.weight: Font.DemiBold
         color: Theme.textPrimary

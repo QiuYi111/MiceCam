@@ -19,6 +19,7 @@ qt_add_qml_module(micecam_ui
         qml/components/EncodingSettings.qml
         qml/components/AlertsSettings.qml
         qml/components/OutputSettings.qml
+        qml/components/LoggingSettings.qml
         qml/components/AboutView.qml
         qml/components/NotificationPopup.qml
     RESOURCES

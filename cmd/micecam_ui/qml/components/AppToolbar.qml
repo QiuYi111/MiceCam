@@ -64,7 +64,7 @@ Rectangle {
                         
                         Text {
                             text: recordBtn.isRecording ? "Stop" : "Record"
-                            font.family: "SF Pro Text"
+                            font.family: Theme.fontPrimary
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                             color: "white"
@@ -82,7 +82,7 @@ Rectangle {
                     Text {
                         anchors.centerIn: parent
                         text: "00:42:17"
-                        font.family: "SF Pro Text"
+                        font.family: Theme.fontPrimary
                         font.pixelSize: 14
                         color: Theme.recordRed
                     }
@@ -121,7 +121,7 @@ Rectangle {
                 RowLayout {
                     anchors.centerIn: parent; spacing: 8
                     AppIcon { name: "gear"; size: 16 }
-                    Text { text: "Settings"; font.family: "SF Pro Text"; font.pixelSize: 14; color: Theme.textPrimary }
+                    Text { text: "Settings"; font.family: Theme.fontPrimary; font.pixelSize: 14; color: Theme.textPrimary }
                     AppIcon { name: "chevron-right"; size: 8; color: Theme.textSecondary; rotation: 90 }
                 }
                 MouseArea { anchors.fill: parent; onClicked: root.parent.currentViewIndex = 1 }

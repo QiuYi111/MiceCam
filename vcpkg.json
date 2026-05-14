@@ -4,10 +4,11 @@
   "dependencies": [
     {
       "name": "ffmpeg",
-      "features": ["avcodec", "avformat", "avdevice", "swscale", "gpl"]
+      "features": ["avcodec", "avformat", "avdevice", "swscale", "x264", "gpl"]
     },
     "spdlog",
     "nlohmann-json",
-    "gtest"
+    "gtest",
+    "pkgconf"
   ]
 }

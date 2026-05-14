@@ -20,17 +20,53 @@ if(APPLE)
     list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/qt)
 endif()
 
-# PkgConfig — required on macOS/Homebrew, also supports vcpkg
-find_package(PkgConfig REQUIRED)
+# ---- Dependencies (cross-platform: find_package first, pkg-config fallback) ----
 
 # FFmpeg
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libavdevice libswscale)
+find_package(FFmpeg QUIET)
+if(NOT FFmpeg_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libavdevice libswscale)
+else()
+    # Create an alias target compatible with our PkgConfig::FFMPEG usage
+    if(NOT TARGET PkgConfig::FFMPEG)
+        add_library(PkgConfig::FFMPEG INTERFACE IMPORTED)
+        foreach(_lib avcodec avformat avutil avdevice swscale)
+            if(TARGET FFmpeg::${_lib})
+                target_link_libraries(PkgConfig::FFMPEG INTERFACE FFmpeg::${_lib})
+            endif()
+        endforeach()
+        target_include_directories(PkgConfig::FFMPEG INTERFACE ${FFMPEG_INCLUDE_DIRS})
+    endif()
+endif()
 
-# spdlog (header-only via Homebrew; vcpkg provides cmake config)
-pkg_check_modules(spdlog REQUIRED IMPORTED_TARGET spdlog)
+# spdlog
+find_package(spdlog QUIET)
+if(NOT spdlog_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(spdlog REQUIRED IMPORTED_TARGET spdlog)
+    endif()
+else()
+    if(NOT TARGET PkgConfig::spdlog)
+        add_library(PkgConfig::spdlog INTERFACE IMPORTED)
+        target_link_libraries(PkgConfig::spdlog INTERFACE spdlog::spdlog)
+    endif()
+endif()
 
-# nlohmann_json (header-only)
-pkg_check_modules(nlohmann_json REQUIRED IMPORTED_TARGET nlohmann_json)
+# nlohmann_json
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(nlohmann_json REQUIRED IMPORTED_TARGET nlohmann_json)
+    endif()
+else()
+    if(NOT TARGET PkgConfig::nlohmann_json)
+        add_library(PkgConfig::nlohmann_json INTERFACE IMPORTED)
+        target_link_libraries(PkgConfig::nlohmann_json INTERFACE nlohmann_json::nlohmann_json)
+    endif()
+endif()
 
 # Qt6 (optional for headless CI builds)
 if(BUILD_UI)
@@ -90,7 +126,10 @@ target_link_libraries(micecam_encoding PUBLIC
     PkgConfig::nlohmann_json
 )
 
-target_compile_options(micecam_encoding PRIVATE -Wall -Wextra)
+target_compile_options(micecam_encoding PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+)
 
 # MiceCam v2 executable (requires Qt6, skipped in CI headless mode)
 if(BUILD_UI)
@@ -113,7 +152,10 @@ if(BUILD_UI)
         PkgConfig::spdlog
         PkgConfig::nlohmann_json
     )
-    target_compile_options(micecam PRIVATE -Wall -Wextra)
+    target_compile_options(micecam PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
     set_target_properties(micecam PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cmd/micecam"
     )
@@ -131,7 +173,10 @@ function(add_micecam_test name sources)
         ${CMAKE_CURRENT_SOURCE_DIR}/internal
     )
     target_link_libraries(${name} PRIVATE micecam_encoding GTest::gtest GTest::gtest_main PkgConfig::FFMPEG PkgConfig::spdlog PkgConfig::nlohmann_json)
-    target_compile_options(${name} PRIVATE -Wall -Wextra)
+    target_compile_options(${name} PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
     set_target_properties(${name} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
     )

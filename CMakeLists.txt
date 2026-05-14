@@ -14,6 +14,7 @@ endif()
 # Build options
 option(BUILD_SPIKE "Build spike feasibility tests (headless)" OFF)
 option(BUILD_UI "Build Qt/QML UI executable (requires Qt6)" ON)
+option(BUILD_HIL "Build hardware-in-the-loop tests (requires real camera)" OFF)
 
 # macOS: add Homebrew paths for finding libraries
 if(APPLE)
@@ -202,6 +203,11 @@ add_micecam_test(test_feishu_webhook tests/unit/test_feishu_webhook.cpp)
 add_micecam_test(test_recording_pipeline tests/unit/test_recording_pipeline.cpp)
 add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
 add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
+
+# Hardware-in-the-Loop tests (requires real camera hardware)
+if(BUILD_HIL)
+    add_micecam_test(test_real_camera_hil tests/hil/test_real_camera.cpp)
+endif()
 
 # Spike subdirectory (headless feasibility tests)
 if(BUILD_SPIKE)

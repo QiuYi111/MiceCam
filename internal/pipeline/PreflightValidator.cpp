@@ -1,6 +1,10 @@
 #include "PreflightValidator.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/statvfs.h>
+#endif
 
 #include <algorithm>
 #include <sstream>
@@ -8,6 +12,14 @@
 namespace micecam::pipeline {
 
 bool PreflightValidator::check_disk_space(const std::string& output_dir, uint64_t estimated_bytes) {
+#ifdef _WIN32
+    ULARGE_INTEGER free_bytes;
+    if (!GetDiskFreeSpaceExA(output_dir.c_str(), &free_bytes, nullptr, nullptr)) {
+        return false;
+    }
+    available_bytes_ = free_bytes.QuadPart;
+    return available_bytes_ >= estimated_bytes;
+#else
     struct statvfs buf;
     if (statvfs(output_dir.c_str(), &buf) != 0) {
         return false;
@@ -15,6 +27,7 @@ bool PreflightValidator::check_disk_space(const std::string& output_dir, uint64_
     uint64_t avail = static_cast<uint64_t>(buf.f_bavail) * buf.f_frsize;
     available_bytes_ = avail;
     return avail >= estimated_bytes;
+#endif
 }
 
 bool PreflightValidator::check_capabilities(const domain::StreamConfig& config,

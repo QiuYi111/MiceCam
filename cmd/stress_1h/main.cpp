@@ -85,7 +85,7 @@ int main() {
     meta.keyframe_interval = enc_cfg.keyframe_interval;
     meta.output_dir = out;
     infrastructure::MetadataWriter::write_session_header(
-        (std::string(out) + "_meta.json").c_str(), meta);
+        meta, (std::string(out) + "_meta.json"));
 
     // ---- 1-hour loop ----
     constexpr int64_t DURATION_S = 3600;
@@ -150,7 +150,7 @@ int main() {
     meta.end_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     infrastructure::MetadataWriter::write_session_footer(
-        (std::string(out) + "_meta.json").c_str(), captured, 0, 0);
+        (std::string(out) + "_meta.json"), captured, 0, "");
 
     std::vector<domain::StreamStats> stats;
     domain::StreamStats s;

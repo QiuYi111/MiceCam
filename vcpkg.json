@@ -1,0 +1,11 @@
+{
+  "name": "micecam",
+  "version": "2.0.0",
+  "dependencies": [
+    "ffmpeg",
+    "qt6",
+    "spdlog",
+    "nlohmann-json",
+    "gtest"
+  ]
+}

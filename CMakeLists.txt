@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Default build type to Release
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 # Build options
 option(BUILD_SPIKE "Build spike feasibility tests (headless)" OFF)
 
@@ -56,7 +61,18 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/StreamWriter.cpp
     internal/infrastructure/SRTWriter.cpp
     internal/infrastructure/MetadataWriter.cpp
+    internal/infrastructure/ConfigLoader.cpp
+    internal/infrastructure/AlertManager.cpp
+    internal/infrastructure/Watchdog.cpp
+    internal/infrastructure/FeishuWebhook.cpp
+    internal/infrastructure/MockCameraBackend.cpp
+    internal/infrastructure/CameraManager.cpp
+    internal/infrastructure/OAKCameraBackend.cpp
+    internal/infrastructure/FFmpegCameraBackend.cpp
     internal/pipeline/TranscodeStage.cpp
+    internal/pipeline/StatsCollector.cpp
+    internal/pipeline/PreflightValidator.cpp
+    internal/pipeline/RecordingPipeline.cpp
 )
 
 target_include_directories(micecam_encoding PUBLIC
@@ -128,8 +144,21 @@ add_micecam_test(test_stream_writer tests/unit/test_stream_writer.cpp)
 add_micecam_test(test_srt_writer tests/unit/test_srt_writer.cpp)
 add_micecam_test(test_metadata_writer tests/unit/test_metadata_writer.cpp)
 add_micecam_test(test_encoding_pipeline tests/integration/test_encoding_pipeline.cpp)
+add_micecam_test(test_config_loader tests/unit/test_config_loader.cpp)
+add_micecam_test(test_alert_manager tests/unit/test_alert_manager.cpp)
+add_micecam_test(test_mock_camera tests/unit/test_mock_camera.cpp)
+add_micecam_test(test_camera_manager tests/unit/test_camera_manager.cpp)
+add_micecam_test(test_oak_camera tests/unit/test_oak_camera.cpp)
+add_micecam_test(test_ffmpeg_camera tests/unit/test_ffmpeg_camera.cpp)
+add_micecam_test(test_preflight tests/unit/test_preflight.cpp)
+add_micecam_test(test_stats_collector tests/unit/test_stats_collector.cpp)
+add_micecam_test(test_watchdog tests/unit/test_watchdog.cpp)
+add_micecam_test(test_feishu_webhook tests/unit/test_feishu_webhook.cpp)
+add_micecam_test(test_recording_pipeline tests/unit/test_recording_pipeline.cpp)
+add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
+add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
 
-# Spike subdirectory (preserved from v1)
+# Spike subdirectory (headless feasibility tests)
 if(BUILD_SPIKE)
     add_subdirectory(cmd/spike)
 endif()

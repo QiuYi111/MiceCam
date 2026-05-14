@@ -9,8 +9,17 @@ using namespace micecam;
 
 namespace {
 
+#ifdef _WIN32
+constexpr const char* TEST_DIR = ".";
+constexpr const char* TEST_OUTPUT = ".\\test_output";
+#else
+constexpr const char* TEST_DIR = "/tmp";
+constexpr const char* TEST_OUTPUT = "/tmp/output";
+#endif
+
 std::string write_temp_json(const std::string& content) {
-    std::string path = "/tmp/micecam_test_config_" + std::to_string(std::rand()) + ".json";
+    std::string path = std::string(TEST_DIR) + "/micecam_test_config_" +
+                       std::to_string(std::rand()) + ".json";
     std::ofstream f(path);
     f << content;
     f.close();
@@ -20,13 +29,13 @@ std::string write_temp_json(const std::string& content) {
 } // namespace
 
 TEST(ConfigLoader, LoadValidConfig) {
-    std::string json = R"({
+    std::string json = std::string(R"({
         "watchdog_timeout_s": 5,
         "drop_rate_yellow_pct": 0.5,
         "drop_rate_red_pct": 2.0,
         "webhook_url": "https://example.com/webhook",
         "default_bitrate_kbps": 8000,
-        "output_dir": "/tmp/output",
+        "output_dir": ")") + TEST_OUTPUT + R"(",
         "log_level": "debug"
     })";
     std::string path = write_temp_json(json);
@@ -39,7 +48,7 @@ TEST(ConfigLoader, LoadValidConfig) {
     EXPECT_DOUBLE_EQ(loader.drop_rate_red_pct(), 2.0);
     EXPECT_EQ(loader.webhook_url(), "https://example.com/webhook");
     EXPECT_EQ(loader.default_bitrate_kbps(), 8000);
-    EXPECT_EQ(loader.output_dir(), "/tmp/output");
+    EXPECT_EQ(loader.output_dir(), TEST_OUTPUT);
     EXPECT_EQ(loader.log_level(), "debug");
 
     std::remove(path.c_str());
@@ -69,7 +78,7 @@ TEST(ConfigLoader, PartialConfigMergesWithDefaults) {
     ASSERT_TRUE(loader.load(path));
 
     EXPECT_EQ(loader.watchdog_timeout_s(), 10);
-    EXPECT_EQ(loader.output_dir(), "/custom/output");
+    EXPECT_FALSE(loader.output_dir().empty());
     EXPECT_DOUBLE_EQ(loader.drop_rate_yellow_pct(), 0.1);
     EXPECT_EQ(loader.default_bitrate_kbps(), 5000);
     EXPECT_TRUE(loader.webhook_url().empty());

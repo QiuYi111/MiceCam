@@ -2,8 +2,10 @@
   "name": "micecam",
   "version": "2.0.0",
   "dependencies": [
-    "ffmpeg",
-    "qt6",
+    {
+      "name": "ffmpeg",
+      "features": ["avcodec", "avformat", "avdevice", "swscale"]
+    },
     "spdlog",
     "nlohmann-json",
     "gtest"

@@ -161,6 +161,8 @@ if(BUILD_UI)
     set_target_properties(micecam PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cmd/micecam"
     )
+
+    add_subdirectory(cmd/micecam_ui)
 endif()
 
 # Ensure test output directory exists

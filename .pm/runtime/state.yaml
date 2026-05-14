@@ -1,0 +1,69 @@
+project_id: "micecam-v2"
+status: active
+
+current_stage: "delivery"
+current_stage_goal: "Stage 2: Foundation — CMake v2 + domain model + plugin interfaces"
+current_phase: "worker_running"
+loop_iteration: 1
+
+ui_direction_required: true
+
+max_iterations: null
+consecutive_failures: 0
+max_consecutive_failures: 3
+iteration_valid_count: 1
+iteration_total_count: 1
+
+failure_tracking:
+  last_failure_signature: null
+  last_failure_reason: null
+  same_failure_count: 0
+
+readiness:
+  product_definition_ready: true
+  evidence_ready: true
+  ux_ready: true
+  ux_depth: full
+  ui_direction_ready: true
+  roadmap_ready: true
+  feasibility_ready: true
+  architecture_guardrails_ready: true
+
+supervisor_authority:
+  can:
+    - plan
+    - delegate
+    - review
+    - update_state
+    - request_rework
+    - call_grill_product
+    - call_harness_context
+    - call_harness_eval
+  cannot:
+    - change_product_positioning
+    - change_mvp_boundary_without_user
+    - change_core_tech_stack_without_user
+    - approve_core_or_infra_risk
+    - approve_security_payment_auth_changes
+
+worker:
+  engine: opencode
+  role: intern
+  current_task_file: .pm/runtime/next-task.md
+  current_report_file: .pm/runtime/worker-report.md
+  last_run_id: null
+
+last_verified:
+  commit: e010134
+  test_command: "ffprobe spike_encoder.mp4"
+  test_result: passed
+  harness_eval_result: unknown
+
+next_action:
+  type: "delegate"
+  summary: "Feasibility confirmed. Stage 2: Rewrite CMakeLists.txt, define domain types, and plugin interfaces."
+  blocked: false
+  needs_user_decision: false
+
+stop_reason: null
+last_updated: "2026-05-14"

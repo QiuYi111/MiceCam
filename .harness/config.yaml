@@ -1,0 +1,18 @@
+project: micecam
+version: "3.0"
+risk_policy: ./policies/blast-radius.yaml
+skills:
+  subskills:
+    - harness-domain-language
+    - harness-architecture-review
+    - harness-tdd
+    - harness-specify
+    - harness-plan
+    - harness-tasks
+    - harness-eval
+    - harness-report
+    - harness-risk
+    - harness-context
+    - harness-grill
+    - harness-init
+templates_dir: ./templates

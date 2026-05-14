@@ -90,6 +90,7 @@ TEST(RealCameraHIL, OpenAndCaptureFrames) {
     ASSERT_GT(dev_list->nb_devices, 0);
 
     // Try each device until one opens successfully (first may be metadata)
+    CameraTestContext cam;
     bool opened = false;
     for (int i = 0; i < static_cast<int>(dev_list->nb_devices); ++i) {
         opened = open_camera(cam, dev_list->devices[i]->device_name, 640, 480, 30);
@@ -178,7 +179,7 @@ TEST(RealCameraHIL, FullEncodePipeline) {
     AVPacket* pkt = av_packet_alloc();
 
     for (int i = 0; i < 60; ++i) {
-        ret = av_read_frame(cam_ctx, pkt);
+        int ret = av_read_frame(cam_ctx, pkt);
         if (ret < 0) { av_packet_unref(pkt); continue; }
         captured++;
 

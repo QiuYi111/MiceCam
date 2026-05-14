@@ -207,6 +207,7 @@ add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watch
 # Hardware-in-the-Loop tests (requires real camera hardware)
 if(BUILD_HIL)
     add_micecam_test(test_real_camera_hil tests/hil/test_real_camera.cpp)
+    add_micecam_test(test_e2e_stress tests/hil/test_e2e_stress.cpp)
 endif()
 
 # Spike subdirectory (headless feasibility tests)

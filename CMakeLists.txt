@@ -13,6 +13,7 @@ endif()
 
 # Build options
 option(BUILD_SPIKE "Build spike feasibility tests (headless)" OFF)
+option(BUILD_UI "Build Qt/QML UI executable (requires Qt6)" ON)
 
 # macOS: add Homebrew paths for finding libraries
 if(APPLE)
@@ -31,10 +32,12 @@ pkg_check_modules(spdlog REQUIRED IMPORTED_TARGET spdlog)
 # nlohmann_json (header-only)
 pkg_check_modules(nlohmann_json REQUIRED IMPORTED_TARGET nlohmann_json)
 
-# Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Qml Quick QuickControls2)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
+# Qt6 (optional for headless CI builds)
+if(BUILD_UI)
+    find_package(Qt6 REQUIRED COMPONENTS Core Qml Quick QuickControls2)
+    set(CMAKE_AUTOMOC ON)
+    set(CMAKE_AUTORCC ON)
+endif()
 
 # depthai-core (optional)
 find_package(depthai QUIET)
@@ -89,35 +92,32 @@ target_link_libraries(micecam_encoding PUBLIC
 
 target_compile_options(micecam_encoding PRIVATE -Wall -Wextra)
 
-# MiceCam v2 executable
-add_executable(micecam
-    cmd/micecam_v2/main.cpp
-    cmd/micecam_v2/qml/qml.qrc
-)
-
-target_include_directories(micecam PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/api
-    ${CMAKE_CURRENT_SOURCE_DIR}/internal
-)
-
-target_link_libraries(micecam PRIVATE
-    micecam_encoding
-    Qt6::Core
-    Qt6::Qml
-    Qt6::Quick
-    Qt6::QuickControls2
-    PkgConfig::FFMPEG
-    PkgConfig::spdlog
-    PkgConfig::nlohmann_json
-)
-
-target_compile_options(micecam PRIVATE -Wall -Wextra)
-
-# Output path: build/cmd/micecam/micecam
-set_target_properties(micecam PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cmd/micecam"
-)
+# MiceCam v2 executable (requires Qt6, skipped in CI headless mode)
+if(BUILD_UI)
+    add_executable(micecam
+        cmd/micecam_v2/main.cpp
+        cmd/micecam_v2/qml/qml.qrc
+    )
+    target_include_directories(micecam PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+    )
+    target_link_libraries(micecam PRIVATE
+        micecam_encoding
+        Qt6::Core
+        Qt6::Qml
+        Qt6::Quick
+        Qt6::QuickControls2
+        PkgConfig::FFMPEG
+        PkgConfig::spdlog
+        PkgConfig::nlohmann_json
+    )
+    target_compile_options(micecam PRIVATE -Wall -Wextra)
+    set_target_properties(micecam PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cmd/micecam"
+    )
+endif()
 
 # Ensure test output directory exists
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/test_output")

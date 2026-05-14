@@ -4,32 +4,96 @@ on: [push, pull_request]
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
-        build_type: [Release]
+        include:
+          - os: ubuntu-24.04
+            build_ui: ON
+          - os: macos-14
+            build_ui: ON
+          - os: windows-2022
+            build_ui: OFF
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: brew install ffmpeg qt spdlog nlohmann-json googletest pkg-config
-
+      # ====== Linux ======
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libavdevice-dev libswscale-dev qt6-base-dev qt6-declarative-dev libspdlog-dev nlohmann-json3-dev libgtest-dev pkg-config
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libavcodec-dev libavformat-dev libavutil-dev libavdevice-dev libswscale-dev \
+            qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window \
+            libspdlog-dev nlohmann-json3-dev libgtest-dev pkg-config
+          cd /usr/src/gtest && sudo cmake -B build && sudo cmake --build build && sudo cmake --install build --prefix /usr/local
+
+      # ====== macOS ======
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg qt@6 spdlog nlohmann-json googletest pkg-config
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
+
+      # ====== Windows ======
+      - name: Setup vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${{ github.workspace }}/vcpkg")) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ github.workspace }}/vcpkg"
+            & "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat"
+          }
+          echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          vcpkg install ffmpeg[core,avcodec,avformat,avdevice,swscale]:x64-windows qt6[core,quick,quickcontrols2]:x64-windows spdlog:x64-windows nlohmann-json:x64-windows gtest:x64-windows
+          & "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows `
+            ffmpeg[core,avcodec,avformat,avdevice,swscale] `
+            spdlog nlohmann-json gtest
+        shell: pwsh
 
-      - name: Configure
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_SPIKE=OFF
+      # ====== Configure ======
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DBUILD_SPIKE=OFF `
+            -DBUILD_UI=${{ matrix.build_ui }}
+        shell: pwsh
 
+      - name: Configure (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SPIKE=OFF \
+            -DBUILD_UI=${{ matrix.build_ui }}
+
+      # ====== Build & Test ======
       - name: Build
-        run: cmake --build build -j
+        run: cmake --build build --config Release -j
 
       - name: Test
-        run: cd build && ctest --output-on-failure
+        run: cd build && ctest --output-on-failure -C Release
+
+      # ====== Artifacts ======
+      - name: Upload binary (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: micecam-macos-arm64
+          path: build/cmd/micecam/micecam
+
+      - name: Upload binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: micecam-linux-x64
+          path: build/cmd/micecam/micecam

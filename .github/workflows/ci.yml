@@ -57,7 +57,6 @@ jobs:
         shell: pwsh
         run: |
           & "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows
-        shell: pwsh
 
       # ====== Configure ======
       - name: Configure (Windows)

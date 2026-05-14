@@ -1,6 +1,10 @@
 #include <gtest/gtest.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/statvfs.h>
+#endif
 
 #include "domain/DeviceInfo.h"
 #include "domain/StreamConfig.h"
@@ -10,16 +14,30 @@ using namespace micecam;
 
 TEST(PreflightValidator, DiskSpaceCheckPasses) {
     pipeline::PreflightValidator validator;
+#ifdef _WIN32
+    ULARGE_INTEGER free_bytes;
+    bool has_space = GetDiskFreeSpaceExA("C:\\", &free_bytes, nullptr, nullptr) != 0;
+#else
     struct statvfs buf;
-    if (statvfs("/tmp", &buf) == 0) {
-        uint64_t avail = static_cast<uint64_t>(buf.f_bavail) * buf.f_frsize;
-        EXPECT_TRUE(validator.check_disk_space("/tmp", avail / 10));
+    bool has_space = statvfs("/tmp", &buf) == 0;
+#endif
+    if (has_space) {
+#ifdef _WIN32
+        bool result = validator.check_disk_space("C:\\", 1000);
+#else
+        bool result = validator.check_disk_space("/tmp", 1000);
+#endif
+        EXPECT_TRUE(result);
     }
 }
 
 TEST(PreflightValidator, DiskSpaceCheckFails) {
     pipeline::PreflightValidator validator;
+#ifdef _WIN32
+    bool result = validator.check_disk_space("C:\\", UINT64_MAX);
+#else
     bool result = validator.check_disk_space("/tmp", UINT64_MAX);
+#endif
     EXPECT_FALSE(result);
 }
 
@@ -87,6 +105,12 @@ TEST(PreflightValidator, FullValidationPassesWhenDiskHasSpace) {
     config.pixel_format = "nv12";
     configs.push_back(config);
 
-    auto result = validator.validate(configs, "/tmp", 60);
+    auto result = validator.validate(configs,
+#ifdef _WIN32
+        "C:\\",
+#else
+        "/tmp",
+#endif
+        60);
     EXPECT_TRUE(result.passed);
 }

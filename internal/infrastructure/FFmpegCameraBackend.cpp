@@ -116,11 +116,16 @@ std::unique_ptr<domain::CameraStream> FFmpegCameraBackend::open_stream(const dom
     int h = config.height > 0 ? config.height : 1080;
     int fps = config.framerate > 0 ? config.framerate : 30;
 
-    av_dict_set_int(&opts, "video_size", w, 0);
-    av_dict_set_int(&opts, "framerate", fps, 0);
+    char size_str[32];
+    snprintf(size_str, sizeof(size_str), "%dx%d", w, h);
+    av_dict_set(&opts, "video_size", size_str, 0);
+
+    char fps_str[16];
+    snprintf(fps_str, sizeof(fps_str), "%d", fps);
+    av_dict_set(&opts, "framerate", fps_str, 0);
 
     if (config.pixel_format == "mjpeg") {
-        av_dict_set(&opts, "pixel_format", "mjpeg", 0);
+        av_dict_set(&opts, "input_format", "mjpeg", 0);
     }
 
     int ret = avformat_open_input(&ctx, url.c_str(), fmt, &opts);

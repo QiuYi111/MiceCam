@@ -13,9 +13,17 @@
 #include "infrastructure/SRTWriter.h"
 #include "infrastructure/HardwareEncoderSelector.h"
 
+extern "C" {
+#include <libavdevice/avdevice.h>
+}
+
 using namespace micecam;
 
-extern "C" { #include <libavdevice/avdevice.h> }
+// Need to register avdevice globally before using camera backends
+namespace {
+    struct AvDeviceInit { AvDeviceInit() { avdevice_register_all(); } };
+    static AvDeviceInit g_avdevice_init;
+}
 
 TEST(MiceCamE2E, Stress60fps1080pNVENC) {
     avdevice_register_all();
@@ -116,7 +124,6 @@ TEST(MiceCamE2E, Stress60fps1080pNVENC) {
 }
 
 TEST(MiceCamE2E, DISABLED_Stress120fps720pNVENC) {
-    avdevice_register_all();
 
     infrastructure::FFmpegCameraBackend backend;
     auto devices = backend.enumerate_devices();

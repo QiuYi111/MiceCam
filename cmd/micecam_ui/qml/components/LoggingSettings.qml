@@ -266,8 +266,8 @@ Flickable {
         spacing: 24
 
         ColumnLayout {
-            Layout.fillWidth: true
-            Layout.maximumWidth: 300
+            Layout.preferredWidth: 220
+            Layout.minimumWidth: 180
             spacing: 2
             Text { text: logRow.title; font.family: Theme.fontPrimary; font.weight: Font.Bold; font.pixelSize: 13; color: Theme.textPrimary; Layout.fillWidth: true }
             Text { text: logRow.description; font.family: Theme.fontPrimary; font.pixelSize: 12; color: Theme.textSecondary; Layout.fillWidth: true; wrapMode: Text.WordWrap }
@@ -277,7 +277,7 @@ Flickable {
             id: controlSlot
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            implicitWidth: childrenRect.width
+            implicitWidth: 200
             implicitHeight: childrenRect.height
         }
     }

@@ -41,6 +41,10 @@ ApplicationWindow {
             onPreflightTriggered: {
                 preflightModal.open()
             }
+
+            onSettingsClicked: {
+                currentViewIndex = 1
+            }
         }
 
         AppSidebar {

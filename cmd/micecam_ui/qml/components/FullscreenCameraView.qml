@@ -34,6 +34,16 @@ Rectangle {
 
     Keys.onEscapePressed: root.close()
 
+    MouseArea {
+        anchors.fill: parent
+        z: 0
+        onClicked: function(mouse) {
+            if (!contentArea.contains(contentArea.mapFromItem(root, mouse.x, mouse.y))) {
+                root.close()
+            }
+        }
+    }
+
     Rectangle {
         id: contentArea
         anchors.centerIn: parent
@@ -42,6 +52,7 @@ Rectangle {
         radius: 12
         color: "#1A1A1E"
         clip: true
+        z: 1
 
         Rectangle {
             id: topControls
@@ -211,15 +222,6 @@ Rectangle {
                         font.pixelSize: 12
                     }
                 }
-            }
-        }
-    }
-
-    MouseArea {
-        anchors.fill: parent
-        onClicked: function(mouse) {
-            if (!contentArea.contains(contentArea.mapFromItem(root, mouse.x, mouse.y))) {
-                root.close()
             }
         }
     }

@@ -14,26 +14,14 @@ Menu {
     padding: 4
     topPadding: 4
     bottomPadding: 4
+    overlap: 0
+    z: 999
 
     background: Rectangle {
         color: "white"
         radius: 10
         border.color: Theme.bgTertiary
         border.width: 1
-
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -4
-            radius: 14
-            color: "transparent"
-            border.width: 0
-
-            layer.enabled: true
-            layer.effect: Item {
-            }
-        }
-
-        layer.enabled: true
     }
 
     delegate: MenuItem {

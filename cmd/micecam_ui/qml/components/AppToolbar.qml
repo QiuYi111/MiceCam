@@ -10,6 +10,7 @@ Rectangle {
 
     signal fullscreenClicked()
     signal preflightTriggered()
+    signal settingsClicked()
 
     Rectangle {
         anchors.bottom: parent.bottom
@@ -29,7 +30,7 @@ Rectangle {
             width: isRecording ? 180 : 110
             height: 36
             radius: 8
-            color: "transparent"
+            color: recordBtn.isRecording ? "white" : Theme.recordRed
             border.color: Theme.recordRed
             border.width: 1
             clip: true
@@ -41,12 +42,22 @@ Rectangle {
                 spacing: 0
 
                 Rectangle {
-                    Layout.preferredWidth: recordBtn.isRecording ? 90 : recordBtn.width
+                    Layout.preferredWidth: recordBtn.isRecording ? 90 : recordBtn.width - 2
                     Layout.fillHeight: true
+                    Layout.topMargin: 1
+                    Layout.bottomMargin: 1
+                    Layout.leftMargin: 1
                     color: Theme.recordRed
-                    radius: 8
+                    radius: 7
+                    clip: true
 
-                    layer.enabled: recordBtn.isRecording
+                    Rectangle {
+                        anchors.right: parent.right
+                        width: 10
+                        height: parent.height
+                        color: Theme.recordRed
+                        visible: recordBtn.isRecording
+                    }
 
                     RowLayout {
                         anchors.centerIn: parent
@@ -73,6 +84,9 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    Layout.topMargin: 1
+                    Layout.bottomMargin: 1
+                    Layout.rightMargin: 1
                     color: "white"
                     visible: recordBtn.isRecording
 
@@ -113,7 +127,7 @@ Rectangle {
                 NotificationPopup {
                     id: notifyPopup
                     y: parent.height + 8
-                    x: Math.min(0, root.width - notifyPopup.width - 12)
+                    x: Math.max(0, root.width - notifyPopup.width - 12)
                 }
             }
 
@@ -135,7 +149,7 @@ Rectangle {
                     Text { text: "Settings"; font.family: Theme.fontPrimary; font.pixelSize: 14; color: Theme.textPrimary }
                     AppIcon { name: "chevron-right"; size: 8; color: Theme.textSecondary; rotation: 90 }
                 }
-                MouseArea { anchors.fill: parent; onClicked: root.parent.currentViewIndex = 1 }
+                MouseArea { anchors.fill: parent; onClicked: root.settingsClicked() }
             }
         }
     }

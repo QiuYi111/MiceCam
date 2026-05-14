@@ -196,14 +196,10 @@ Rectangle {
         }
     }
 
-    MouseArea {
-        id: rightClickArea
-        anchors.fill: parent
+    TapHandler {
         acceptedButtons: Qt.RightButton
-        propagateComposedEvents: true
-        onClicked: function(mouse) {
-            contextMenu.popup(root, mouse.x, mouse.y)
-            mouse.accepted = true
+        onTapped: function(eventPoint, button) {
+            contextMenu.popup()
         }
     }
 

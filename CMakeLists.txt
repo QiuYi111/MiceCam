@@ -45,14 +45,38 @@ endif()
 find_package(GTest CONFIG REQUIRED)
 enable_testing()
 
-# MiceCam v2 executable
-add_executable(micecam
-    cmd/micecam_v2/main.cpp
-    cmd/micecam_v2/qml/qml.qrc
+# Encoding infrastructure library
+add_library(micecam_encoding STATIC
     internal/domain/TimestampEngine.cpp
     internal/domain/PluginRegistry.cpp
     internal/domain/SessionMetadata.cpp
     internal/domain/StreamStats.cpp
+    internal/infrastructure/HardwareEncoderSelector.cpp
+    internal/infrastructure/FFmpegEncoder.cpp
+    internal/infrastructure/StreamWriter.cpp
+    internal/infrastructure/SRTWriter.cpp
+    internal/infrastructure/MetadataWriter.cpp
+    internal/pipeline/TranscodeStage.cpp
+)
+
+target_include_directories(micecam_encoding PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/api
+    ${CMAKE_CURRENT_SOURCE_DIR}/internal
+)
+
+target_link_libraries(micecam_encoding PUBLIC
+    PkgConfig::FFMPEG
+    PkgConfig::spdlog
+    PkgConfig::nlohmann_json
+)
+
+target_compile_options(micecam_encoding PRIVATE -Wall -Wextra)
+
+# MiceCam v2 executable
+add_executable(micecam
+    cmd/micecam_v2/main.cpp
+    cmd/micecam_v2/qml/qml.qrc
 )
 
 target_include_directories(micecam PRIVATE
@@ -62,6 +86,7 @@ target_include_directories(micecam PRIVATE
 )
 
 target_link_libraries(micecam PRIVATE
+    micecam_encoding
     Qt6::Core
     Qt6::Qml
     Qt6::Quick
@@ -69,7 +94,6 @@ target_link_libraries(micecam PRIVATE
     PkgConfig::FFMPEG
     PkgConfig::spdlog
     PkgConfig::nlohmann_json
-    GTest::gtest
 )
 
 target_compile_options(micecam PRIVATE -Wall -Wextra)
@@ -78,6 +102,32 @@ target_compile_options(micecam PRIVATE -Wall -Wextra)
 set_target_properties(micecam PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cmd/micecam"
 )
+
+# Ensure test output directory exists
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/test_output")
+
+# Test executables
+function(add_micecam_test name sources)
+    add_executable(${name} ${sources})
+    target_include_directories(${name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+    )
+    target_link_libraries(${name} PRIVATE micecam_encoding GTest::gtest GTest::gtest_main PkgConfig::FFMPEG PkgConfig::spdlog PkgConfig::nlohmann_json)
+    target_compile_options(${name} PRIVATE -Wall -Wextra)
+    set_target_properties(${name} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+    )
+    add_test(NAME ${name} COMMAND ${name} WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+endfunction()
+
+add_micecam_test(test_encoder_selector tests/unit/test_encoder_selector.cpp)
+add_micecam_test(test_ffmpeg_encoder tests/unit/test_ffmpeg_encoder.cpp)
+add_micecam_test(test_stream_writer tests/unit/test_stream_writer.cpp)
+add_micecam_test(test_srt_writer tests/unit/test_srt_writer.cpp)
+add_micecam_test(test_metadata_writer tests/unit/test_metadata_writer.cpp)
+add_micecam_test(test_encoding_pipeline tests/integration/test_encoding_pipeline.cpp)
 
 # Spike subdirectory (preserved from v1)
 if(BUILD_SPIKE)

@@ -33,6 +33,14 @@ ApplicationWindow {
             anchors.top: titleBar.bottom
             anchors.left: parent.left
             anchors.right: parent.right
+
+            onFullscreenClicked: {
+                fullscreenView.open("CAM_A", 29.97, 0, true, 0)
+            }
+
+            onPreflightTriggered: {
+                preflightModal.open()
+            }
         }
 
         AppSidebar {
@@ -54,17 +62,37 @@ ApplicationWindow {
         }
 
         StackLayout {
+            id: stackLayout
             currentIndex: currentViewIndex
             anchors.top: toolbar.bottom
             anchors.left: sidebar.right
             anchors.right: parent.right
             anchors.bottom: statusBar.top
 
-            CameraGridView {}
+            CameraGridView {
+                onCardFullscreen: function(name, fps, drops, isRecording, status) {
+                    fullscreenView.open(name, fps, drops, isRecording, status)
+                }
+            }
             EncodingSettings {}
             AlertsSettings {}
             LoggingSettings {}
             AboutView {}
+        }
+
+        FullscreenCameraView {
+            id: fullscreenView
+            anchors.fill: parent
+            onClosed: {
+            }
+        }
+
+        PreflightModal {
+            id: preflightModal
+            anchors.fill: parent
+            onAdjustSettings: {
+                currentViewIndex = 1
+            }
         }
     }
 }

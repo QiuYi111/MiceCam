@@ -12,6 +12,9 @@ Rectangle {
     property bool isRecording: false
     property int status: 0
 
+    signal contextConfigure()
+    signal contextFullscreen()
+
     radius: 12
     color: "#1A1A1E"
     clip: true
@@ -191,5 +194,23 @@ Rectangle {
                 }
             }
         }
+    }
+
+    MouseArea {
+        id: rightClickArea
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        propagateComposedEvents: true
+        onClicked: function(mouse) {
+            contextMenu.popup(root, mouse.x, mouse.y)
+            mouse.accepted = true
+        }
+    }
+
+    CameraContextMenu {
+        id: contextMenu
+        cameraName: root.cameraName
+        onConfigureClicked: root.contextConfigure()
+        onFullscreenClicked: root.contextFullscreen()
     }
 }

@@ -22,6 +22,9 @@ qt_add_qml_module(micecam_ui
         qml/components/LoggingSettings.qml
         qml/components/AboutView.qml
         qml/components/NotificationPopup.qml
+        qml/components/CameraContextMenu.qml
+        qml/components/FullscreenCameraView.qml
+        qml/components/PreflightModal.qml
     RESOURCES
         qml/theme/qmldir
         resources/logo.png

@@ -102,6 +102,17 @@ Canvas {
             ctx.beginPath(); ctx.arc(9, 9, 3, 0, Math.PI * 2); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(2, 9); ctx.bezierCurveTo(2, 9, 9, 2, 16, 9);
             ctx.bezierCurveTo(16, 9, 9, 16, 2, 9); ctx.stroke();
+        } else if (name === "close") {
+            ctx.beginPath();
+            ctx.moveTo(4, 4); ctx.lineTo(14, 14);
+            ctx.moveTo(14, 4); ctx.lineTo(4, 14);
+            ctx.stroke();
+        } else if (name === "warning") {
+            ctx.beginPath();
+            ctx.moveTo(9, 2); ctx.lineTo(16, 15); ctx.lineTo(2, 15); ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(9, 7); ctx.lineTo(9, 10); ctx.stroke();
+            ctx.beginPath(); ctx.arc(9, 12.5, 0.7, 0, Math.PI * 2); ctx.fill();
         }
     }
 }

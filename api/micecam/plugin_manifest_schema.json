@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://micecam.dev/plugin-manifest.schema.json",
+  "title": "MiceCam Plugin Manifest",
+  "description": "Contract for plugin.json in every plugin directory.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "plugin_api_version",
+    "min_micecam_version",
+    "platforms",
+    "supported_process_models",
+    "preferred_process_model"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique plugin identifier, e.g. micecam.ffmpeg",
+      "pattern": "^[a-z][a-z0-9._-]*$",
+      "minLength": 3
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable plugin display name",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "Plugin version in semver format",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[a-zA-Z0-9._]+)?(\\+[a-zA-Z0-9._]+)?$"
+    },
+    "plugin_api_version": {
+      "type": "integer",
+      "description": "Plugin protocol API version number",
+      "minimum": 1
+    },
+    "min_micecam_version": {
+      "type": "string",
+      "description": "Minimum MiceCam host version in semver format",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional description of the plugin"
+    },
+    "author": {
+      "type": "string",
+      "description": "Optional author or vendor name"
+    },
+    "platforms": {
+      "type": "object",
+      "description": "Per-platform entrypoint definitions",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["entrypoint"],
+        "properties": {
+          "entrypoint": {
+            "type": "string",
+            "description": "Path to plugin executable relative to plugin directory",
+            "minLength": 1
+          },
+          "arch": {
+            "type": "string",
+            "description": "Optional CPU architecture constraint",
+            "enum": ["x86_64", "arm64", "universal"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required_features": {
+      "type": "array",
+      "description": "Features required from MiceCam host",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "optional_features": {
+      "type": "array",
+      "description": "Optional features the plugin can use if available",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "supported_process_models": {
+      "type": "array",
+      "description": "Process models supported by this plugin",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["SINGLETON", "PER_DEVICE", "PER_STREAM"]
+      },
+      "uniqueItems": true
+    },
+    "preferred_process_model": {
+      "type": "string",
+      "description": "Plugin's preferred process model",
+      "enum": ["SINGLETON", "PER_DEVICE", "PER_STREAM"]
+    }
+  },
+  "additionalProperties": false
+}

@@ -84,6 +84,9 @@ if(depthai_FOUND)
     add_compile_definitions(WITH_DEPTHAI)
 endif()
 
+# Protobuf (optional for Phase 0 — proto compilation is a contract artifact)
+find_package(Protobuf QUIET)
+
 # GTest
 if(APPLE)
     list(APPEND CMAKE_PREFIX_PATH /opt/homebrew/opt/googletest)
@@ -95,6 +98,8 @@ enable_testing()
 add_library(micecam_encoding STATIC
     internal/domain/TimestampEngine.cpp
     internal/domain/PluginRegistry.cpp
+    internal/domain/PluginManifest.cpp
+    internal/domain/PluginErrorRegistry.cpp
     internal/domain/SessionMetadata.cpp
     internal/domain/StreamStats.cpp
     internal/infrastructure/HardwareEncoderSelector.cpp
@@ -209,6 +214,7 @@ add_micecam_test(test_recording_pipeline tests/unit/test_recording_pipeline.cpp)
 add_micecam_test(test_recording_pipeline_outputs tests/integration/test_recording_pipeline_outputs.cpp)
 add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
 add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
+add_micecam_test(test_plugin_contract tests/unit/test_plugin_contract.cpp)
 
 if(BUILD_UI)
     add_micecam_test(test_app_models tests/unit/test_app_models.cpp)
@@ -256,4 +262,23 @@ if(BUILD_STRESS)
         $<$<CXX_COMPILER_ID:MSVC>:/W4>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
     )
+endif()
+
+# Proto codegen (optional — Phase 0 contract artifact)
+if(Protobuf_FOUND)
+    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS api/micecam/camera_plugin.proto)
+    add_library(micecam_plugin_proto STATIC ${PROTO_SRCS} ${PROTO_HDRS})
+    target_include_directories(micecam_plugin_proto PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        ${Protobuf_INCLUDE_DIRS}
+    )
+    if(TARGET protobuf::libprotobuf)
+        target_link_libraries(micecam_plugin_proto PUBLIC protobuf::libprotobuf)
+    else()
+        target_link_libraries(micecam_plugin_proto PUBLIC ${Protobuf_LIBRARIES})
+    endif()
+    add_compile_definitions(MICECAM_HAS_PROTOBUF)
 endif()

@@ -1,119 +1,107 @@
-# Worker Report
+# Worker Report: Phase 0 — Plugin Protocol Contract Freeze
 
-## Task summary
+**Worker**: harness-intern (single worker)  
+**Task**: `.pm/runtime/next-task.md` — 003-phase-0-contract-freeze  
+**Branch**: `codex/camera-plugin-runtime`  
+**Date**: 2026-05-15
 
-Backend/UI Wiring Regression Repair — fixed production-mode empty-state rendering, recording affordance logic, and status bar messaging; locked semantics in unit tests.
+## Summary
 
-## What was done
+All 14 Phase 0 deliverables implemented. Full build succeeds (100%), all 25 tests pass (100%), proto compiles with protoc 34.1, manifest validation passes, invalid manifests correctly rejected.
 
-- Rewired `main.cpp` to use `BackendMode::Production` instead of `MockOnly` as default startup mode
-- Added `canStartRecording` and `cameraCount` Q_PROPERTY to `AppController`, with proper NOTIFY signals
-- Implemented conditional `recordButtonText`: "Start" (cameras available), "Stop" (recording), "No Device" (no cameras)
-- Added `cameraCount()` accessor and `canStartRecording()` guard (cameras > 0 and not recording)
-- Updated `preflightMessage()` to return "No cameras detected" when camera count is zero
-- Added cascading signal emissions on `refreshCameras()` for camera count, canStart, and button text changes
-- Added preflight failure path in `startRecording()` for zero-camera case
-- Fixed `AppToolbar.qml`: replaced always-red record button with conditional green (Start) / red (Stop) / disabled gray (No Device)
-- Added `play` and `stop` icon paths to `AppIcon.qml` for toolbar button states
-- Rewrote `AppStatusBar.qml`: status segments now conditionally show recording metrics vs. idle readiness/preflight state; recording-only segments hidden when idle; fixed orphan divider visibility
-- Added empty-state overlay to `CameraGridView.qml`: centered "No cameras detected" panel with preflight message
-- Wired `main.qml` to pass new `canStartRecording`, `preflightMessage`, and `cameraCount` properties to toolbar and status bar
-- Extended `test_app_controller.cpp` with two new tests: `ProductionModeWithoutRegisteredBackendsShowsEmptyIdleState` and `StartRecordingWithoutCamerasReportsPreflightFailure`
-- Updated existing tests to assert new "Start" button text (was "Record") and `canStartRecording` transitions
+## Changed/New Files (1,553 lines total)
 
-## Changed files
+### New Files (11)
 
-| File | Change type | Lines |
-|------|------------|-------|
-| `cmd/micecam_ui/main.cpp` | Modified | +1 -1 |
-| `cmd/micecam_ui/AppController.h` | Modified | +6 -2 |
-| `cmd/micecam_ui/AppController.cpp` | Modified | +43 -6 |
-| `cmd/micecam_ui/qml/components/AppIcon.qml` | Modified | +8 -0 |
-| `cmd/micecam_ui/qml/components/AppStatusBar.qml` | Modified | +32 -16 |
-| `cmd/micecam_ui/qml/components/AppToolbar.qml` | Modified | +16 -10 |
-| `cmd/micecam_ui/qml/components/CameraGridView.qml` | Modified | +39 -0 |
-| `cmd/micecam_ui/qml/main.qml` | Modified | +3 -0 |
-| `tests/unit/test_app_controller.cpp` | Modified | +42 -2 |
-| `.pm/runtime/next-task.md` | Modified | task updated to repair pass |
+| File | Lines | Description |
+|------|-------|-------------|
+| `api/micecam/camera_plugin.proto` | 295 | gRPC service: 11 RPCs, 23 messages, 8 enums |
+| `api/micecam/plugin_manifest_schema.json` | 103 | JSON Schema (draft-07) for plugin.json validation |
+| `internal/domain/PluginManifest.h` | 36 | Struct + from_json/to_json/validate API |
+| `internal/domain/PluginManifest.cpp` | 108 | Implementation: semver regex, process model validation |
+| `internal/domain/PluginSource.h` | 24 | Camera source group: BUNDLED/LINKED, diagnostics state |
+| `internal/domain/PluginDeviceInfo.h` | 27 | Extended device descriptor with optional exclusive_resource_id |
+| `internal/domain/StreamRingDescriptor.h` | 50 | Ring contract: PayloadHeader, ownership, policy, platform handle |
+| `internal/domain/PluginErrorRegistry.h` | 48 | 17 error codes + ErrorMeta registry (FR-019) |
+| `internal/domain/PluginErrorRegistry.cpp` | 89 | Error registry entries with severity/recovery/messages |
+| `internal/domain/ResourceRequest.h` | 25 | Resource allocation model: slots, bandwidth, budgets |
+| `3rdParty/bundled_plugins/micecam.ffmpeg/plugin.json` | 27 | Golden manifest for official FFmpeg plugin |
+| `scripts/validate_plugin_manifest.py` | 54 | Manifest validator using jsonschema |
+| `tests/unit/test_plugin_contract.cpp` | 275 | 22 tests: manifest validation, error registry, domain defaults |
 
-**Total: 10 files changed, 235 insertions(+), 240 deletions(-)**
+### Updated Files (3)
 
-## Commands run
+| File | Lines | Changes |
+|------|-------|---------|
+| `internal/domain/PluginDescriptor.h` | 21 (+7) | Extended with id, api_version, path, source_type, PluginSourceType enum |
+| `internal/domain/PluginRegistry.h` | 35 (+10) | Added register_external(), has_external(), source-grouped queries |
+| `internal/domain/PluginRegistry.cpp` | 52 (+21) | Implementations for new external plugin methods |
+| `CMakeLists.txt` | 284 (+25) | find_package(Protobuf QUIET), proto codegen target, new test registration |
 
-| Command | Result |
-|---------|--------|
-| `cmake --build build --target micecam_ui test_app_controller -j 4` | PASS — all targets built successfully |
-| `ctest --test-dir build --output-on-failure -R test_app_controller` | PASS — all 5 tests passed |
+## Design Decisions
 
-## Test results
+1. **Proto-only, no gRPC codegen**: CMake uses `protobuf_generate_cpp` (generates `.pb.h/.pb.cc`) but not `grpc_generate_cpp`. gRPC server/client implementation is deferred to Phase 2+. The proto file uses `service CameraPluginService` syntax but no server stubs are generated yet — this is intentional per the task's forbidden scope.
 
+2. **PluginSourceType lives in PluginDescriptor.h**: Extracted the enum into PluginDescriptor.h to avoid a circular dependency. PluginSource.h includes PluginDescriptor.h for the type.
+
+3. **Protobuf is optional**: CMake uses `find_package(Protobuf QUIET)` and guards the proto target with `if(Protobuf_FOUND)`. The build works without protobuf (proto-dependent test coverage is in the manifest/registry tests).
+
+4. **StreamRingDescriptor platform_handle**: Uses `std::string platform_handle_type` + `uintptr_t platform_handle_value` rather than `google::protobuf::Any` to keep the C++ domain model separable from the proto wire format.
+
+5. **Error registry completeness**: All 17 error codes cover the FR-019 failure modes (MANIFEST_PARSE_ERROR through SDK_MISSING), plus the additional ones from the task spec (STREAM_WRITE_FAILED, BACKPRESSURE, DISK_FULL, EXCLUSIVE_CONFLICT).
+
+## Verification Commands and Results
+
+```bash
+# Proto compilation
+$ protoc --cpp_out=/tmp/micecam_proto api/micecam/camera_plugin.proto -I.
+Proto compiled OK  ✓ (generates camera_plugin.pb.cc 559.7K, camera_plugin.pb.h 566.2K)
+
+# Manifest validation
+$ python3 scripts/validate_plugin_manifest.py \
+    3rdParty/bundled_plugins/micecam.ffmpeg/plugin.json \
+    api/micecam/plugin_manifest_schema.json
+PASS: 3rdParty/bundled_plugins/micecam.ffmpeg/plugin.json  ✓
+Validation passed.  ✓
+
+# Invalid manifest correctly rejected
+$ python3 scripts/validate_plugin_manifest.py /tmp/bad_manifest.json api/micecam/plugin_manifest_schema.json
+7 validation error(s) found.  ✓ (correctly rejected)
+
+# Full build
+$ cmake --build build -j4
+[100%] Built target micecam_ui  ✓
+
+# Full test suite
+$ ctest --test-dir build --output-on-failure
+100% tests passed, 0 tests failed out of 25  ✓
+
+# Contract tests specifically
+$ ctest --test-dir build --output-on-failure -R test_plugin_contract
+100% tests passed, 0 tests failed out of 1  ✓
 ```
-Test project /Users/qiujingyi.7/MiceCam/build
-    Start 1: AppController.MockModeDiscoversUiReadyCameras
-    Start 2: AppController.StartAndStopRecordingUpdatesState
-    Start 3: AppController.RecordingPumpUpdatesFrameCounters
-    Start 4: AppController.ProductionModeWithoutRegisteredBackendsShowsEmptyIdleState
-    Start 5: AppController.StartRecordingWithoutCamerasReportsPreflightFailure
-1/5 Test #1: AppController.MockModeDiscoversUiReadyCameras ....   Passed
-2/5 Test #2: AppController.StartAndStopRecordingUpdatesState ...   Passed
-3/5 Test #3: AppController.RecordingPumpUpdatesFrameCounters ...   Passed
-4/5 Test #4: AppController.ProductionModeWithoutRegisteredBackendsShowsEmptyIdleState. Passed
-5/5 Test #5: AppController.StartRecordingWithoutCamerasReportsPreflightFailure. Passed
 
-5 tests passed, 0 tests failed.
-```
+## Acceptance Checklist
 
-New tests added:
-- `ProductionModeWithoutRegisteredBackendsShowsEmptyIdleState` — asserts zero cameras → canStartRecording=false, buttonText="No Device", preflightMessage="No cameras detected"
-- `StartRecordingWithoutCamerasReportsPreflightFailure` — asserts startRecording() returns false, state unchanged, preflight message set
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | `camera_plugin.proto` defines all 11 RPCs and required enums | ✓ |
+| 2 | `plugin_manifest_schema.json` validates against golden manifest | ✓ |
+| 3 | `PluginManifest` rounds-trips through JSON and validates semver | ✓ |
+| 4 | `PluginSource`/`PluginDeviceInfo`/`StreamRingDescriptor`/`ResourceRequest` headers compile | ✓ |
+| 5 | `PluginErrorRegistry` covers all FR-019 failure modes | ✓ |
+| 6 | `PluginDescriptor` extended with manifest fields | ✓ |
+| 7 | `PluginRegistry` extended with external plugin support | ✓ |
+| 8 | Golden FFmpeg `plugin.json` passes schema validation | ✓ |
+| 9 | `validate_plugin_manifest.py` rejects invalid manifests | ✓ |
+| 10 | Protobuf codegen builds with `find_package(Protobuf)` | ✓ (Protobuf 34.1 found) |
+| 11 | No existing tests regressed | ✓ (25/25 pass) |
+| 12 | No UI/QML files modified | ✓ |
+| 13 | No gRPC server/client code written | ✓ |
+| 14 | No new CMake dependencies beyond protobuf | ✓ |
 
-Updated tests:
-- `MockModeDiscoversUiReadyCameras` — now asserts `canStartRecording()==true`, `cameraCount()==5`, buttonText=="Start"
-- `StartAndStopRecordingUpdatesState` — now asserts full canStartRecording transitions and "Start"/"Stop" cycle
+## Remaining Risks
 
-## Harness results
-
-- Risk classification: **BRANCH** — multi-file behavioral change touching backend controller, QML views, and tests
-- Gate: build + targeted unit tests — **ALL PASSED**
-
-## Acceptance criteria checklist
-
-- [x] Production startup with no cameras shows `0 cameras` and no camera cards
-- [x] Production/no-camera state disables the recording action and exposes an actionable no-device message
-- [x] Idle with available devices presents a green play/start affordance
-- [x] Recording presents a red stop affordance
-- [x] Bottom status bar distinguishes idle readiness from recording metrics
-- [x] MockOnly remains available for explicit tests/demo mode only
-- [x] Targeted build and tests pass
-
-## Problems encountered
-
-- AppStatusBar had orphan `Divider {}` items between recording-only segments that remained visible when recording segments were hidden. Fixed by adding `visible: root.recording` to each Divider adjacent to recording-only StatusSegments.
-- Button text was "Record" in prior implementation but the task semantics require "Start"/"Stop"/"No Device" tri-state. All existing tests updated to match the new semantics.
-
-## Deviations from task
-
-- `AppIcon.qml` was not listed in allowed scope but required `play` and `stop` icon paths to render the green Start / red Stop affordances. This is a minimal, necessary addition (8 lines) within the spirit of the task.
-- CameraGridView empty-state overlay references `appController.cameraCount` and `appController.preflightMessage` directly rather than through an injected property. This matches the existing pattern in the file where `appController` is already accessed directly.
-
-## Remaining work
-
-- Manual visual smoke test on macOS with Production mode to confirm QML renders correctly with no cameras
-- Integration test for QML property bindings (optional — currently validated through build + unit tests only)
-
-## Remaining risks
-
-- **QML runtime errors**: The QML changes are compile-time validated (build passes) but not runtime-validated in this session. An on-device smoke test is recommended before merge.
-- **Theme constants**: `Theme.statusGreen` and `Theme.statusAmber` are used in AppToolbar and AppStatusBar. If these colors are not defined in the Theme singleton, runtime errors will occur.
-- **Production backend discovery**: On a machine with actual cameras (FFmpeg/OAK-D), the Production mode will attempt hardware discovery. Behavior on machines with partial hardware support has not been tested.
-
-## Suggested next step
-
-Run manual Production-mode smoke test on macOS to verify QML rendering, then commit and merge the branch.
-
-## Evidence
-
-- Branch: dirty working tree on current branch (not yet committed)
-- Build: `cmake --build build --target micecam_ui test_app_controller -j 4` — PASS
-- Tests: `ctest --test-dir build --output-on-failure -R test_app_controller` — 5/5 PASSED
-- Diff stats: 10 files changed, 235 insertions(+), 240 deletions(-)
+- **Protobuf version sensitivity**: The proto uses `protobuf_generate_cpp` from CMake 3.20+ FindProtobuf. On CI without Homebrew, protobuf may not be found (handled gracefully with `QUIET` + `if(Protobuf_FOUND)`).
+- **gRPC codegen**: The proto defines `service CameraPluginService` but gRPC C++ codegen (`grpc_cpp_plugin`) is not invoked. This is deferred to Phase 2. The static proto library is ready to be extended with gRPC when needed.
+- **PluginRegistry method stubs**: `get_source_grouped_plugins()` currently delegates to `get_external_plugins()`. Real source grouping by plugin id will be implemented in Phase 1.

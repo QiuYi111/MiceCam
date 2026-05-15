@@ -391,4 +391,76 @@ endif()
 if(BUILD_PLUGINS)
     find_package(gRPC CONFIG REQUIRED)
     add_subdirectory(cmd/plugins/micecam_ffmpeg)
+    add_subdirectory(cmd/plugins/micecam_oak)
+
+    # OAK plugin gRPC integration test (no hardware required)
+    set(OAK_PLUGIN_TEST_SRC tests/unit/test_oak_plugin_server.cpp)
+    set(OAK_PLUGIN_PROTO_GEN_DIR "${CMAKE_BINARY_DIR}/oak_test_proto_gen")
+    file(MAKE_DIRECTORY "${OAK_PLUGIN_PROTO_GEN_DIR}")
+
+    find_program(OAK_TEST_PROTOC protoc REQUIRED)
+    find_program(OAK_TEST_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+
+    add_custom_command(
+        OUTPUT
+            ${OAK_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+            ${OAK_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.h
+            ${OAK_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+            ${OAK_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.h
+        COMMAND ${OAK_TEST_PROTOC}
+            ARGS
+                --proto_path=${CMAKE_SOURCE_DIR}/api
+                --cpp_out=${OAK_PLUGIN_PROTO_GEN_DIR}
+                --grpc_out=${OAK_PLUGIN_PROTO_GEN_DIR}
+                --plugin=protoc-gen-grpc=${OAK_TEST_GRPC_CPP_PLUGIN}
+                ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+        DEPENDS ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+        COMMENT "Generating gRPC stubs for OAK plugin test"
+    )
+
+    add_executable(test_oak_plugin_server
+        ${OAK_PLUGIN_TEST_SRC}
+        ${OAK_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+        ${OAK_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+        cmd/plugins/micecam_oak/OAKPluginServer.cpp
+    )
+
+    target_include_directories(test_oak_plugin_server PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmd/plugins/micecam_oak
+        ${OAK_PLUGIN_PROTO_GEN_DIR}
+    )
+
+    if(APPLE)
+        target_include_directories(test_oak_plugin_server PRIVATE /opt/homebrew/include)
+    endif()
+
+    target_link_libraries(test_oak_plugin_server PRIVATE
+        micecam_encoding
+        gRPC::grpc++
+        gRPC::grpc
+        protobuf::libprotobuf
+        GTest::gtest
+        GTest::gtest_main
+        PkgConfig::spdlog
+        PkgConfig::nlohmann_json
+    )
+
+    target_compile_options(test_oak_plugin_server PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+
+    target_compile_definitions(test_oak_plugin_server PRIVATE
+        _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+    )
+
+    set_target_properties(test_oak_plugin_server PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+    )
+
+    add_test(NAME test_oak_plugin_server COMMAND test_oak_plugin_server
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 endif()

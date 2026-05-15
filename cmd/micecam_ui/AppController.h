@@ -13,7 +13,9 @@
 #include "AppAlertModel.h"
 #include "AppCameraModel.h"
 #include "AppSettings.h"
+#include "CameraSourceModel.h"
 #include "infrastructure/CameraManager.h"
+#include "infrastructure/PluginRegistryService.h"
 #include "pipeline/RecordingPipeline.h"
 
 namespace micecam::ui {
@@ -23,6 +25,7 @@ enum class BackendMode { Production, MockOnly };
 class AppController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QAbstractListModel* cameraModel READ cameraModel CONSTANT)
+    Q_PROPERTY(QAbstractListModel* sourceModel READ sourceModel CONSTANT)
     Q_PROPERTY(QAbstractListModel* alertModel READ alertModel CONSTANT)
     Q_PROPERTY(AppSettings* settings READ settings CONSTANT)
     Q_PROPERTY(bool isRecording READ isRecording NOTIFY isRecordingChanged)
@@ -44,6 +47,7 @@ public:
     explicit AppController(BackendMode mode, QObject* parent = nullptr);
 
     QAbstractListModel* cameraModel() const;
+    QAbstractListModel* sourceModel() const;
     QAbstractListModel* alertModel() const;
     AppSettings* settings() const;
     bool isRecording() const;
@@ -90,9 +94,11 @@ private:
     };
 
     BackendMode mode_;
+    infrastructure::PluginRegistryService plugin_registry_;
     infrastructure::CameraManager manager_;
     pipeline::RecordingPipeline pipeline_;
     AppCameraModel* camera_model_;
+    CameraSourceModel* source_model_;
     AppAlertModel* alert_model_;
     AppSettings* settings_;
 

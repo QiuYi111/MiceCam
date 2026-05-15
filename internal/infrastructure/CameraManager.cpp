@@ -1,10 +1,16 @@
 #include "CameraManager.h"
 
+#include "infrastructure/PluginRegistryService.h"
+
 namespace micecam::infrastructure {
 
 void CameraManager::register_backend(std::unique_ptr<api::ICameraBackend> backend) {
     std::lock_guard<std::mutex> lock(mutex_);
     backends_.push_back(std::move(backend));
+}
+
+void CameraManager::set_plugin_registry(PluginRegistryService* registry) {
+    plugin_registry_ = registry;
 }
 
 std::vector<domain::DeviceInfo> CameraManager::discover_all() {
@@ -22,6 +28,20 @@ std::unique_ptr<domain::CameraStream> CameraManager::open_stream(const domain::S
     auto* backend = find_backend_for_device(config.device_id);
     if (!backend) return nullptr;
     return backend->open_stream(config);
+}
+
+std::vector<domain::PluginSource> CameraManager::get_sources() {
+    if (plugin_registry_) {
+        return plugin_registry_->getSources();
+    }
+    return {};
+}
+
+std::vector<domain::PluginDeviceInfo> CameraManager::get_devices_for_source(const std::string& source_id) {
+    std::vector<domain::PluginDeviceInfo> result;
+    if (!plugin_registry_) return result;
+    (void)source_id;
+    return result;
 }
 
 api::ICameraBackend* CameraManager::find_backend_for_device(const std::string& device_id) {

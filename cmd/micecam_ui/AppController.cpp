@@ -14,19 +14,26 @@ namespace micecam::ui {
 AppController::AppController(BackendMode mode, QObject* parent)
     : QObject(parent)
     , mode_(mode)
+    , plugin_registry_("../3rdParty/bundled_plugins", ".")
     , camera_model_(new AppCameraModel(this))
+    , source_model_(new CameraSourceModel(this))
     , alert_model_(new AppAlertModel(this))
     , settings_(new AppSettings(this))
 {
+    plugin_registry_.initialize();
+
     if (mode_ == BackendMode::Production) {
         manager_.register_backend(std::make_unique<infrastructure::FFmpegCameraBackend>());
         manager_.register_backend(std::make_unique<infrastructure::OAKCameraBackend>());
     } else {
         manager_.register_backend(std::make_unique<infrastructure::MockCameraBackend>());
     }
+
+    manager_.set_plugin_registry(&plugin_registry_);
 }
 
 QAbstractListModel* AppController::cameraModel() const { return camera_model_; }
+QAbstractListModel* AppController::sourceModel() const { return source_model_; }
 QAbstractListModel* AppController::alertModel() const { return alert_model_; }
 AppSettings* AppController::settings() const { return settings_; }
 
@@ -106,6 +113,7 @@ static void pushLogEntry(QStringList& entries, const QString& msg) {
 
 void AppController::refreshCameras() {
     auto devices = manager_.discover_all();
+    auto sources = manager_.get_sources();
 
     std::vector<CameraRow> rows;
     for (const auto& device : devices) {
@@ -113,6 +121,8 @@ void AppController::refreshCameras() {
             CameraRow row;
             row.cameraId = QString::fromStdString(device.id) + "_" + QString::number(stream.index);
             row.name = QString::fromStdString(stream.label);
+            row.sourceId.clear();
+            row.sourceGroup.clear();
             row.fps = stream.supported_framerates.empty() ? 0.0 : static_cast<double>(stream.supported_framerates.front());
             row.dropCount = 0;
             row.recording = recording_;
@@ -135,6 +145,10 @@ void AppController::refreshCameras() {
 
     const int previous_count = cameraCount();
     camera_model_->replaceRows(std::move(rows));
+
+    std::vector<domain::PluginDeviceInfo> plugin_devices;
+    source_model_->populateFromSources(sources, plugin_devices);
+
     preflight_message_ = cameraCount() == 0
         ? QStringLiteral("No cameras detected")
         : QStringLiteral("Ready");

@@ -5,6 +5,7 @@ add_executable(micecam_ui
     AppAlertModel.cpp
     AppSettings.cpp
     AppController.cpp
+    CameraSourceModel.cpp
 )
 
 qt_policy(SET QTP0004 NEW)

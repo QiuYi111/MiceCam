@@ -27,6 +27,8 @@ QVariant AppCameraModel::data(const QModelIndex& index, int role) const {
         case ResolutionOptionsRole: return row.resolutionLabels;
         case FramerateOptionsRole: return row.framerateLabels;
         case FormatOptionsRole: return row.formatLabels;
+        case SourceIdRole: return row.sourceId;
+        case SourceGroupRole: return row.sourceGroup;
     }
     return QVariant();
 }
@@ -43,6 +45,8 @@ QHash<int, QByteArray> AppCameraModel::roleNames() const {
     roles[ResolutionOptionsRole] = "resolutionOptions";
     roles[FramerateOptionsRole] = "framerateOptions";
     roles[FormatOptionsRole] = "formatOptions";
+    roles[SourceIdRole] = "sourceId";
+    roles[SourceGroupRole] = "sourceGroup";
     return roles;
 }
 
@@ -67,6 +71,8 @@ QVariantMap AppCameraModel::get(int row) const {
     map["resolutionOptions"] = r.resolutionLabels;
     map["framerateOptions"] = r.framerateLabels;
     map["formatOptions"] = r.formatLabels;
+    map["sourceId"] = r.sourceId;
+    map["sourceGroup"] = r.sourceGroup;
     return map;
 }
 

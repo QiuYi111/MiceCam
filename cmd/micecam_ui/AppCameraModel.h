@@ -11,6 +11,8 @@ namespace micecam::ui {
 struct CameraRow {
     QString cameraId;
     QString name;
+    QString sourceId;
+    QString sourceGroup;
     QStringList resolutionLabels;
     QStringList framerateLabels;
     QStringList formatLabels;
@@ -34,7 +36,9 @@ public:
         AlertMessageRole,
         ResolutionOptionsRole,
         FramerateOptionsRole,
-        FormatOptionsRole
+        FormatOptionsRole,
+        SourceIdRole,
+        SourceGroupRole
     };
     Q_ENUM(CameraRoles)
 

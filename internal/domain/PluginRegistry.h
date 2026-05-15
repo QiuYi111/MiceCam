@@ -22,6 +22,7 @@ public:
     bool has_external() const;
     std::vector<PluginDescriptor*> get_external_plugins();
     std::vector<PluginDescriptor*> get_source_grouped_plugins();
+    std::vector<PluginSource> get_sources() const;
 
     std::vector<DeviceInfo> discover_all();
     api::ICameraBackend* get_backend(const std::string& type);

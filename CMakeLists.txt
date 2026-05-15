@@ -111,6 +111,8 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/AlertManager.cpp
     internal/infrastructure/Watchdog.cpp
     internal/infrastructure/FeishuWebhook.cpp
+    internal/infrastructure/LinkedPluginConfig.cpp
+    internal/infrastructure/PluginRegistryService.cpp
     internal/infrastructure/MockCameraBackend.cpp
     internal/infrastructure/CameraManager.cpp
     internal/infrastructure/OAKCameraBackend.cpp
@@ -215,6 +217,8 @@ add_micecam_test(test_recording_pipeline_outputs tests/integration/test_recordin
 add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
 add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
 add_micecam_test(test_plugin_contract tests/unit/test_plugin_contract.cpp)
+add_micecam_test(test_plugin_registry tests/unit/test_plugin_registry.cpp)
+add_micecam_test(test_linked_plugin_config tests/unit/test_linked_plugin_config.cpp)
 
 if(BUILD_UI)
     add_micecam_test(test_app_models tests/unit/test_app_models.cpp)
@@ -224,12 +228,14 @@ if(BUILD_UI)
     target_sources(test_app_models PRIVATE
         cmd/micecam_ui/AppCameraModel.cpp
         cmd/micecam_ui/AppAlertModel.cpp
+        cmd/micecam_ui/CameraSourceModel.cpp
     )
     target_sources(test_app_controller PRIVATE
         cmd/micecam_ui/AppCameraModel.cpp
         cmd/micecam_ui/AppAlertModel.cpp
         cmd/micecam_ui/AppSettings.cpp
         cmd/micecam_ui/AppController.cpp
+        cmd/micecam_ui/CameraSourceModel.cpp
     )
 endif()
 

@@ -10,6 +10,10 @@ Rectangle {
     color: Theme.bgSecondary
 
     signal viewChanged(int index)
+    signal cameraSelected(string name, int status)
+
+    property int activeViewIndex: 0
+    property string _selectedCameraName: ""
 
     Rectangle {
         anchors.right: parent.right
@@ -45,7 +49,14 @@ Rectangle {
                 width: ListView.view.width
                 height: 40
                 radius: 8
-                color: (root.parent.currentViewIndex === 0 && index === 0) ? Theme.navyTint : "transparent"
+                color: {
+                    if (root.activeViewIndex === 5 && root._selectedCameraName === model.name) return Theme.navyTint
+                    if (root.activeViewIndex === 0 && index === 0) return Theme.navyTint
+                    return "transparent"
+                }
+
+                property string camName: model.name
+                property int camStatus: model.status
 
                 RowLayout {
                     anchors.fill: parent
@@ -88,7 +99,10 @@ Rectangle {
 
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: root.viewChanged(0)
+                    onClicked: {
+                        root._selectedCameraName = cameraItem.camName
+                        root.cameraSelected(cameraItem.camName, cameraItem.camStatus)
+                    }
                 }
             }
         }

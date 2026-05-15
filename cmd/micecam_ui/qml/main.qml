@@ -5,6 +5,7 @@ import "theme"
 import "components"
 
 ApplicationWindow {
+    id: appRoot
     visible: true
     width: 1200
     height: 800
@@ -13,6 +14,20 @@ ApplicationWindow {
     color: "transparent"
 
     property int currentViewIndex: 0
+    property string selectedCameraName: ""
+    property double selectedCameraFps: 29.97
+    property int selectedCameraDrops: 0
+    property int selectedCameraStatus: 0
+    property bool selectedCameraRecording: true
+
+    function openCameraDetail(name, fps, drops, isRecording, status) {
+        selectedCameraName = name
+        selectedCameraFps = fps !== undefined ? fps : 29.97
+        selectedCameraDrops = drops !== undefined ? drops : 0
+        selectedCameraRecording = isRecording !== undefined ? isRecording : true
+        selectedCameraStatus = status !== undefined ? status : 0
+        currentViewIndex = 5
+    }
 
     Rectangle {
         id: windowRoot
@@ -52,9 +67,19 @@ ApplicationWindow {
             anchors.top: toolbar.bottom
             anchors.left: parent.left
             anchors.bottom: statusBar.top
+            activeViewIndex: currentViewIndex
 
             onViewChanged: (index) => {
                 currentViewIndex = index
+            }
+
+            onCameraSelected: function(name, status) {
+                var fps = 29.97
+                var drops = 0
+                var rec = true
+                var st = status
+                if (name === "CAM_D") { fps = 18.45; drops = 152; }
+                appRoot.openCameraDetail(name, fps, drops, rec, st)
             }
         }
 
@@ -74,14 +99,36 @@ ApplicationWindow {
             anchors.bottom: statusBar.top
 
             CameraGridView {
+                id: cameraGridPage
                 onCardFullscreen: function(name, fps, drops, isRecording, status) {
                     fullscreenView.open(name, fps, drops, isRecording, status)
+                }
+                onCardConfigure: function(name, fps, drops, isRecording, status) {
+                    appRoot.openCameraDetail(name, fps, drops, isRecording, status)
                 }
             }
             EncodingSettings {}
             AlertsSettings {}
-            LoggingSettings {}
+            LoggingSettings {
+                onNavigateBack: currentViewIndex = 0
+            }
             AboutView {}
+
+            CameraDetailView {
+                cameraName: appRoot.selectedCameraName
+                cameraFps: appRoot.selectedCameraFps
+                cameraDrops: appRoot.selectedCameraDrops
+                cameraStatus: appRoot.selectedCameraStatus
+                cameraRecording: appRoot.selectedCameraRecording
+
+                onBackClicked: {
+                    currentViewIndex = 0
+                }
+
+                onFullscreenClicked: function(name, fps, drops, isRecording, status) {
+                    fullscreenView.open(name, fps, drops, isRecording, status)
+                }
+            }
         }
 
         FullscreenCameraView {

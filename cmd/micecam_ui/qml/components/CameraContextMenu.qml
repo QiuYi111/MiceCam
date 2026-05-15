@@ -1,88 +1,178 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import "../theme"
 
-Menu {
+Rectangle {
     id: root
 
     property string cameraName: ""
+    property bool menuVisible: false
+    property real menuX: 0
+    property real menuY: 0
     signal configureClicked()
     signal fullscreenClicked()
     signal removeClicked()
 
-    padding: 4
-    topPadding: 4
-    bottomPadding: 4
-    overlap: 0
+    visible: menuVisible
     z: 999
+    width: 200
+    height: menuCol.height + 16
+    color: "white"
+    radius: 10
+    border.color: Theme.bgTertiary
+    border.width: 1
 
-    background: Rectangle {
-        color: "white"
-        radius: 10
-        border.color: Theme.bgTertiary
-        border.width: 1
+    x: menuX
+    y: menuY
+
+    onMenuVisibleChanged: {
+        if (menuVisible) {
+            closeTimer.stop()
+        }
     }
 
-    delegate: MenuItem {
-        id: menuItem
-        width: 180
-        height: 36
-        padding: 0
-        leftPadding: 12
-        rightPadding: 12
+    Column {
+        id: menuCol
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.margins: 8
+        spacing: 2
 
-        contentItem: RowLayout {
-            spacing: 10
+        Rectangle {
+            width: parent.width
+            height: 36
+            radius: 6
+            color: configureHover.containsMouse ? Theme.bgSecondary : "transparent"
 
-            Rectangle {
-                width: 18
-                height: 18
-                radius: 4
-                color: "transparent"
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                spacing: 10
 
-                Text {
-                    anchors.centerIn: parent
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 12
-                    font.weight: Font.Medium
-                    color: menuItem.enabled ? Theme.textPrimary : Theme.textTertiary
-                    text: {
-                        if (menuItem.text === "Configure") return "C"
-                        if (menuItem.text === "Fullscreen") return "F"
-                        if (menuItem.text === "Remove") return "R"
-                        return ""
+                Rectangle {
+                    width: 18; height: 18; radius: 4; color: "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        font.family: Theme.fontPrimary; font.pixelSize: 12; font.weight: Font.Medium
+                        color: Theme.textPrimary; text: "C"
                     }
                 }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Configure"
+                    font.family: Theme.fontPrimary; font.pixelSize: 13; font.weight: Font.Medium
+                    color: Theme.textPrimary
+                }
             }
 
-            Text {
-                Layout.fillWidth: true
-                text: menuItem.text
-                font.family: Theme.fontPrimary
-                font.pixelSize: 13
-                font.weight: Font.Medium
-                color: {
-                    if (!menuItem.enabled) return Theme.textTertiary
-                    if (menuItem.text === "Remove") return Theme.statusRed
-                    return Theme.textPrimary
+            MouseArea {
+                id: configureHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.menuVisible = false
+                    root.configureClicked()
                 }
             }
         }
 
-        background: Rectangle {
+        Rectangle {
+            width: parent.width
+            height: 36
             radius: 6
-            color: menuItem.hovered ? Theme.bgSecondary : "transparent"
+            color: fullscreenHover.containsMouse ? Theme.bgSecondary : "transparent"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                spacing: 10
+
+                Rectangle {
+                    width: 18; height: 18; radius: 4; color: "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        font.family: Theme.fontPrimary; font.pixelSize: 12; font.weight: Font.Medium
+                        color: Theme.textPrimary; text: "F"
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Fullscreen"
+                    font.family: Theme.fontPrimary; font.pixelSize: 13; font.weight: Font.Medium
+                    color: Theme.textPrimary
+                }
+            }
+
+            MouseArea {
+                id: fullscreenHover
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.menuVisible = false
+                    root.fullscreenClicked()
+                }
+            }
         }
 
-        onTriggered: {
-            if (text === "Configure") root.configureClicked()
-            else if (text === "Fullscreen") root.fullscreenClicked()
-            else if (text === "Remove") root.removeClicked()
+        Rectangle {
+            width: parent.width
+            height: 36
+            radius: 6
+            color: "transparent"
+            opacity: 0.4
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                spacing: 10
+
+                Rectangle {
+                    width: 18; height: 18; radius: 4; color: "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        font.family: Theme.fontPrimary; font.pixelSize: 12; font.weight: Font.Medium
+                        color: Theme.textTertiary; text: "R"
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Remove"
+                    font.family: Theme.fontPrimary; font.pixelSize: 13; font.weight: Font.Medium
+                    color: Theme.textTertiary
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.menuVisible = false
+            }
         }
     }
 
-    Action { text: "Configure" }
-    Action { text: "Fullscreen" }
-    Action { text: "Remove"; enabled: false }
+    Timer {
+        id: closeTimer
+        interval: 8000
+        onTriggered: root.menuVisible = false
+    }
+
+    function show(px, py) {
+        menuX = px
+        menuY = py
+        menuVisible = true
+        closeTimer.start()
+    }
+
+    function hide() {
+        menuVisible = false
+        closeTimer.stop()
+    }
 }

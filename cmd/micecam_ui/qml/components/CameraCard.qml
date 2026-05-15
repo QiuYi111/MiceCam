@@ -11,9 +11,11 @@ Rectangle {
     property int drops: 0
     property bool isRecording: false
     property int status: 0
+    property bool contextMenuOpen: false
 
     signal contextConfigure()
     signal contextFullscreen()
+    signal contextMenuRequested(real globalX, real globalY)
 
     radius: 12
     color: "#1A1A1E"
@@ -98,8 +100,8 @@ Rectangle {
         anchors.fill: parent
         color: "transparent"
         radius: root.radius
-        border.width: root.status === 1 ? 2 : 1
-        border.color: root.status === 1 ? Theme.statusAmber : "#3A3A3E"
+        border.width: root.status === 1 ? 2 : 0
+        border.color: root.status === 1 ? Theme.statusAmber : "transparent"
     }
 
     Rectangle {
@@ -156,9 +158,18 @@ Rectangle {
     Rectangle {
         id: bottomBar
         anchors.bottom: parent.bottom
-        width: parent.width
+        anchors.left: parent.left
+        anchors.right: parent.right
         height: 30
         color: "#B2000000"
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: root.radius
+            color: "#B2000000"
+        }
 
         RowLayout {
             anchors.fill: parent
@@ -196,17 +207,16 @@ Rectangle {
         }
     }
 
-    TapHandler {
-        acceptedButtons: Qt.RightButton
-        onTapped: function(eventPoint, button) {
-            contextMenu.popup()
+    MouseArea {
+        id: cardMouseArea
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        z: 100
+        onClicked: function(mouse) {
+            if (mouse.button === Qt.RightButton) {
+                var globalPos = root.mapToItem(null, mouse.x, mouse.y)
+                root.contextMenuRequested(globalPos.x, globalPos.y)
+            }
         }
-    }
-
-    CameraContextMenu {
-        id: contextMenu
-        cameraName: root.cameraName
-        onConfigureClicked: root.contextConfigure()
-        onFullscreenClicked: root.contextFullscreen()
     }
 }

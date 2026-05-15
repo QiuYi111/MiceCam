@@ -24,8 +24,6 @@ Rectangle {
     Rectangle {
         id: previewSurface
         anchors.fill: parent
-        radius: root.radius
-        clip: true
         gradient: Gradient {
             GradientStop { position: 0.0; color: "#2C3040" }
             GradientStop { position: 0.3; color: "#252830" }
@@ -162,14 +160,6 @@ Rectangle {
         anchors.right: parent.right
         height: 30
         color: "#B2000000"
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: root.radius
-            color: "#B2000000"
-        }
 
         RowLayout {
             anchors.fill: parent

@@ -20,6 +20,9 @@ public:
     void start(uint64_t expected_frame_interval_us);
     void record_frame(uint64_t expected_seq, uint64_t actual_seq,
                       double encode_latency_us, uint64_t frame_interval_us) override;
+    void add_bytes(uint64_t bytes);
+    void set_encoder(std::string encoder_name, bool fallback);
+    domain::StreamStats snapshot();
     domain::StreamStats finalize() override;
     void add_alert(const domain::AlertRecord& alert) override;
 
@@ -36,6 +39,8 @@ private:
     uint64_t expected_frame_interval_us_ = 0;
     int encode_count_ = 0;
     uint64_t bytes_written_ = 0;
+    std::string encoder_used_;
+    bool encoder_fallback_ = false;
     std::vector<domain::AlertRecord> alerts_;
 };
 

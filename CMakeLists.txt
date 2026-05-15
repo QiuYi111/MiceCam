@@ -206,6 +206,7 @@ add_micecam_test(test_watchdog tests/unit/test_watchdog.cpp)
 add_micecam_test(test_feishu_webhook tests/unit/test_feishu_webhook.cpp)
 add_micecam_test(test_backend_ui_contract tests/unit/test_backend_ui_contract.cpp)
 add_micecam_test(test_recording_pipeline tests/unit/test_recording_pipeline.cpp)
+add_micecam_test(test_recording_pipeline_outputs tests/integration/test_recording_pipeline_outputs.cpp)
 add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
 add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
 

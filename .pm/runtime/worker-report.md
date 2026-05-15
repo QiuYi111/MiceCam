@@ -1,98 +1,57 @@
-# Worker Report
+# Worker Report: Task 3/8 — RecordingPipeline Produces Valid H264 MP4 from Raw Frames
 
-## Task summary
+## Summary
 
-Added detailed per-field preflight validation results (`PreflightSeverity`, `PreflightItem`, `validate_stream_capabilities()`) so the QML preflight modal can render specific failure items with severity, error code, title, message, and stream_id.
+Fixed `RecordingPipeline::push_frame()` to encode raw frames through `TranscodeStage::process()` before writing, added flush on stop, and extended stats tracking with `bytes_written`, `encoder_used`, and `encoder_fallback` fields.
 
-## What was done
+## Risk Classification
 
-- Added `PreflightSeverity` enum (`Info`, `Warning`, `Error`), `PreflightItem` struct with `severity`, `code`, `title`, `message`, `stream_id` fields
-- Extended `PreflightResult` with `std::vector<PreflightItem> items`
-- Declared and implemented `validate_stream_capabilities()` on `PreflightValidator`
-- Implementation matches config.stream_index against caps.streams; checks resolution against StreamInfo.resolutions (empty list = pass), framerate against supported_framerates, format against supported_formats; pushes PreflightItem per failure with appropriate code
-- Handles missing stream edge case: `missing_capabilities` error code
-- Created `tests/unit/test_preflight_detail.cpp` with two TDD test cases
-- Registered `test_preflight_detail` test target in `CMakeLists.txt`
+**BRANCH** — multi-file changes across pipeline infrastructure, domain types, and integration tests.
 
-## Changed files
+## Files Changed
 
-- `internal/pipeline/PreflightValidator.h` — added `PreflightSeverity`, `PreflightItem`, `items` field, `validate_stream_capabilities()` declaration
-- `internal/pipeline/PreflightValidator.cpp` — implemented `validate_stream_capabilities()`
-- `tests/unit/test_preflight_detail.cpp` — new test file (2 test cases)
-- `CMakeLists.txt` — registered `test_preflight_detail` test target
+| File | Change |
+|------|--------|
+| `tests/integration/test_recording_pipeline_outputs.cpp` | New: integration test verifying H264 MP4 output from raw RGB frames |
+| `CMakeLists.txt` | Registered `test_recording_pipeline_outputs` test target |
+| `internal/pipeline/StatsCollector.h` | Added `add_bytes()`, `set_encoder()`, `snapshot()` methods; added `encoder_used_`, `encoder_fallback_` fields |
+| `internal/pipeline/StatsCollector.cpp` | Implemented new methods; `finalize()` now delegates to `snapshot()` |
+| `internal/pipeline/RecordingPipeline.cpp` | Route `push_frame()` through transcoder; flush transcoder on `stop()`; use actual encoder name in `result()` |
 
-## Commands run
+## Details
 
-| Command | Result |
-|---|---|
-| `cmake -B build -S . -DBUILD_UI=ON` | Pass |
-| `cmake --build build --target test_preflight_detail -j` | Pass (RED then GREEN) |
-| `build/tests/test_preflight_detail` | 2/2 passed |
-| `cmake --build build --target test_preflight -j` | Pass |
-| `build/tests/test_preflight` | 6/6 passed |
+### StatsCollector
+- `add_bytes(uint64_t bytes)`: atomic add to `bytes_written_` counter
+- `set_encoder(string name, bool fallback)`: records encoder name and fallback status
+- `snapshot()`: returns a `StreamStats` with all fields including `bytes_written`, `encoder_used`, `encoder_fallback`
+- `finalize()`: now delegates to `snapshot()` to avoid duplication
 
-## Test results
+### RecordingPipeline::push_frame()
+- Calls `TranscodeStage::process()` to get H264-encoded packets
+- Sets encoder name and records frame stats only when encoded output is produced
+- Writes encoded packets to `StreamWriter::write_packet()` (not raw frame data)
+- Tracks `bytes_written` per packet via `StatsCollector::add_bytes()`
+- SRT entries and watchdog feed maintained for all frames
 
-- **test_preflight_detail**: 2 tests — `ReportsUnsupportedResolutionAsFieldFailure` (passed), `PassingCapabilityProducesNoItems` (passed)
-- **test_preflight**: 6 tests — all passed, no regressions
+### RecordingPipeline::stop()
+- Flushes transcoder before closing each writer
+- Writes any remaining flushed packets and counts their bytes
 
-## Harness results
+### RecordingPipeline::result()
+- Uses actual transcoder encoder name instead of hardcoded "libx264"
 
-- Risk classification: **LEAF** — single module change (`PreflightValidator`), additive only
-- TDD RED phase: compilation failed as expected (no `validate_stream_capabilities` member)
-- TDD GREEN phase: implementation compiled and both new tests pass
-- Existing test regression check: all 6 `test_preflight` tests still pass
-
-## Acceptance criteria checklist
-
-- [x] `test_preflight_detail.cpp` compiles and both tests pass
-- [x] `ReportsUnsupportedResolutionAsFieldFailure`: 4K config with 1080p-only caps → `passed=false`, 1 item with `code="unsupported_resolution"`, `stream_id="mock_cam_0"`
-- [x] `PassingCapabilityProducesNoItems`: matching config → `passed=true`, `items.empty()`
-- [x] Existing `test_preflight` still passes
-- [x] Worker report has correct commit hash and all required sections
-
-## Problems encountered
-
-None.
-
-## Deviations from task
-
-None.
-
-## Remaining work
-
-None; task 2/8 is complete.
-
-## Suggested next step
-
-Proceed to task 3/8 as defined by the supervisor.
-
-## Evidence
+## Test Results
 
 ```
-$ build/tests/test_preflight_detail
-[==========] Running 2 tests from 1 test suite.
-[ RUN      ] PreflightDetail.ReportsUnsupportedResolutionAsFieldFailure
-[       OK ] PreflightDetail.ReportsUnsupportedResolutionAsFieldFailure (0 ms)
-[ RUN      ] PreflightDetail.PassingCapabilityProducesNoItems
-[       OK ] PreflightDetail.PassingCapabilityProducesNoItems (0 ms)
-[==========] 2 tests from 1 test suite ran. (0 ms total)
-[  PASSED  ] 2 tests.
-
-$ build/tests/test_preflight
-[==========] Running 6 tests from 1 test suite.
-[ RUN      ] PreflightValidator.DiskSpaceCheckPasses
-[       OK ] PreflightValidator.DiskSpaceCheckPasses (0 ms)
-[ RUN      ] PreflightValidator.DiskSpaceCheckFails
-[       OK ] PreflightValidator.DiskSpaceCheckFails (0 ms)
-[ RUN      ] PreflightValidator.CapabilityCheckMatches
-[       OK ] PreflightValidator.CapabilityCheckMatches (0 ms)
-[ RUN      ] PreflightValidator.CapabilityCheckResolutionTooHigh
-[       OK ] PreflightValidator.CapabilityCheckResolutionTooHigh (0 ms)
-[ RUN      ] PreflightValidator.CapabilityCheckUnsupportedFormat
-[       OK ] PreflightValidator.CapabilityCheckUnsupportedFormat (0 ms)
-[ RUN      ] PreflightValidator.FullValidationPassesWhenDiskHasSpace
-[       OK ] PreflightValidator.FullValidationPassesWhenDiskHasSpace (0 ms)
-[==========] 6 tests from 1 test suite ran. (0 ms total)
-[  PASSED  ] 6 tests.
+test_recording_pipeline_outputs:    1/1 PASSED
+test_recording_pipeline:            7/7 PASSED
+test_camera_pipeline_integration:   2/2 PASSED
 ```
+
+## Acceptance Criteria
+
+- [x] `test_recording_pipeline_outputs` compiles and passes
+- [x] MP4 file exists at expected path and contains valid H264 video stream (verified via libavformat)
+- [x] `frames_actual == 30`, `bytes_written > 0`, `encoder_used` is non-empty
+- [x] Existing `test_recording_pipeline` still passes
+- [x] Existing `test_camera_pipeline_integration` still passes

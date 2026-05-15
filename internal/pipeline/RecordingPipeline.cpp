@@ -99,13 +99,19 @@ bool RecordingPipeline::push_frame(const FrameData& frame) {
     uint64_t frame_seq = sp.frame_seq++;
     uint64_t frame_interval_us = 1000000ULL / sp.fps;
 
-    sp.stats->record_frame(frame_seq, frame_seq, 0, frame_interval_us);
+    auto packet = sp.transcoder->process(frame.data, frame.size, frame.width, frame.height, frame.pts, frame.source_format);
+    if (!packet.empty()) {
+        sp.stats->set_encoder(sp.transcoder->encoder_name(), false);
+        sp.stats->record_frame(frame_seq, frame_seq, 0, frame_interval_us);
+
+        bool keyframe = (frame_seq % static_cast<uint64_t>(config_.encoder.keyframe_interval) == 0);
+        sp.writer->write_packet(packet.data(), packet.size(), frame.pts, frame.pts, keyframe);
+        sp.stats->add_bytes(packet.size());
+    }
 
     domain::FrameTimestamp fts;
     fts.session_offset_us = static_cast<uint64_t>(frame.pts);
     sp.srt->write_entry(frame_seq, fts, false);
-
-    sp.writer->write_packet(frame.data, frame.size, frame.pts, frame.pts, (frame_seq % 60 == 0));
 
     if (watchdog_) {
         watchdog_->feed();
@@ -124,6 +130,15 @@ void RecordingPipeline::stop() {
 
     for (auto& [id, sp] : streams_) {
         if (!sp->initialized) continue;
+
+        std::vector<uint8_t> flushed;
+        if (sp->transcoder && sp->transcoder->flush(flushed) && !flushed.empty()) {
+            const int64_t pts = static_cast<int64_t>(sp->frame_seq);
+            if (sp->writer->write_packet(flushed.data(), flushed.size(), pts, pts, true)) {
+                sp->stats->add_bytes(flushed.size());
+            }
+        }
+
         sp->writer->close();
         sp->srt->close();
     }
@@ -136,7 +151,7 @@ RecordingPipeline::result() {
     domain::SessionMetadata meta;
     meta.session_id = config_.session_id;
     meta.output_dir = config_.output_dir;
-    meta.encoder_name = "libx264";
+    meta.encoder_name = streams_.empty() ? "" : streams_.begin()->second->transcoder->encoder_name();
     meta.bitrate_kbps = config_.encoder.bitrate_kbps;
     meta.keyframe_interval = config_.encoder.keyframe_interval;
 

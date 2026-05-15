@@ -16,6 +16,7 @@ option(BUILD_SPIKE "Build spike feasibility tests (headless)" OFF)
 option(BUILD_UI "Build Qt/QML UI executable (requires Qt6)" ON)
 option(BUILD_HIL "Build hardware-in-the-loop tests (requires real camera)" OFF)
 option(BUILD_STRESS "Build 1-hour stress test binary" OFF)
+option(BUILD_PLUGINS "Build bundled camera plugin executables" ON)
 
 # macOS: add Homebrew paths for finding libraries
 if(APPLE)
@@ -85,7 +86,7 @@ if(depthai_FOUND)
 endif()
 
 # Protobuf (optional for Phase 0 — proto compilation is a contract artifact)
-find_package(Protobuf QUIET)
+find_package(Protobuf CONFIG QUIET)
 
 # GTest
 if(APPLE)
@@ -220,6 +221,83 @@ add_micecam_test(test_plugin_contract tests/unit/test_plugin_contract.cpp)
 add_micecam_test(test_plugin_registry tests/unit/test_plugin_registry.cpp)
 add_micecam_test(test_linked_plugin_config tests/unit/test_linked_plugin_config.cpp)
 
+if(BUILD_PLUGINS)
+    # FFmpeg plugin gRPC integration test
+    # Must re-generate proto stubs since gRPC plugin test needs the full gRPC service stubs
+    set(FFMPEG_PLUGIN_TEST_SRC tests/unit/test_ffmpeg_plugin_server.cpp)
+    set(FFMPEG_PLUGIN_PROTO_GEN_DIR "${CMAKE_BINARY_DIR}/test_proto_gen")
+    file(MAKE_DIRECTORY "${FFMPEG_PLUGIN_PROTO_GEN_DIR}")
+
+    find_program(FFMPEG_TEST_PROTOC protoc REQUIRED)
+    find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+
+    add_custom_command(
+        OUTPUT
+            ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+            ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.h
+            ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+            ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.h
+        COMMAND ${FFMPEG_TEST_PROTOC}
+            ARGS
+                --proto_path=${CMAKE_SOURCE_DIR}/api
+                --cpp_out=${FFMPEG_PLUGIN_PROTO_GEN_DIR}
+                --grpc_out=${FFMPEG_PLUGIN_PROTO_GEN_DIR}
+                --plugin=protoc-gen-grpc=${FFMPEG_TEST_GRPC_CPP_PLUGIN}
+                ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+        DEPENDS ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+        COMMENT "Generating gRPC stubs for plugin test"
+    )
+
+    add_executable(test_ffmpeg_plugin_server
+        ${FFMPEG_PLUGIN_TEST_SRC}
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+        cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.cpp
+        cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
+        cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
+        cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
+    )
+
+    target_include_directories(test_ffmpeg_plugin_server PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmd/plugins/micecam_ffmpeg
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}
+    )
+
+    if(APPLE)
+        target_include_directories(test_ffmpeg_plugin_server PRIVATE /opt/homebrew/include)
+    endif()
+
+    target_link_libraries(test_ffmpeg_plugin_server PRIVATE
+        gRPC::grpc++
+        gRPC::grpc
+        protobuf::libprotobuf
+        GTest::gtest
+        GTest::gtest_main
+        PkgConfig::FFMPEG
+        PkgConfig::spdlog
+        PkgConfig::nlohmann_json
+    )
+
+    target_compile_options(test_ffmpeg_plugin_server PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+
+    target_compile_definitions(test_ffmpeg_plugin_server PRIVATE
+        _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+    )
+
+    set_target_properties(test_ffmpeg_plugin_server PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+    )
+
+    add_test(NAME test_ffmpeg_plugin_server COMMAND test_ffmpeg_plugin_server
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+endif()
+
 if(BUILD_UI)
     add_micecam_test(test_app_models tests/unit/test_app_models.cpp)
     add_micecam_test(test_app_controller tests/unit/test_app_controller.cpp)
@@ -272,19 +350,39 @@ endif()
 
 # Proto codegen (optional — Phase 0 contract artifact)
 if(Protobuf_FOUND)
-    protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS api/micecam/camera_plugin.proto)
-    add_library(micecam_plugin_proto STATIC ${PROTO_SRCS} ${PROTO_HDRS})
-    target_include_directories(micecam_plugin_proto PUBLIC
-        ${CMAKE_CURRENT_BINARY_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/api
-        ${CMAKE_CURRENT_SOURCE_DIR}/internal
-        ${Protobuf_INCLUDE_DIRS}
-    )
-    if(TARGET protobuf::libprotobuf)
+    find_program(PROTOC_EXE protoc)
+    if(PROTOC_EXE)
+        set(PROTO_SRC_DIR ${CMAKE_BINARY_DIR}/proto_src)
+        file(MAKE_DIRECTORY ${PROTO_SRC_DIR})
+        add_custom_command(
+            OUTPUT
+                ${PROTO_SRC_DIR}/micecam/camera_plugin.pb.cc
+                ${PROTO_SRC_DIR}/micecam/camera_plugin.pb.h
+            COMMAND ${PROTOC_EXE}
+                ARGS --proto_path=${CMAKE_SOURCE_DIR}/api
+                     --cpp_out=${PROTO_SRC_DIR}
+                     ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+            DEPENDS ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+            COMMENT "Generating protobuf stubs for camera_plugin.proto"
+        )
+        file(MAKE_DIRECTORY ${PROTO_SRC_DIR}/micecam)
+        add_library(micecam_plugin_proto STATIC
+            ${PROTO_SRC_DIR}/micecam/camera_plugin.pb.cc
+            ${PROTO_SRC_DIR}/micecam/camera_plugin.pb.h
+        )
+        target_include_directories(micecam_plugin_proto PUBLIC
+            ${PROTO_SRC_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/api
+            ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        )
         target_link_libraries(micecam_plugin_proto PUBLIC protobuf::libprotobuf)
-    else()
-        target_link_libraries(micecam_plugin_proto PUBLIC ${Protobuf_LIBRARIES})
+        add_compile_definitions(MICECAM_HAS_PROTOBUF)
     endif()
-    add_compile_definitions(MICECAM_HAS_PROTOBUF)
+endif()
+
+# Plugin executables (out-of-process camera backends via gRPC)
+if(BUILD_PLUGINS)
+    find_package(gRPC CONFIG REQUIRED)
+    add_subdirectory(cmd/plugins/micecam_ffmpeg)
 endif()

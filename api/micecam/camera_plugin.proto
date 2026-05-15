@@ -41,7 +41,7 @@ enum ErrorSeverity {
 }
 
 enum RecoveryAction {
-    NO_RECOVERY = 0;
+    RECOVERY_NONE = 0;
     RETRY = 1;
     RESTART_PLUGIN = 2;
     RESTART_STREAM = 3;

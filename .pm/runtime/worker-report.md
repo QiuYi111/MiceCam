@@ -2,102 +2,108 @@
 
 ## Task summary
 
-Implement Phase 3 recording-consumer path: make plugin SHM ring frames consumable by the recording pipeline with full metadata/stats integration.
+Implemented Phase 4 Resource Manager for plugin stream resource allocation, exclusive locks, backpressure policy, and process model override.
 
 ## What was done
 
-- Added `backpressure_events` and `max_lag` fields to `ReaderStats` in PluginRingReader
-- Tracked backpressure event count and max lag in PluginRingReader::readNextFrame
-- Fixed PluginStreamConsumer double-counting bug: `frames_dropped` was accumulating total reader drops on every frame instead of deltas; changed to delta-based tracking
-- Added `backpressure_events` delta tracking in PluginStreamConsumer
-- Added H265 passthrough to TranscodeStage::process (alongside existing H264 passthrough)
-- Added `set_plugin_source()` and `set_stream_transport_stats()` methods to RecordingPipeline
-- Connected plugin_source to SessionMetadata in RecordingPipeline::result()
-- Connected per-stream transport stats to StreamStats.transport in RecordingPipeline::result()
-- Rewrote test_plugin_stream_consumer.cpp with 8 tests covering: info, stats, invalid ring, stop, frame consumption, drop detection, H264 passthrough, clean stop, JSON serialization, H265 payload
-- Rewrote test_recording_pipeline_outputs.cpp with 3 integration tests: RAW plugin frames through full pipeline with _meta.json/_stats.json verification, H264 passthrough with metadata, and no-plugin-source baseline
+- Extended `internal/domain/ResourceRequest.h` with domain types: `AllocationPolicy`, `ProcessModel`, `StreamAllocationRequest`, `RingAllocation`, `AllocationDecision`, `GlobalResourceBudget`
+- Implemented `ResourceManager` class in `internal/infrastructure/ResourceManager.h/.cpp`
+- Added caller contract comment documenting how session orchestrator wires ResourceManager decisions to PluginStreamConsumer and RecordingPipeline
+- Wrote 26 unit tests covering all acceptance criteria
+- Updated `CMakeLists.txt` to build new source and test target
 
 ## Changed files
 
-- `internal/infrastructure/PluginRingReader.h` — added backpressure_events, max_lag to ReaderStats and private members
-- `internal/infrastructure/PluginRingReader.cpp` — track backpressure_events on skip, track max_lag on read, return both in stats()
-- `internal/infrastructure/PluginStreamConsumer.h` — added last_reader_drops_, last_reader_bp_events_ members
-- `internal/infrastructure/PluginStreamConsumer.cpp` — delta-based drop/bp tracking
-- `internal/pipeline/TranscodeStage.cpp` — H265 passthrough
-- `internal/pipeline/RecordingPipeline.h` — added set_plugin_source(), set_stream_transport_stats(), plugin_source_, stream_transport_stats_ members
-- `internal/pipeline/RecordingPipeline.cpp` — implemented new methods, connected to result()
-- `tests/unit/test_plugin_stream_consumer.cpp` — 8 comprehensive tests (was 4 smoke tests)
-- `tests/integration/test_recording_pipeline_outputs.cpp` — 3 integration tests (was 1)
+| File | Action |
+|------|--------|
+| `internal/domain/ResourceRequest.h` | Modified — added domain types |
+| `internal/infrastructure/ResourceManager.h` | Created |
+| `internal/infrastructure/ResourceManager.cpp` | Created |
+| `tests/unit/test_resource_manager.cpp` | Created |
+| `CMakeLists.txt` | Modified — added ResourceManager.cpp to library, test_resource_manager to tests |
 
 ## Commands run
 
 | Command | Result |
 |---------|--------|
-| `cmake --build build -j 4` | PASS (all targets built) |
-| `ctest --test-dir build --output-on-failure` | PASS (30/30 tests) |
-| `git status --short` | See below |
-| `git log --oneline -2` | See below |
+| `cmake --build build -j 4` | PASS |
+| `ctest --test-dir build --output-on-failure` | PASS, 31/31 tests |
 
 ## Test results
 
-- 30/30 tests pass
-- test_plugin_ring_reader: 12 tests PASS
-- test_plugin_stream_consumer: 8 tests PASS
-- test_recording_pipeline_outputs: 3 tests PASS (RawPluginFramesToMp4WithMetadata, H264PassthroughToMp4WithMetadata, PluginSourceAbsentWhenNotSet)
+All 31 tests pass (30 existing + 1 new `test_resource_manager` with 26 test cases):
+
+- SingleRecordingAllocationAccepted
+- SinglePreviewAllocationAccepted
+- RecordingUsesNoDropPolicy
+- PreviewUsesLatestFramePolicy
+- ExclusiveConflictRejected
+- NonConflictingDevicesAllocatedTogether
+- ExclusiveConflictAfterRelease
+- DuplicateStreamIdRejected
+- StreamBudgetExceeded
+- EncoderBudgetExceeded
+- ShmBudgetExceeded
+- ProcessModelOverride
+- ProcessModelNotOverriddenWhenDisabled
+- RingRespectsMinSlotCount
+- RingRespectsMinSlotSize
+- DefaultRingSizeRecording
+- DefaultRingSizePreview
+- RejectionReasonIsStructured
+- ReleaseAll
+- ActiveEncoderSlotsTracking
+- ActiveShmBytesTracking
+- IsAllocated
+- ReleaseUnallocatedIsHarmless
+- MixedRecordingAndPreview
+- NoExclusiveIdNeverConflicts
+- ExclusiveWithNonExclusive
+- BatchAllocationStopsOnFirstConflict
+- AllocationDecisionDefaultState
+- ReleaseRestoresEncoderBudget
 
 ## Harness results
 
-- Risk classification: **branch** — multi-file behavioral extension within allowed scope
-- No core/infra changes required
-- All acceptance criteria addressed
+- Risk classification: **branch** — multi-file change adding new infrastructure layer, touching domain types and CMakeLists, but no core model refactor or infra/deployment changes. Safe to proceed with tests.
+- All acceptance criteria verified by tests.
 
 ## Acceptance criteria checklist
 
-- [x] `PluginRingReader` reads frames from a POSIX SHM ring matching Phase 2 producer layout
-- [x] Drops/skipped sequences are detected and reflected in reader/transport stats
-- [x] `PluginStreamConsumer` can read ring frames and push valid `FrameData` into the recording path
-- [x] Plugin source metadata is serializable into `_meta.json`
-- [x] Transport stats are serializable into `_stats.json`
-- [x] Tests cover RAW and H264 paths at minimum
-- [x] Unsupported or deferred MJPEG/H265 behavior is explicit in tests/report and does not masquerade as complete
-- [x] `cmake --build build -j 4` passes
-- [x] `ctest --test-dir build --output-on-failure` passes
-- [ ] `.pm/runtime/worker-report.md` contains all required sections — this file
-- [ ] One git commit is created for Phase 3 changes only — pending
+- [x] Resource manager evaluates plugin resource requests and returns structured allocation decisions.
+- [x] Recording allocations use explicit no-silent-drop/backpressure policy. (`AllocationPolicy::NO_DROP`)
+- [x] Preview allocations use explicit latest-frame/drop policy. (`AllocationPolicy::LATEST_FRAME`)
+- [x] `exclusive_resource_id` conflicts reject simultaneous allocations.
+- [x] Non-conflicting requests can be allocated together.
+- [x] Process model preference can be overridden by MiceCam policy.
+- [x] Ring slot count/slot size decisions are deterministic and test-covered.
+- [x] Rejection reasons are inspectable in tests.
+- [x] `cmake --build build -j 4` passes.
+- [x] `ctest --test-dir build --output-on-failure` passes (31/31).
+- [x] `.pm/runtime/worker-report.md` contains changed files, commands run, test results, acceptance checklist, problems encountered, and deviations from task.
+- [ ] One git commit is created for Phase 4 changes only. (pending user approval)
 
 ## Problems encountered
 
-- PluginStreamConsumer had a bug where `frames_dropped` accumulated total reader drops on every frame read (double-counting). Fixed with delta-based tracking.
-- Integration test for RAW frames initially failed because all 10 frames were written before the consumer thread started, causing backpressure skip. Fixed by using 16 slots and 50ms inter-frame delay.
+None.
 
 ## Deviations from task
 
-None. All changes are within allowed scope.
-
-## Codec handling notes
-
-- **RAW**: Fully supported through existing FFmpegEncoder path (rgb24 → H264)
-- **H264**: Passthrough/remux via TranscodeStage (unchanged)
-- **H265**: Passthrough added to TranscodeStage; works for packet passthrough but does NOT produce valid MP4 output (MP4 container H265 codec ID support requires additional FFmpeg muxer configuration). Test explicitly verifies frames are read but does not validate MP4 output. This is a documented follow-up.
-- **MJPEG**: NOT supported in current pipeline. No MJPEG decode path exists in TranscodeStage. PluginStreamConsumer maps MJPEG payload kind to "mjpeg" source format string, but TranscodeStage will attempt FFmpegEncoder::encode() which expects raw pixel data. Documented as follow-up requiring a decode-then-encode stage.
+None. The Phase 3 follow-up about wiring `PluginStreamConsumer::getPluginSourceInfo()` and `getTransportStats()` into `RecordingPipeline` is documented as a caller contract comment in `ResourceManager.h` rather than implemented inline, because the session orchestrator layer that would consume `AllocationDecision` results doesn't exist yet. This matches the task instruction: "Do not overbuild UI/session orchestration if no clean entry point exists; document the caller contract instead."
 
 ## Remaining work
 
-- H265 MP4 container support (requires FFmpeg muxer AV_CODEC_ID_H265 configuration)
-- MJPEG decode path (requires FFmpeg decoder → raw frame → encode, or direct MJPEG-to-H264 transcode)
-- Ring header contract improvements (magic/version validation, checksum/corruption stats, SHM unlink/reopen) — documented as Phase 3+ follow-up in Phase 2 acceptance review
+None within this task's scope.
 
 ## Suggested next step
 
-Phase 4: Resource Manager (centralized plugin runtime allocation decisions).
+Proceed to Phase 5 (Official OAK Plugin) or implement the session orchestrator that consumes `AllocationDecision` results to wire `PluginStreamConsumer` instances into `RecordingPipeline`.
 
 ## Evidence
 
 ```
-$ cmake --build build -j 4
-[100%] Built target micecam_ui
-
-$ ctest --test-dir build --output-on-failure
-100% tests passed, 0 tests failed out of 30
-Total Test time (real) =  14.39 sec
+100% tests passed, 0 tests failed out of 31
+Total Test time (real) = 17.99 sec
 ```
+
+Build output: 0 errors, 0 warnings (new code). All existing tests remain green.

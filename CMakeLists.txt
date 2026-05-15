@@ -120,6 +120,7 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/FFmpegCameraBackend.cpp
     internal/infrastructure/PluginRingReader.cpp
     internal/infrastructure/PluginStreamConsumer.cpp
+    internal/infrastructure/ResourceManager.cpp
     internal/pipeline/TranscodeStage.cpp
     internal/pipeline/StatsCollector.cpp
     internal/pipeline/PreflightValidator.cpp
@@ -224,6 +225,7 @@ add_micecam_test(test_plugin_registry tests/unit/test_plugin_registry.cpp)
 add_micecam_test(test_linked_plugin_config tests/unit/test_linked_plugin_config.cpp)
 add_micecam_test(test_plugin_ring_reader tests/unit/test_plugin_ring_reader.cpp)
 add_micecam_test(test_plugin_stream_consumer tests/unit/test_plugin_stream_consumer.cpp)
+add_micecam_test(test_resource_manager tests/unit/test_resource_manager.cpp)
 
 if(BUILD_PLUGINS)
     # FFmpeg plugin gRPC integration test

@@ -370,364 +370,358 @@ Item {
 
                             Item { Layout.fillWidth: true }
 
-            ComboBox {
-                id: resolutionCombo
-                Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 180
-                Layout.rightMargin: 16
-                model: resolutionOptions
-                textRole: "label"
-                currentIndex: root.selectedResolutionIndex
-                onActivated: root.selectedResolutionIndex = currentIndex
+                            ComboBox {
+                                id: resolutionCombo
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.preferredWidth: 180
+                                model: resolutionOptions
+                                textRole: "label"
+                                currentIndex: root.selectedResolutionIndex
+                                onActivated: root.selectedResolutionIndex = currentIndex
 
-                delegate: ItemDelegate {
-                    required property string label
-                    required property string value
-                    width: resolutionCombo.width
-                    contentItem: Text {
-                        text: label
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: highlighted ? "white" : Theme.textPrimary
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    highlighted: resolutionCombo.highlightedIndex === index
-                    background: Rectangle {
-                        color: highlighted ? Theme.navyPrimary : "white"
-                    }
-                }
+                                delegate: ItemDelegate {
+                                    required property string label
+                                    required property string value
+                                    width: resolutionCombo.width
+                                    contentItem: Text {
+                                        text: label
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 13
+                                        color: highlighted ? "white" : Theme.textPrimary
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    highlighted: resolutionCombo.highlightedIndex === index
+                                    background: Rectangle {
+                                        color: highlighted ? Theme.navyPrimary : "white"
+                                    }
+                                }
 
-                contentItem: Text {
-                    text: resolutionOptions.get(resolutionCombo.currentIndex).label
-                    font.family: Theme.fontMono
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textPrimary
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: 10
-                }
+                                contentItem: Text {
+                                    text: resolutionOptions.get(resolutionCombo.currentIndex).label
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 13
+                                    font.weight: Font.Medium
+                                    color: Theme.textPrimary
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 10
+                                }
 
-                background: Rectangle {
-                    radius: 6
-                    color: "white"
-                    border.color: resolutionCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
-                    border.width: 1
-                    implicitHeight: 34
-                }
+                                background: Rectangle {
+                                    radius: 6
+                                    color: "white"
+                                    border.color: resolutionCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                                    border.width: 1
+                                    implicitHeight: 34
+                                }
 
-                indicator: Canvas {
-                    x: resolutionCombo.width - width - 10
-                    y: resolutionCombo.height / 2 - height / 2
-                    width: 10
-                    height: 6
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.clearRect(0, 0, width, height)
-                        ctx.fillStyle = Theme.textSecondary
-                        ctx.beginPath()
-                        ctx.moveTo(0, 0)
-                        ctx.lineTo(width, 0)
-                        ctx.lineTo(width / 2, height)
-                        ctx.closePath()
-                        ctx.fill()
-                    }
-                    Component.onCompleted: requestPaint()
-                }
+                                indicator: Canvas {
+                                    x: resolutionCombo.width - width - 10
+                                    y: resolutionCombo.height / 2 - height / 2
+                                    width: 10
+                                    height: 6
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.fillStyle = Theme.textSecondary
+                                        ctx.beginPath()
+                                        ctx.moveTo(0, 0)
+                                        ctx.lineTo(width, 0)
+                                        ctx.lineTo(width / 2, height)
+                                        ctx.closePath()
+                                        ctx.fill()
+                                    }
+                                    Component.onCompleted: requestPaint()
+                                }
 
-                popup: Popup {
-                    y: resolutionCombo.height
-                    width: resolutionCombo.width
-                    implicitHeight: contentItem.implicitHeight
-                    padding: 1
+                                popup: Popup {
+                                    y: resolutionCombo.height
+                                    width: resolutionCombo.width
+                                    implicitHeight: contentItem.implicitHeight
+                                    padding: 1
 
-                    contentItem: ListView {
-                        clip: true
-                        implicitHeight: contentHeight
-                        model: resolutionCombo.popup.visible ? resolutionCombo.delegateModel : null
-                        currentIndex: resolutionCombo.highlightedIndex
-                    }
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: resolutionCombo.popup.visible ? resolutionCombo.delegateModel : null
+                                        currentIndex: resolutionCombo.highlightedIndex
+                                    }
 
-                    background: Rectangle {
-                        radius: 6
-                        color: "white"
-                        border.color: Theme.borderColor
-                        border.width: 1
-                        layer.enabled: true
-                    }
-                }
-            }
-        }
-    }
-
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.leftMargin: 16
-        Layout.rightMargin: 16
-        height: 1
-        color: Theme.divider
-    }
-
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.leftMargin: 16
-        Layout.rightMargin: 16
-        height: fpsRow.height + 20
-        color: "transparent"
-
-        RowLayout {
-            id: fpsRow
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: 16
-
-            ColumnLayout {
-                Layout.preferredWidth: 200
-                spacing: 2
-
-                Text {
-                    text: "Frame Rate"
-                    font.family: Theme.fontPrimary
-                    font.weight: Font.Bold
-                    font.pixelSize: 13
-                    color: Theme.textPrimary
-                }
-
-                Text {
-                    text: "Target acquisition frame rate."
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 12
-                    color: Theme.textSecondary
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            ComboBox {
-                id: frameRateCombo
-                Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 160
-                Layout.rightMargin: 16
-                model: frameRateOptions
-                textRole: "label"
-                currentIndex: root.selectedFrameRateIndex
-                onActivated: root.selectedFrameRateIndex = currentIndex
-
-                delegate: ItemDelegate {
-                    required property string label
-                    required property string value
-                    width: frameRateCombo.width
-                    contentItem: Text {
-                        text: label
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: highlighted ? "white" : Theme.textPrimary
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    highlighted: frameRateCombo.highlightedIndex === index
-                    background: Rectangle {
-                        color: highlighted ? Theme.navyPrimary : "white"
-                    }
-                }
-
-                contentItem: Text {
-                    text: frameRateOptions.get(frameRateCombo.currentIndex).label
-                    font.family: Theme.fontMono
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textPrimary
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: 10
-                }
-
-                background: Rectangle {
-                    radius: 6
-                    color: "white"
-                    border.color: frameRateCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
-                    border.width: 1
-                    implicitHeight: 34
-                }
-
-                indicator: Canvas {
-                    x: frameRateCombo.width - width - 10
-                    y: frameRateCombo.height / 2 - height / 2
-                    width: 10
-                    height: 6
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.clearRect(0, 0, width, height)
-                        ctx.fillStyle = Theme.textSecondary
-                        ctx.beginPath()
-                        ctx.moveTo(0, 0)
-                        ctx.lineTo(width, 0)
-                        ctx.lineTo(width / 2, height)
-                        ctx.closePath()
-                        ctx.fill()
-                    }
-                    Component.onCompleted: requestPaint()
-                }
-
-                popup: Popup {
-                    y: frameRateCombo.height
-                    width: frameRateCombo.width
-                    implicitHeight: contentItem.implicitHeight
-                    padding: 1
-
-                    contentItem: ListView {
-                        clip: true
-                        implicitHeight: contentHeight
-                        model: frameRateCombo.popup.visible ? frameRateCombo.delegateModel : null
-                        currentIndex: frameRateCombo.highlightedIndex
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: "white"
+                                        border.color: Theme.borderColor
+                                        border.width: 1
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    background: Rectangle {
-                        radius: 6
-                        color: "white"
-                        border.color: Theme.borderColor
-                        border.width: 1
-                        layer.enabled: true
-                    }
-                }
-            }
-        }
-    }
-
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.leftMargin: 16
-        Layout.rightMargin: 16
-        height: 1
-        color: Theme.divider
-    }
-
-    Rectangle {
-        Layout.fillWidth: true
-        Layout.leftMargin: 16
-        Layout.rightMargin: 16
-        height: streamModeRow.height + 20
-        color: "transparent"
-
-        RowLayout {
-            id: streamModeRow
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: 16
-
-            ColumnLayout {
-                Layout.preferredWidth: 200
-                spacing: 2
-
-                Text {
-                    text: "Stream Mode"
-                    font.family: Theme.fontPrimary
-                    font.weight: Font.Bold
-                    font.pixelSize: 13
-                    color: Theme.textPrimary
-                }
-
-                Text {
-                    text: "Pixel format / stream mode."
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 12
-                    color: Theme.textSecondary
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            ComboBox {
-                id: streamModeCombo
-                Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: 160
-                Layout.rightMargin: 16
-                model: streamModeOptions
-                textRole: "label"
-                currentIndex: root.selectedStreamModeIndex
-                onActivated: root.selectedStreamModeIndex = currentIndex
-
-                delegate: ItemDelegate {
-                    required property string label
-                    required property string value
-                    width: streamModeCombo.width
-                    contentItem: Text {
-                        text: label
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: highlighted ? "white" : Theme.textPrimary
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    highlighted: streamModeCombo.highlightedIndex === index
-                    background: Rectangle {
-                        color: highlighted ? Theme.navyPrimary : "white"
-                    }
-                }
-
-                contentItem: Text {
-                    text: streamModeOptions.get(streamModeCombo.currentIndex).label
-                    font.family: Theme.fontMono
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textPrimary
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: 10
-                }
-
-                background: Rectangle {
-                    radius: 6
-                    color: "white"
-                    border.color: streamModeCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
-                    border.width: 1
-                    implicitHeight: 34
-                }
-
-                indicator: Canvas {
-                    x: streamModeCombo.width - width - 10
-                    y: streamModeCombo.height / 2 - height / 2
-                    width: 10
-                    height: 6
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.clearRect(0, 0, width, height)
-                        ctx.fillStyle = Theme.textSecondary
-                        ctx.beginPath()
-                        ctx.moveTo(0, 0)
-                        ctx.lineTo(width, 0)
-                        ctx.lineTo(width / 2, height)
-                        ctx.closePath()
-                        ctx.fill()
-                    }
-                    Component.onCompleted: requestPaint()
-                }
-
-                popup: Popup {
-                    y: streamModeCombo.height
-                    width: streamModeCombo.width
-                    implicitHeight: contentItem.implicitHeight
-                    padding: 1
-
-                    contentItem: ListView {
-                        clip: true
-                        implicitHeight: contentHeight
-                        model: streamModeCombo.popup.visible ? streamModeCombo.delegateModel : null
-                        currentIndex: streamModeCombo.highlightedIndex
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: 1
+                        color: Theme.divider
                     }
 
-                    background: Rectangle {
-                        radius: 6
-                        color: "white"
-                        border.color: Theme.borderColor
-                        border.width: 1
-                        layer.enabled: true
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: fpsRow.height + 20
+                        color: "transparent"
+
+                        RowLayout {
+                            id: fpsRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            spacing: 16
+
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 2
+
+                                Text {
+                                    text: "Frame Rate"
+                                    font.family: Theme.fontPrimary
+                                    font.weight: Font.Bold
+                                    font.pixelSize: 13
+                                    color: Theme.textPrimary
+                                }
+
+                                Text {
+                                    text: "Target acquisition frame rate."
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 12
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            ComboBox {
+                                id: frameRateCombo
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.preferredWidth: 160
+                                model: frameRateOptions
+                                textRole: "label"
+                                currentIndex: root.selectedFrameRateIndex
+                                onActivated: root.selectedFrameRateIndex = currentIndex
+
+                                delegate: ItemDelegate {
+                                    required property string label
+                                    required property string value
+                                    width: frameRateCombo.width
+                                    contentItem: Text {
+                                        text: label
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 13
+                                        color: highlighted ? "white" : Theme.textPrimary
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    highlighted: frameRateCombo.highlightedIndex === index
+                                    background: Rectangle {
+                                        color: highlighted ? Theme.navyPrimary : "white"
+                                    }
+                                }
+
+                                contentItem: Text {
+                                    text: frameRateOptions.get(frameRateCombo.currentIndex).label
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 13
+                                    font.weight: Font.Medium
+                                    color: Theme.textPrimary
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 10
+                                }
+
+                                background: Rectangle {
+                                    radius: 6
+                                    color: "white"
+                                    border.color: frameRateCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                                    border.width: 1
+                                    implicitHeight: 34
+                                }
+
+                                indicator: Canvas {
+                                    x: frameRateCombo.width - width - 10
+                                    y: frameRateCombo.height / 2 - height / 2
+                                    width: 10
+                                    height: 6
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.fillStyle = Theme.textSecondary
+                                        ctx.beginPath()
+                                        ctx.moveTo(0, 0)
+                                        ctx.lineTo(width, 0)
+                                        ctx.lineTo(width / 2, height)
+                                        ctx.closePath()
+                                        ctx.fill()
+                                    }
+                                    Component.onCompleted: requestPaint()
+                                }
+
+                                popup: Popup {
+                                    y: frameRateCombo.height
+                                    width: frameRateCombo.width
+                                    implicitHeight: contentItem.implicitHeight
+                                    padding: 1
+
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: frameRateCombo.popup.visible ? frameRateCombo.delegateModel : null
+                                        currentIndex: frameRateCombo.highlightedIndex
+                                    }
+
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: "white"
+                                        border.color: Theme.borderColor
+                                        border.width: 1
+                                    }
+                                }
+                            }
+                        }
                     }
-                }
-            }
-        }
-    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: 1
+                        color: Theme.divider
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: streamModeRow.height + 20
+                        color: "transparent"
+
+                        RowLayout {
+                            id: streamModeRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            spacing: 16
+
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 2
+
+                                Text {
+                                    text: "Stream Mode"
+                                    font.family: Theme.fontPrimary
+                                    font.weight: Font.Bold
+                                    font.pixelSize: 13
+                                    color: Theme.textPrimary
+                                }
+
+                                Text {
+                                    text: "Pixel format / stream mode."
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 12
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            ComboBox {
+                                id: streamModeCombo
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.preferredWidth: 160
+                                model: streamModeOptions
+                                textRole: "label"
+                                currentIndex: root.selectedStreamModeIndex
+                                onActivated: root.selectedStreamModeIndex = currentIndex
+
+                                delegate: ItemDelegate {
+                                    required property string label
+                                    required property string value
+                                    width: streamModeCombo.width
+                                    contentItem: Text {
+                                        text: label
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 13
+                                        color: highlighted ? "white" : Theme.textPrimary
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    highlighted: streamModeCombo.highlightedIndex === index
+                                    background: Rectangle {
+                                        color: highlighted ? Theme.navyPrimary : "white"
+                                    }
+                                }
+
+                                contentItem: Text {
+                                    text: streamModeOptions.get(streamModeCombo.currentIndex).label
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 13
+                                    font.weight: Font.Medium
+                                    color: Theme.textPrimary
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 10
+                                }
+
+                                background: Rectangle {
+                                    radius: 6
+                                    color: "white"
+                                    border.color: streamModeCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                                    border.width: 1
+                                    implicitHeight: 34
+                                }
+
+                                indicator: Canvas {
+                                    x: streamModeCombo.width - width - 10
+                                    y: streamModeCombo.height / 2 - height / 2
+                                    width: 10
+                                    height: 6
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.fillStyle = Theme.textSecondary
+                                        ctx.beginPath()
+                                        ctx.moveTo(0, 0)
+                                        ctx.lineTo(width, 0)
+                                        ctx.lineTo(width / 2, height)
+                                        ctx.closePath()
+                                        ctx.fill()
+                                    }
+                                    Component.onCompleted: requestPaint()
+                                }
+
+                                popup: Popup {
+                                    y: streamModeCombo.height
+                                    width: streamModeCombo.width
+                                    implicitHeight: contentItem.implicitHeight
+                                    padding: 1
+
+                                    contentItem: ListView {
+                                        clip: true
+                                        implicitHeight: contentHeight
+                                        model: streamModeCombo.popup.visible ? streamModeCombo.delegateModel : null
+                                        currentIndex: streamModeCombo.highlightedIndex
+                                    }
+
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: "white"
+                                        border.color: Theme.borderColor
+                                        border.width: 1
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

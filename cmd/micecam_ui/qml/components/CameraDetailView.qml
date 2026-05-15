@@ -12,31 +12,59 @@ Item {
     property int cameraStatus: 0
     property bool cameraRecording: true
 
-    property string selectedResolution: "1920\u00d71080"
-    property string selectedFrameRate: "30 fps"
-    property string selectedPixelFormat: "BGR"
+    property int selectedResolutionIndex: 0
+    property int selectedFrameRateIndex: 1
+    property int selectedStreamModeIndex: 1
+
+    readonly property string selectedResolution: resolutionOptions.get(selectedResolutionIndex).label
+    readonly property string selectedFrameRate: frameRateOptions.get(selectedFrameRateIndex).label
+    readonly property string selectedPixelFormat: streamModeOptions.get(selectedStreamModeIndex).label
+
+    ListModel {
+        id: resolutionOptions
+        ListElement { label: "1920\u00d71080"; value: "1920x1080" }
+        ListElement { label: "1280\u00d7720"; value: "1280x720" }
+        ListElement { label: "640\u00d7480"; value: "640x480" }
+    }
+
+    ListModel {
+        id: frameRateOptions
+        ListElement { label: "15 fps"; value: "15" }
+        ListElement { label: "30 fps"; value: "30" }
+        ListElement { label: "60 fps"; value: "60" }
+    }
+
+    ListModel {
+        id: streamModeOptions
+        ListElement { label: "Mono8"; value: "Mono8" }
+        ListElement { label: "BGR"; value: "BGR" }
+        ListElement { label: "NV12"; value: "NV12" }
+    }
 
     signal backClicked()
     signal fullscreenClicked(string name, real fps, int drops, bool isRecording, int status)
 
     Flickable {
+        id: flick
         anchors.fill: parent
-        contentHeight: detailContent.height
+        contentWidth: width
+        contentHeight: detailContent.implicitHeight + 32
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         ColumnLayout {
             id: detailContent
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.rightMargin: 24
             anchors.leftMargin: 32
-            spacing: 16
+            anchors.rightMargin: 32
+            spacing: 20
 
             RowLayout {
                 Layout.fillWidth: true
+                Layout.topMargin: 8
                 spacing: 12
 
                 Text {
@@ -143,7 +171,7 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(root.height * 0.35, 300)
+                Layout.preferredHeight: 260
                 radius: 12
                 color: "#1A1A1E"
                 clip: true
@@ -229,7 +257,7 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: metricsGrid.height + 32
+                implicitHeight: metricsGrid.implicitHeight + 32
                 color: "white"
                 radius: 10
                 border.color: Theme.borderColor
@@ -237,7 +265,9 @@ Item {
 
                 GridLayout {
                     id: metricsGrid
-                    anchors.fill: parent
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
                     anchors.margins: 16
                     columns: 4
                     rowSpacing: 12
@@ -279,47 +309,34 @@ Item {
                 }
             }
 
+            Text {
+                text: "Acquisition Configuration"
+                font.family: Theme.fontPrimary
+                font.weight: Font.Bold
+                font.pixelSize: 16
+                color: Theme.textPrimary
+            }
+
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: acquisitionContent.height + 24
+                implicitHeight: acqInner.implicitHeight + 24
                 color: "white"
                 radius: 10
                 border.color: Theme.borderColor
                 border.width: 1
 
                 ColumnLayout {
-                    id: acquisitionContent
+                    id: acqInner
                     anchors.fill: parent
                     anchors.topMargin: 12
                     anchors.bottomMargin: 12
                     spacing: 0
 
-                    Text {
-                        text: "Acquisition Configuration"
-                        font.family: Theme.fontPrimary
-                        font.weight: Font.Bold
-                        font.pixelSize: 14
-                        color: Theme.textPrimary
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        Layout.bottomMargin: 8
-                    }
-
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.leftMargin: 16
                         Layout.rightMargin: 16
-                        height: 1
-                        color: Theme.divider
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        Layout.topMargin: 4
-                        Layout.bottomMargin: 4
-                        height: resolutionRow.height + 16
+                        height: resolutionRow.height + 20
                         color: "transparent"
 
                         RowLayout {
@@ -353,250 +370,395 @@ Item {
 
                             Item { Layout.fillWidth: true }
 
-                            Row {
-                                spacing: 0
-                                Layout.alignment: Qt.AlignVCenter
+            ComboBox {
+                id: resolutionCombo
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 180
+                Layout.rightMargin: 16
+                model: resolutionOptions
+                textRole: "label"
+                currentIndex: root.selectedResolutionIndex
+                onActivated: root.selectedResolutionIndex = currentIndex
 
-                                Repeater {
-                                    model: ["1920\u00d71080", "1280\u00d7720", "640\u00d7480"]
-                                    delegate: Rectangle {
-                                        required property string modelData
-                                        property bool isSelected: root.selectedResolution === modelData
-                                        width: modelData.length > 8 ? 96 : 88
-                                        height: 30
-                                        color: isSelected ? Theme.navyPrimary : Theme.bgSecondary
-                                        border.color: isSelected ? Theme.navyPrimary : Theme.borderColor
-                                        border.width: 1
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: modelData
-                                            font.family: Theme.fontMono
-                                            font.pixelSize: 12
-                                            font.weight: isSelected ? Font.Bold : Font.Normal
-                                            color: isSelected ? "white" : Theme.textSecondary
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.selectedResolution = modelData
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                delegate: ItemDelegate {
+                    required property string label
+                    required property string value
+                    width: resolutionCombo.width
+                    contentItem: Text {
+                        text: label
+                        font.family: Theme.fontMono
+                        font.pixelSize: 13
+                        color: highlighted ? "white" : Theme.textPrimary
+                        verticalAlignment: Text.AlignVCenter
                     }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        height: 1
-                        color: Theme.divider
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        Layout.topMargin: 4
-                        Layout.bottomMargin: 4
-                        height: fpsRow.height + 16
-                        color: "transparent"
-
-                        RowLayout {
-                            id: fpsRow
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            spacing: 16
-
-                            ColumnLayout {
-                                Layout.preferredWidth: 200
-                                spacing: 2
-
-                                Text {
-                                    text: "Frame Rate"
-                                    font.family: Theme.fontPrimary
-                                    font.weight: Font.Bold
-                                    font.pixelSize: 13
-                                    color: Theme.textPrimary
-                                }
-
-                                Text {
-                                    text: "Target acquisition frame rate."
-                                    font.family: Theme.fontPrimary
-                                    font.pixelSize: 12
-                                    color: Theme.textSecondary
-                                    Layout.fillWidth: true
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Row {
-                                spacing: 0
-                                Layout.alignment: Qt.AlignVCenter
-
-                                Repeater {
-                                    model: ["15 fps", "30 fps", "60 fps"]
-                                    delegate: Rectangle {
-                                        required property string modelData
-                                        property bool isSelected: root.selectedFrameRate === modelData
-                                        width: 72
-                                        height: 30
-                                        color: isSelected ? Theme.navyPrimary : Theme.bgSecondary
-                                        border.color: isSelected ? Theme.navyPrimary : Theme.borderColor
-                                        border.width: 1
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: modelData
-                                            font.family: Theme.fontMono
-                                            font.pixelSize: 12
-                                            font.weight: isSelected ? Font.Bold : Font.Normal
-                                            color: isSelected ? "white" : Theme.textSecondary
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.selectedFrameRate = modelData
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        height: 1
-                        color: Theme.divider
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        Layout.topMargin: 4
-                        Layout.bottomMargin: 4
-                        height: pixelRow.height + 16
-                        color: "transparent"
-
-                        RowLayout {
-                            id: pixelRow
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            spacing: 16
-
-                            ColumnLayout {
-                                Layout.preferredWidth: 200
-                                spacing: 2
-
-                                Text {
-                                    text: "Stream Mode"
-                                    font.family: Theme.fontPrimary
-                                    font.weight: Font.Bold
-                                    font.pixelSize: 13
-                                    color: Theme.textPrimary
-                                }
-
-                                Text {
-                                    text: "Pixel format / stream mode."
-                                    font.family: Theme.fontPrimary
-                                    font.pixelSize: 12
-                                    color: Theme.textSecondary
-                                    Layout.fillWidth: true
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Row {
-                                spacing: 0
-                                Layout.alignment: Qt.AlignVCenter
-
-                                Repeater {
-                                    model: ["Mono8", "BGR", "NV12"]
-                                    delegate: Rectangle {
-                                        required property string modelData
-                                        property bool isSelected: root.selectedPixelFormat === modelData
-                                        width: 72
-                                        height: 30
-                                        color: isSelected ? Theme.navyPrimary : Theme.bgSecondary
-                                        border.color: isSelected ? Theme.navyPrimary : Theme.borderColor
-                                        border.width: 1
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: modelData
-                                            font.family: Theme.fontMono
-                                            font.pixelSize: 12
-                                            font.weight: isSelected ? Font.Bold : Font.Normal
-                                            color: isSelected ? "white" : Theme.textSecondary
-                                        }
-
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.selectedPixelFormat = modelData
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    highlighted: resolutionCombo.highlightedIndex === index
+                    background: Rectangle {
+                        color: highlighted ? Theme.navyPrimary : "white"
                     }
                 }
+
+                contentItem: Text {
+                    text: resolutionOptions.get(resolutionCombo.currentIndex).label
+                    font.family: Theme.fontMono
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    color: Theme.textPrimary
+                    verticalAlignment: Text.AlignVCenter
+                    leftPadding: 10
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: "white"
+                    border.color: resolutionCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                    border.width: 1
+                    implicitHeight: 34
+                }
+
+                indicator: Canvas {
+                    x: resolutionCombo.width - width - 10
+                    y: resolutionCombo.height / 2 - height / 2
+                    width: 10
+                    height: 6
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        ctx.fillStyle = Theme.textSecondary
+                        ctx.beginPath()
+                        ctx.moveTo(0, 0)
+                        ctx.lineTo(width, 0)
+                        ctx.lineTo(width / 2, height)
+                        ctx.closePath()
+                        ctx.fill()
+                    }
+                    Component.onCompleted: requestPaint()
+                }
+
+                popup: Popup {
+                    y: resolutionCombo.height
+                    width: resolutionCombo.width
+                    implicitHeight: contentItem.implicitHeight
+                    padding: 1
+
+                    contentItem: ListView {
+                        clip: true
+                        implicitHeight: contentHeight
+                        model: resolutionCombo.popup.visible ? resolutionCombo.delegateModel : null
+                        currentIndex: resolutionCombo.highlightedIndex
+                    }
+
+                    background: Rectangle {
+                        radius: 6
+                        color: "white"
+                        border.color: Theme.borderColor
+                        border.width: 1
+                        layer.enabled: true
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.leftMargin: 16
+        Layout.rightMargin: 16
+        height: 1
+        color: Theme.divider
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.leftMargin: 16
+        Layout.rightMargin: 16
+        height: fpsRow.height + 20
+        color: "transparent"
+
+        RowLayout {
+            id: fpsRow
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: 16
+
+            ColumnLayout {
+                Layout.preferredWidth: 200
+                spacing: 2
+
+                Text {
+                    text: "Frame Rate"
+                    font.family: Theme.fontPrimary
+                    font.weight: Font.Bold
+                    font.pixelSize: 13
+                    color: Theme.textPrimary
+                }
+
+                Text {
+                    text: "Target acquisition frame rate."
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 12
+                    color: Theme.textSecondary
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            ComboBox {
+                id: frameRateCombo
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 160
+                Layout.rightMargin: 16
+                model: frameRateOptions
+                textRole: "label"
+                currentIndex: root.selectedFrameRateIndex
+                onActivated: root.selectedFrameRateIndex = currentIndex
+
+                delegate: ItemDelegate {
+                    required property string label
+                    required property string value
+                    width: frameRateCombo.width
+                    contentItem: Text {
+                        text: label
+                        font.family: Theme.fontMono
+                        font.pixelSize: 13
+                        color: highlighted ? "white" : Theme.textPrimary
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    highlighted: frameRateCombo.highlightedIndex === index
+                    background: Rectangle {
+                        color: highlighted ? Theme.navyPrimary : "white"
+                    }
+                }
+
+                contentItem: Text {
+                    text: frameRateOptions.get(frameRateCombo.currentIndex).label
+                    font.family: Theme.fontMono
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    color: Theme.textPrimary
+                    verticalAlignment: Text.AlignVCenter
+                    leftPadding: 10
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: "white"
+                    border.color: frameRateCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                    border.width: 1
+                    implicitHeight: 34
+                }
+
+                indicator: Canvas {
+                    x: frameRateCombo.width - width - 10
+                    y: frameRateCombo.height / 2 - height / 2
+                    width: 10
+                    height: 6
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        ctx.fillStyle = Theme.textSecondary
+                        ctx.beginPath()
+                        ctx.moveTo(0, 0)
+                        ctx.lineTo(width, 0)
+                        ctx.lineTo(width / 2, height)
+                        ctx.closePath()
+                        ctx.fill()
+                    }
+                    Component.onCompleted: requestPaint()
+                }
+
+                popup: Popup {
+                    y: frameRateCombo.height
+                    width: frameRateCombo.width
+                    implicitHeight: contentItem.implicitHeight
+                    padding: 1
+
+                    contentItem: ListView {
+                        clip: true
+                        implicitHeight: contentHeight
+                        model: frameRateCombo.popup.visible ? frameRateCombo.delegateModel : null
+                        currentIndex: frameRateCombo.highlightedIndex
+                    }
+
+                    background: Rectangle {
+                        radius: 6
+                        color: "white"
+                        border.color: Theme.borderColor
+                        border.width: 1
+                        layer.enabled: true
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.leftMargin: 16
+        Layout.rightMargin: 16
+        height: 1
+        color: Theme.divider
+    }
+
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.leftMargin: 16
+        Layout.rightMargin: 16
+        height: streamModeRow.height + 20
+        color: "transparent"
+
+        RowLayout {
+            id: streamModeRow
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: 16
+
+            ColumnLayout {
+                Layout.preferredWidth: 200
+                spacing: 2
+
+                Text {
+                    text: "Stream Mode"
+                    font.family: Theme.fontPrimary
+                    font.weight: Font.Bold
+                    font.pixelSize: 13
+                    color: Theme.textPrimary
+                }
+
+                Text {
+                    text: "Pixel format / stream mode."
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 12
+                    color: Theme.textSecondary
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            ComboBox {
+                id: streamModeCombo
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: 160
+                Layout.rightMargin: 16
+                model: streamModeOptions
+                textRole: "label"
+                currentIndex: root.selectedStreamModeIndex
+                onActivated: root.selectedStreamModeIndex = currentIndex
+
+                delegate: ItemDelegate {
+                    required property string label
+                    required property string value
+                    width: streamModeCombo.width
+                    contentItem: Text {
+                        text: label
+                        font.family: Theme.fontMono
+                        font.pixelSize: 13
+                        color: highlighted ? "white" : Theme.textPrimary
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    highlighted: streamModeCombo.highlightedIndex === index
+                    background: Rectangle {
+                        color: highlighted ? Theme.navyPrimary : "white"
+                    }
+                }
+
+                contentItem: Text {
+                    text: streamModeOptions.get(streamModeCombo.currentIndex).label
+                    font.family: Theme.fontMono
+                    font.pixelSize: 13
+                    font.weight: Font.Medium
+                    color: Theme.textPrimary
+                    verticalAlignment: Text.AlignVCenter
+                    leftPadding: 10
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: "white"
+                    border.color: streamModeCombo.activeFocus ? Theme.navyPrimary : Theme.borderColor
+                    border.width: 1
+                    implicitHeight: 34
+                }
+
+                indicator: Canvas {
+                    x: streamModeCombo.width - width - 10
+                    y: streamModeCombo.height / 2 - height / 2
+                    width: 10
+                    height: 6
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        ctx.fillStyle = Theme.textSecondary
+                        ctx.beginPath()
+                        ctx.moveTo(0, 0)
+                        ctx.lineTo(width, 0)
+                        ctx.lineTo(width / 2, height)
+                        ctx.closePath()
+                        ctx.fill()
+                    }
+                    Component.onCompleted: requestPaint()
+                }
+
+                popup: Popup {
+                    y: streamModeCombo.height
+                    width: streamModeCombo.width
+                    implicitHeight: contentItem.implicitHeight
+                    padding: 1
+
+                    contentItem: ListView {
+                        clip: true
+                        implicitHeight: contentHeight
+                        model: streamModeCombo.popup.visible ? streamModeCombo.delegateModel : null
+                        currentIndex: streamModeCombo.highlightedIndex
+                    }
+
+                    background: Rectangle {
+                        radius: 6
+                        color: "white"
+                        border.color: Theme.borderColor
+                        border.width: 1
+                        layer.enabled: true
+                    }
+                }
+            }
+        }
+    }
+                }
+            }
+
+            Text {
+                text: "Recording & Preview"
+                font.family: Theme.fontPrimary
+                font.weight: Font.Bold
+                font.pixelSize: 16
+                color: Theme.textPrimary
             }
 
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: recordingContent.height + 24
+                implicitHeight: recInner.implicitHeight + 24
                 color: "white"
                 radius: 10
                 border.color: Theme.borderColor
                 border.width: 1
 
                 ColumnLayout {
-                    id: recordingContent
+                    id: recInner
                     anchors.fill: parent
                     anchors.topMargin: 12
                     anchors.bottomMargin: 12
                     spacing: 0
 
-                    Text {
-                        text: "Recording & Preview"
-                        font.family: Theme.fontPrimary
-                        font.weight: Font.Bold
-                        font.pixelSize: 14
-                        color: Theme.textPrimary
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        Layout.bottomMargin: 8
-                    }
-
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.leftMargin: 16
                         Layout.rightMargin: 16
-                        height: 1
-                        color: Theme.divider
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 16
-                        Layout.rightMargin: 16
-                        Layout.topMargin: 4
-                        Layout.bottomMargin: 4
-                        height: enabledRow.height + 16
+                        height: enabledRow.height + 20
                         color: "transparent"
 
                         RowLayout {
@@ -634,8 +796,8 @@ Item {
                                 id: enabledSwitch
                                 property bool checked: true
                                 width: 52
-                                height: 30
-                                radius: 15
+                                height: 32
+                                radius: 16
                                 color: checked ? Theme.navyPrimary : Theme.bgTertiary
                                 Behavior on color { ColorAnimation { duration: 150 } }
 
@@ -646,8 +808,8 @@ Item {
                                     color: "white"
                                     border.color: "#C0C0C0"
                                     border.width: 0.5
-                                    x: enabledSwitch.checked ? enabledSwitch.width - width - 2 : 2
-                                    y: 2
+                                    x: enabledSwitch.checked ? enabledSwitch.width - width - 3 : 3
+                                    y: 3
                                     Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
                                 }
 
@@ -672,9 +834,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.leftMargin: 16
                         Layout.rightMargin: 16
-                        Layout.topMargin: 4
-                        Layout.bottomMargin: 4
-                        height: qualityRow.height + 16
+                        height: qualityRow.height + 20
                         color: "transparent"
 
                         RowLayout {
@@ -717,7 +877,7 @@ Item {
                                     delegate: Rectangle {
                                         required property string modelData
                                         width: 72
-                                        height: 30
+                                        height: 32
                                         color: modelData === "High" ? Theme.navyPrimary : Theme.bgSecondary
                                         border.color: Theme.borderColor
                                         border.width: 1
@@ -750,9 +910,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.leftMargin: 16
                         Layout.rightMargin: 16
-                        Layout.topMargin: 4
-                        Layout.bottomMargin: 4
-                        height: encoderRow.height + 16
+                        height: encoderRow.height + 20
                         color: "transparent"
 
                         RowLayout {
@@ -791,7 +949,7 @@ Item {
 
                                 Rectangle {
                                     width: 80
-                                    height: 30
+                                    height: 32
                                     radius: 6
                                     color: Theme.bgSecondary
                                     border.color: Theme.borderColor
@@ -808,7 +966,7 @@ Item {
 
                                 Rectangle {
                                     width: 100
-                                    height: 30
+                                    height: 32
                                     radius: 6
                                     color: Theme.bgSecondary
                                     border.color: Theme.borderColor
@@ -828,7 +986,7 @@ Item {
                 }
             }
 
-            Item { Layout.minimumHeight: 24 }
+            Item { Layout.minimumHeight: 32 }
         }
     }
 }

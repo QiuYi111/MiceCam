@@ -27,14 +27,52 @@ Rectangle {
         anchors.margins: 16
         spacing: 0
 
+        Rectangle {
+            id: homeEntry
+            Layout.fillWidth: true
+            height: 40
+            radius: 8
+            color: root.activeViewIndex === 0 ? Theme.navyTint : "transparent"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 12
+                spacing: 12
+
+                AppIcon {
+                    name: "camera"
+                    size: 16
+                    color: root.activeViewIndex === 0 ? Theme.navyPrimary : Theme.textSecondary
+                }
+
+                Text {
+                    text: "Cameras"
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 14
+                    font.weight: root.activeViewIndex === 0 ? Font.Medium : Font.Normal
+                    color: root.activeViewIndex === 0 ? Theme.navyPrimary : Theme.textPrimary
+                    Layout.fillWidth: true
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.viewChanged(0)
+            }
+        }
+
+        Item { height: 4 }
+
         Text {
-            text: "Cameras"
+            text: "DEVICES"
             font.family: Theme.fontPrimary
-            font.pixelSize: 13
+            font.pixelSize: 11
             font.weight: Font.Bold
             color: Theme.textTertiary
-            Layout.bottomMargin: 12
-            Layout.leftMargin: 8
+            Layout.bottomMargin: 8
+            Layout.leftMargin: 16
         }
 
         ListView {
@@ -51,7 +89,6 @@ Rectangle {
                 radius: 8
                 color: {
                     if (root.activeViewIndex === 5 && root._selectedCameraName === model.name) return Theme.navyTint
-                    if (root.activeViewIndex === 0 && index === 0) return Theme.navyTint
                     return "transparent"
                 }
 
@@ -124,7 +161,7 @@ Rectangle {
                     Layout.fillWidth: true
                     height: 40
                     radius: 8
-                    color: root.parent.currentViewIndex === (index + 1) ? Theme.navyTint : "transparent"
+                    color: root.activeViewIndex === (index + 1) ? Theme.navyTint : "transparent"
 
                     RowLayout {
                         anchors.fill: parent
@@ -135,15 +172,15 @@ Rectangle {
                         AppIcon {
                             name: modelData.icon
                             size: 16
-                            color: root.parent.currentViewIndex === (index + 1) ? Theme.navyPrimary : Theme.textSecondary
+                            color: root.activeViewIndex === (index + 1) ? Theme.navyPrimary : Theme.textSecondary
                         }
 
                         Text {
                             text: modelData.name
                             font.family: Theme.fontPrimary
                             font.pixelSize: 14
-                            font.weight: root.parent.currentViewIndex === (index + 1) ? Font.Medium : Font.Normal
-                            color: root.parent.currentViewIndex === (index + 1) ? Theme.navyPrimary : Theme.textPrimary
+                            font.weight: root.activeViewIndex === (index + 1) ? Font.Medium : Font.Normal
+                            color: root.activeViewIndex === (index + 1) ? Theme.navyPrimary : Theme.textPrimary
                             Layout.fillWidth: true
                         }
 
@@ -151,7 +188,7 @@ Rectangle {
                             name: "chevron-right"
                             size: 10
                             color: Theme.textTertiary
-                            visible: root.parent.currentViewIndex !== (index + 1)
+                            visible: root.activeViewIndex !== (index + 1)
                         }
                     }
 

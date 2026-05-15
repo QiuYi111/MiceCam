@@ -1,6 +1,7 @@
 #include "FFmpegPluginServer.h"
 
 #include <algorithm>
+#include <set>
 #include <sstream>
 
 #include <spdlog/spdlog.h>
@@ -446,7 +447,7 @@ void FFmpegPluginServer::ensureDevicesCached() const {
 }
 
 std::string FFmpegPluginServer::generateStreamId() {
-    uint64_t id = next_stream_id_++;
+    uint64_t id = next_stream_id_.fetch_add(1, std::memory_order_relaxed);
     return "stream_" + std::to_string(id);
 }
 

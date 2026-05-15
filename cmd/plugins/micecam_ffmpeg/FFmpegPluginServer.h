@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <chrono>
 #include <memory>
@@ -89,7 +90,7 @@ private:
     std::chrono::steady_clock::time_point start_time_;
     std::mutex streams_mutex_;
     std::unordered_map<std::string, std::unique_ptr<ActiveStream>> streams_;
-    uint64_t next_stream_id_ = 1;
+    std::atomic<uint64_t> next_stream_id_{1};
 
     micecam::plugin::CapabilityInfo buildCapabilityInfo(const std::string& device_id) const;
     std::string generateStreamId();

@@ -132,8 +132,15 @@ std::vector<domain::DeviceInfo> FFmpegCameraBackend::enumerate_devices() {
             si.index = 0;
             si.max_width = 1920;
             si.max_height = 1080;
+            si.label = dev_list->devices[i]->device_name
+                ? dev_list->devices[i]->device_name : "Unknown";
+            si.resolutions = {
+                {1920, 1080, "1080p"},
+                {1280, 720, "720p"},
+            };
             si.supported_formats = {"yuv420p", "mjpeg"};
             si.supported_framerates = {15, 30, 60};
+            si.available = true;
             info.streams.push_back(si);
             result.push_back(info);
         }
@@ -199,8 +206,14 @@ domain::Capabilities FFmpegCameraBackend::get_capabilities() {
     si.index = 0;
     si.max_width = 4096;
     si.max_height = 2160;
+    si.label = "USB Capabilities";
+    si.resolutions = {
+        {4096, 2160, "4K"},
+        {1920, 1080, "1080p"},
+    };
     si.supported_formats = {"yuv420p", "mjpeg", "rgb24"};
     si.supported_framerates = {15, 30, 60};
+    si.available = true;
     caps.streams.push_back(si);
     return caps;
 }

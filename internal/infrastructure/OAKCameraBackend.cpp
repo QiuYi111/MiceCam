@@ -52,8 +52,14 @@ std::vector<domain::DeviceInfo> OAKCameraBackend::enumerate_devices() {
                 si.index = i;
                 si.max_width = 4096;
                 si.max_height = 2160;
+                si.label = std::string("CAM_") + static_cast<char>('A' + i);
+                si.resolutions = {
+                    {4096, 2160, "4K"},
+                    {1920, 1080, "1080p"},
+                };
                 si.supported_formats = {"nv12"};
                 si.supported_framerates = {30, 60};
+                si.available = true;
                 info.streams.push_back(si);
             }
             result.push_back(info);
@@ -104,8 +110,14 @@ domain::Capabilities OAKCameraBackend::get_capabilities() {
     si.index = 0;
     si.max_width = 4096;
     si.max_height = 2160;
+    si.label = "CAM_A";
+    si.resolutions = {
+        {4096, 2160, "4K"},
+        {1920, 1080, "1080p"},
+    };
     si.supported_formats = {"nv12"};
     si.supported_framerates = {30, 60};
+    si.available = true;
     caps.streams.push_back(si);
     return caps;
 }
@@ -128,8 +140,14 @@ domain::Capabilities OAKCameraBackend::get_capabilities() {
     si.index = 0;
     si.max_width = 4096;
     si.max_height = 2160;
+    si.label = "CAM_A";
+    si.resolutions = {
+        {4096, 2160, "4K"},
+        {1920, 1080, "1080p"},
+    };
     si.supported_formats = {"nv12"};
     si.supported_framerates = {30, 60};
+    si.available = true;
     caps.streams.push_back(si);
     return caps;
 }

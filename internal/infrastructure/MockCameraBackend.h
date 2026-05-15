@@ -43,6 +43,7 @@ public:
     std::vector<domain::DeviceInfo> enumerate_devices() override;
     std::unique_ptr<domain::CameraStream> open_stream(const domain::StreamConfig& config) override;
     domain::Capabilities get_capabilities() override;
+    domain::Capabilities get_capabilities(const std::string& device_id, int stream_index) override;
     std::string backend_name() const override { return "Mock"; }
 
     void set_drop_every_n(int n) { drop_every_n_ = n; }

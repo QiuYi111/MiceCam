@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <QCoreApplication>
+#include <QThread>
 #include "cmd/micecam_ui/AppController.h"
 
 static int s_argc2 = 0;
@@ -34,4 +35,17 @@ TEST(AppController, StartAndStopRecordingUpdatesState) {
     EXPECT_FALSE(controller.isRecording());
     EXPECT_EQ(controller.recordButtonText().toStdString(), "Record");
     EXPECT_FALSE(controller.lastSessionId().isEmpty());
+}
+
+TEST(AppController, RecordingPumpUpdatesFrameCounters) {
+    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
+    controller.setOutputDirectory("/tmp/micecam_app_controller_pump");
+    controller.refreshCameras();
+
+    ASSERT_TRUE(controller.startRecording());
+    QThread::msleep(600);
+    controller.stopRecording();
+
+    EXPECT_NE(controller.totalFramesText().toStdString(), "0");
+    EXPECT_FALSE(controller.bytesWrittenText().isEmpty());
 }

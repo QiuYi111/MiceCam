@@ -1,5 +1,10 @@
 #pragma once
 
+#include <atomic>
+#include <memory>
+#include <thread>
+#include <vector>
+
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -70,6 +75,11 @@ signals:
     void lastSessionIdChanged();
 
 private:
+    struct ActiveStream {
+        domain::StreamConfig config;
+        std::unique_ptr<domain::CameraStream> stream;
+    };
+
     BackendMode mode_;
     infrastructure::MockCameraBackend mock_backend_;
     infrastructure::CameraManager manager_;
@@ -86,6 +96,14 @@ private:
     uint64_t bytes_written_ = 0;
     QString disk_remaining_;
     QString preflight_message_;
+
+    std::atomic<bool> capture_running_{false};
+    std::thread capture_thread_;
+    std::vector<ActiveStream> active_streams_;
+
+    void captureLoop();
+    void stopCaptureLoop();
+    void refreshLiveStatus();
 };
 
 } // namespace micecam::ui

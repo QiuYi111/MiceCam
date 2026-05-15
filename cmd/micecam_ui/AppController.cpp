@@ -132,6 +132,17 @@ bool AppController::startRecording() {
 
     if (!pipeline_.start(config)) return false;
 
+    active_streams_.clear();
+    for (const auto& stream_config : config.streams) {
+        auto stream = manager_.open_stream(stream_config);
+        if (stream) {
+            active_streams_.push_back({stream_config, std::move(stream)});
+        }
+    }
+
+    capture_running_ = true;
+    capture_thread_ = std::thread([this] { captureLoop(); });
+
     recording_ = true;
     emit isRecordingChanged();
     emit recordButtonTextChanged();
@@ -142,6 +153,7 @@ bool AppController::startRecording() {
 void AppController::stopRecording() {
     if (!recording_) return;
 
+    stopCaptureLoop();
     pipeline_.stop();
 
     auto [meta, stats_vec] = pipeline_.result();
@@ -177,6 +189,52 @@ QVariantList AppController::preflightItems() {
 
 QVariantMap AppController::cameraAt(int row) {
     return camera_model_->get(row);
+}
+
+void AppController::captureLoop() {
+    using namespace std::chrono;
+    while (capture_running_) {
+        for (auto& active : active_streams_) {
+            if (!active.stream || !active.stream->is_open())
+                continue;
+
+            std::vector<uint8_t> bytes;
+            int64_t pts = 0;
+            if (!active.stream->read_frame(bytes, pts))
+                continue;
+
+            pipeline::FrameData frame;
+            frame.stream_id = active.config.device_id + "_" +
+                std::to_string(active.config.stream_index);
+            frame.data = bytes.data();
+            frame.size = bytes.size();
+            frame.width = active.stream->width();
+            frame.height = active.stream->height();
+            frame.pts = pts;
+            frame.source_format = active.stream->pixel_format();
+
+            if (pipeline_.push_frame(frame)) {
+                total_frames_++;
+                bytes_written_ += bytes.size();
+            }
+        }
+        QMetaObject::invokeMethod(this, [this] { refreshLiveStatus(); },
+                                 Qt::QueuedConnection);
+        std::this_thread::sleep_for(milliseconds(33));
+    }
+}
+
+void AppController::stopCaptureLoop() {
+    capture_running_ = false;
+    if (capture_thread_.joinable()) {
+        capture_thread_.join();
+    }
+    active_streams_.clear();
+}
+
+void AppController::refreshLiveStatus() {
+    emit totalFramesTextChanged();
+    emit bytesWrittenTextChanged();
 }
 
 } // namespace micecam::ui

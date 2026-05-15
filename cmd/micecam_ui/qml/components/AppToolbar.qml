@@ -25,87 +25,68 @@ Rectangle {
         anchors.rightMargin: 12
         spacing: 12
 
-        Rectangle {
-            id: recordBtn
-            width: isRecording ? 180 : 110
-            height: 36
-            radius: 8
-            color: recordBtn.isRecording ? "white" : Theme.recordRed
-            border.color: Theme.recordRed
-            border.width: 1
-            clip: true
+        Row {
+            spacing: 4
 
-            property bool isRecording: true
+            Rectangle {
+                id: recordBtn
+                width: 110
+                height: 36
+                radius: 8
+                color: Theme.recordRed
 
-            RowLayout {
-                anchors.fill: parent
-                spacing: 0
+                property bool isRecording: true
 
-                Rectangle {
-                    Layout.preferredWidth: recordBtn.isRecording ? 90 : recordBtn.width - 2
-                    Layout.fillHeight: true
-                    Layout.topMargin: 1
-                    Layout.bottomMargin: 1
-                    Layout.leftMargin: 1
-                    color: Theme.recordRed
-                    radius: 7
-                    clip: true
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 8
 
                     Rectangle {
-                        anchors.right: parent.right
-                        width: 10
-                        height: parent.height
-                        color: Theme.recordRed
-                        visible: recordBtn.isRecording
+                        width: 18; height: 18; radius: 9; color: "white"
+                        Rectangle {
+                            width: 8; height: 8; radius: 1; color: Theme.recordRed
+                            anchors.centerIn: parent
+                        }
                     }
 
-                    RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 8
-
-                        Rectangle {
-                            width: 18; height: 18; radius: 9; color: "white"
-                            Rectangle {
-                                width: 8; height: 8; radius: 1; color: Theme.recordRed
-                                anchors.centerIn: parent
-                            }
-                        }
-
-                        Text {
-                            text: recordBtn.isRecording ? "Stop" : "Record"
-                            font.family: Theme.fontPrimary
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                            color: "white"
-                        }
+                    Text {
+                        text: recordBtn.isRecording ? "Stop" : "Record"
+                        font.family: Theme.fontPrimary
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        color: "white"
                     }
                 }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.topMargin: 1
-                    Layout.bottomMargin: 1
-                    Layout.rightMargin: 1
-                    color: "white"
-                    visible: recordBtn.isRecording
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "00:42:17"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 14
-                        color: Theme.recordRed
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (!recordBtn.isRecording) {
+                            root.preflightTriggered()
+                        }
                     }
                 }
             }
 
-            MouseArea {
-                anchors.fill: parent
-                onClicked: {
-                    if (!recordBtn.isRecording) {
-                        root.preflightTriggered()
-                    }
+            Rectangle {
+                width: 88
+                height: 36
+                radius: 8
+                color: Theme.bgSecondary
+                visible: recordBtn.isRecording
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "00:42:17"
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 14
+                    font.weight: Font.Medium
+                    color: Theme.recordRed
+                }
+
+                MouseArea {
+                    anchors.fill: parent
                 }
             }
         }

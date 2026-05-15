@@ -97,6 +97,42 @@ TEST(ConfigLoader, InvalidJsonReturnsFalse) {
     std::remove(path.c_str());
 }
 
+TEST(ConfigLoader, SavePersistsNewSettingsProperties) {
+    const std::string path = "/tmp/micecam_ui_new_settings_test.json";
+    std::remove(path.c_str());
+
+    micecam::infrastructure::ConfigLoader config;
+    config.set_keyframe_interval(60);
+    config.set_encoder_preset("ultrafast");
+    config.set_hardware_acceleration(false);
+    config.set_preview_quality("low");
+    config.set_desktop_notifications(false);
+    config.set_sound_alerts(false);
+    config.set_verbose_diagnostics(true);
+    config.set_create_subfolder_per_session(false);
+    config.set_folder_name_prefix("rec_");
+    config.set_naming_pattern("INDEX");
+    config.set_container_format("mkv");
+    config.set_max_file_size_gb(16);
+
+    ASSERT_TRUE(config.save(path));
+
+    micecam::infrastructure::ConfigLoader loaded;
+    ASSERT_TRUE(loaded.load(path));
+    EXPECT_EQ(loaded.keyframe_interval(), 60);
+    EXPECT_EQ(loaded.encoder_preset(), "ultrafast");
+    EXPECT_EQ(loaded.hardware_acceleration(), false);
+    EXPECT_EQ(loaded.preview_quality(), "low");
+    EXPECT_EQ(loaded.desktop_notifications(), false);
+    EXPECT_EQ(loaded.sound_alerts(), false);
+    EXPECT_EQ(loaded.verbose_diagnostics(), true);
+    EXPECT_EQ(loaded.create_subfolder_per_session(), false);
+    EXPECT_EQ(loaded.folder_name_prefix(), "rec_");
+    EXPECT_EQ(loaded.naming_pattern(), "INDEX");
+    EXPECT_EQ(loaded.container_format(), "mkv");
+    EXPECT_EQ(loaded.max_file_size_gb(), 16);
+}
+
 TEST(ConfigLoader, SavePersistsUiEditableSettings) {
     const std::string path = "/tmp/micecam_ui_settings_test.json";
     std::remove(path.c_str());

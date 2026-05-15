@@ -144,7 +144,7 @@ Flickable {
                 SettingRow {
                     title: "Hardware acceleration"
                     description: "Use GPU acceleration when available."
-                    Switch { checked: true; Layout.alignment: Qt.AlignRight }
+                    Switch { checked: appController.settings.hardwareAcceleration; Layout.alignment: Qt.AlignRight }
                 }
 
                 Divider {}

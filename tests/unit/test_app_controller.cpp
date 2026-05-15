@@ -49,3 +49,20 @@ TEST(AppController, RecordingPumpUpdatesFrameCounters) {
     EXPECT_NE(controller.totalFramesText().toStdString(), "0");
     EXPECT_FALSE(controller.bytesWrittenText().isEmpty());
 }
+
+TEST(AppController, ElapsedTextReflectsRecordingDuration) {
+    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
+    controller.setOutputDirectory("/tmp/micecam_app_controller_elapsed");
+    controller.refreshCameras();
+
+    EXPECT_EQ(controller.elapsedText().toStdString(), "00:00");
+
+    ASSERT_TRUE(controller.startRecording());
+    QThread::msleep(1500);
+
+    EXPECT_NE(controller.elapsedText().toStdString(), "00:00");
+
+    controller.stopRecording();
+    // After stop, elapsed should reset
+    EXPECT_EQ(controller.elapsedText().toStdString(), "00:00");
+}

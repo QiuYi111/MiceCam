@@ -11,6 +11,7 @@ Rectangle {
     property bool isRecording: false
     property string recordText: "Record"
     property var alertModel: null
+    property string elapsedText: "00:00"
 
     signal fullscreenClicked()
     signal preflightTriggered()
@@ -77,7 +78,7 @@ Rectangle {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "00:42:17"
+                    text: root.elapsedText
                     font.family: Theme.fontPrimary
                     font.pixelSize: 14
                     font.weight: Font.Medium

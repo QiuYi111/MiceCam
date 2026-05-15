@@ -152,7 +152,7 @@ Flickable {
 
                         LogHigSwitch {
                             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                            checked: false
+                            checked: appController.settings.verboseDiagnostics
                         }
                     }
                 }
@@ -361,14 +361,21 @@ Flickable {
                             anchors.fill: parent
                             anchors.margins: 12
                             spacing: 4
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.textSecondary; text: "[INFO]  Session started \u2014 MiceCam v2.0.0" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.navyPrimary; text: "[INFO]  Camera OAK-D-1 connected (192.168.1.10)" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.navyPrimary; text: "[INFO]  Recording started \u2014 cam_01_2026-05-14.mp4" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.statusAmber; text: "[WARN]  Frame drop detected \u2014 cam_02 (1.2%)" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.navyPrimary; text: "[INFO]  Encoding H.265 @ 30fps \u2014 quality 85" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.navyPrimary; text: "[INFO]  Storage: 245 GB free / 500 GB total" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.textTertiary; text: "[DEBUG] Buffer pool: 48/64 frames allocated" }
-                            Text { font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.navyPrimary; text: "[INFO]  Watchdog healthy \u2014 all cameras active" }
+                            Repeater {
+                                model: appController.recentLogEntries
+                                delegate: Text {
+                                    required property var modelData
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 12
+                                    color: modelData.indexOf("[WARN]") >= 0 ? Theme.statusAmber :
+                                           modelData.indexOf("[ERROR]") >= 0 ? Theme.statusRed :
+                                           modelData.indexOf("[DEBUG]") >= 0 ? Theme.textTertiary :
+                                           Theme.navyPrimary
+                                    text: modelData
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
                         }
                     }
                 }

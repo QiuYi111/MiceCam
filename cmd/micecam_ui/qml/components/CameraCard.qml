@@ -12,6 +12,7 @@ Rectangle {
     property bool isRecording: false
     property int status: 0
     property bool contextMenuOpen: false
+    property string elapsedText: "00:00"
 
     signal contextConfigure()
     signal contextFullscreen()
@@ -112,7 +113,7 @@ Rectangle {
             anchors.right: parent.right
             anchors.topMargin: 36
             anchors.rightMargin: 10
-            text: "00:42:17"
+            text: root.elapsedText
             color: "#99FFFFFF"
             font.family: Theme.fontMono
             font.pixelSize: 11

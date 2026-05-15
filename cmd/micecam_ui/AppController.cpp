@@ -36,7 +36,14 @@ QString AppController::cameraCountText() const {
 }
 
 QString AppController::elapsedText() const {
-    return QStringLiteral("00:00");
+    if (session_start_ == std::chrono::steady_clock::time_point{}) {
+        return QStringLiteral("00:00");
+    }
+    auto elapsed = std::chrono::steady_clock::now() - session_start_;
+    auto total_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+    int min = static_cast<int>(total_sec / 60);
+    int sec = static_cast<int>(total_sec % 60);
+    return QString::asprintf("%02d:%02d", min, sec);
 }
 
 QString AppController::totalFramesText() const {
@@ -63,8 +70,19 @@ QString AppController::lastSessionId() const {
     return session_id_;
 }
 
+QStringList AppController::recentLogEntries() const {
+    return log_entries_;
+}
+
 void AppController::setOutputDirectory(const QString& dir) {
     output_dir_ = dir;
+}
+
+static void pushLogEntry(QStringList& entries, const QString& msg) {
+    entries.append(msg);
+    if (entries.size() > 50) {
+        entries.removeFirst();
+    }
 }
 
 void AppController::refreshCameras() {
@@ -97,6 +115,7 @@ void AppController::refreshCameras() {
     }
 
     camera_model_->replaceRows(std::move(rows));
+    pushLogEntry(log_entries_, QStringLiteral("[INFO] Camera refresh: %1").arg(cameraCountText()));
     emit cameraCountTextChanged();
 }
 
@@ -132,6 +151,9 @@ bool AppController::startRecording() {
 
     if (!pipeline_.start(config)) return false;
 
+    pushLogEntry(log_entries_, QStringLiteral("[INFO] Session started: %1").arg(session_id_));
+    pushLogEntry(log_entries_, QStringLiteral("[INFO] %1").arg(cameraCountText()));
+
     active_streams_.clear();
     for (const auto& stream_config : config.streams) {
         auto stream = manager_.open_stream(stream_config);
@@ -143,6 +165,7 @@ bool AppController::startRecording() {
     capture_running_ = true;
     capture_thread_ = std::thread([this] { captureLoop(); });
 
+    session_start_ = std::chrono::steady_clock::now();
     recording_ = true;
     emit isRecordingChanged();
     emit recordButtonTextChanged();
@@ -155,6 +178,8 @@ void AppController::stopRecording() {
 
     stopCaptureLoop();
     pipeline_.stop();
+
+    pushLogEntry(log_entries_, QStringLiteral("[INFO] Recording stopped: %1").arg(session_id_));
 
     auto [meta, stats_vec] = pipeline_.result();
     total_frames_ = 0;
@@ -175,6 +200,7 @@ void AppController::stopRecording() {
     }
 
     recording_ = false;
+    session_start_ = {};
     emit isRecordingChanged();
     emit recordButtonTextChanged();
     emit totalFramesTextChanged();
@@ -233,8 +259,12 @@ void AppController::stopCaptureLoop() {
 }
 
 void AppController::refreshLiveStatus() {
+    pushLogEntry(log_entries_, QStringLiteral("[DEBUG] Frames: %1, Elapsed: %2")
+        .arg(QString::number(total_frames_), elapsedText()));
+    emit elapsedTextChanged();
     emit totalFramesTextChanged();
     emit bytesWrittenTextChanged();
+    emit logEntriesChanged();
 }
 
 } // namespace micecam::ui

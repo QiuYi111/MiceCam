@@ -6,8 +6,8 @@ import "../theme"
 Item {
     id: root
 
-    signal cardFullscreen(string name, real fps, int drops, bool isRecording, int status)
-    signal cardConfigure(string name, real fps, int drops, bool isRecording, int status)
+    signal cardFullscreen(string name, real fps, int drops, bool isRecording, int status, var resOpts, var fpsOpts, var fmtOpts)
+    signal cardConfigure(string name, real fps, int drops, bool isRecording, int status, var resOpts, var fpsOpts, var fmtOpts)
 
     property string menuTargetName: ""
     property real menuTargetFps: 0
@@ -36,7 +36,9 @@ Item {
                     drops: model.dropCount
                     status: model.status
                     isRecording: model.isRecording
-                    onContextFullscreen: root.cardFullscreen(model.name, model.fps, model.dropCount, model.isRecording, model.status)
+                    elapsedText: appController.elapsedText
+                    onContextFullscreen: root.cardFullscreen(model.name, model.fps, model.dropCount, model.isRecording, model.status,
+                        model.resolutionLabels, model.framerateLabels, model.formatLabels)
                     onContextMenuRequested: function(gx, gy) { root.showContextMenu(model.name, model.fps, model.dropCount, model.isRecording, model.status, gx, gy) }
                 }
             }

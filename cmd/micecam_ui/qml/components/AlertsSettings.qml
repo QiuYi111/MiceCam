@@ -152,7 +152,7 @@ Flickable {
                     title: "Desktop notifications"
                     description: "Show system notifications for alert events."
                     Layout.fillWidth: true
-                    controlItem: HigSwitch { checked: true }
+                    controlItem: HigSwitch { checked: appController.settings.desktopNotifications }
                 }
 
                 SettingDivider {}
@@ -161,7 +161,7 @@ Flickable {
                     title: "Sound alerts"
                     description: "Play a sound when an alert is triggered."
                     Layout.fillWidth: true
-                    controlItem: HigSwitch { checked: true }
+                    controlItem: HigSwitch { checked: appController.settings.soundAlerts }
                 }
 
                 SettingDivider {}

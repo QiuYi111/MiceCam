@@ -47,6 +47,78 @@ void AppSettings::setLogLevel(const QString& value) {
     emit logLevelChanged();
 }
 
+int AppSettings::keyframeInterval() const { return config_.keyframe_interval(); }
+void AppSettings::setKeyframeInterval(int value) {
+    config_.set_keyframe_interval(value);
+    emit keyframeIntervalChanged();
+}
+
+QString AppSettings::encoderPreset() const { return QString::fromStdString(config_.encoder_preset()); }
+void AppSettings::setEncoderPreset(const QString& value) {
+    config_.set_encoder_preset(value.toStdString());
+    emit encoderPresetChanged();
+}
+
+bool AppSettings::hardwareAcceleration() const { return config_.hardware_acceleration(); }
+void AppSettings::setHardwareAcceleration(bool value) {
+    config_.set_hardware_acceleration(value);
+    emit hardwareAccelerationChanged();
+}
+
+QString AppSettings::previewQuality() const { return QString::fromStdString(config_.preview_quality()); }
+void AppSettings::setPreviewQuality(const QString& value) {
+    config_.set_preview_quality(value.toStdString());
+    emit previewQualityChanged();
+}
+
+bool AppSettings::desktopNotifications() const { return config_.desktop_notifications(); }
+void AppSettings::setDesktopNotifications(bool value) {
+    config_.set_desktop_notifications(value);
+    emit desktopNotificationsChanged();
+}
+
+bool AppSettings::soundAlerts() const { return config_.sound_alerts(); }
+void AppSettings::setSoundAlerts(bool value) {
+    config_.set_sound_alerts(value);
+    emit soundAlertsChanged();
+}
+
+bool AppSettings::verboseDiagnostics() const { return config_.verbose_diagnostics(); }
+void AppSettings::setVerboseDiagnostics(bool value) {
+    config_.set_verbose_diagnostics(value);
+    emit verboseDiagnosticsChanged();
+}
+
+bool AppSettings::createSubfolder() const { return config_.create_subfolder_per_session(); }
+void AppSettings::setCreateSubfolder(bool value) {
+    config_.set_create_subfolder_per_session(value);
+    emit createSubfolderChanged();
+}
+
+QString AppSettings::folderNamePrefix() const { return QString::fromStdString(config_.folder_name_prefix()); }
+void AppSettings::setFolderNamePrefix(const QString& value) {
+    config_.set_folder_name_prefix(value.toStdString());
+    emit folderNamePrefixChanged();
+}
+
+QString AppSettings::namingPattern() const { return QString::fromStdString(config_.naming_pattern()); }
+void AppSettings::setNamingPattern(const QString& value) {
+    config_.set_naming_pattern(value.toStdString());
+    emit namingPatternChanged();
+}
+
+QString AppSettings::containerFormat() const { return QString::fromStdString(config_.container_format()); }
+void AppSettings::setContainerFormat(const QString& value) {
+    config_.set_container_format(value.toStdString());
+    emit containerFormatChanged();
+}
+
+int AppSettings::maxFileSizeGB() const { return config_.max_file_size_gb(); }
+void AppSettings::setMaxFileSizeGB(int value) {
+    config_.set_max_file_size_gb(value);
+    emit maxFileSizeGBChanged();
+}
+
 bool AppSettings::save() {
     return config_.save("micecam_config.json");
 }

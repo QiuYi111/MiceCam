@@ -54,7 +54,7 @@ Flickable {
                         spacing: 12
                         TextField { 
                             Layout.fillWidth: true
-                            text: "/Volumes/Recordings/MiceCam" 
+                            text: appController.settings.outputDirectory 
                             font.pixelSize: 13
                             background: Rectangle { border.color: Theme.bgTertiary; radius: 8; color: "white" }
                         }

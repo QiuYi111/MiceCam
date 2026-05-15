@@ -10,20 +10,21 @@ Rectangle {
     visible: false
     z: 100
 
-    property string cameraName: "CAM_A"
-    property double fps: 29.97
+    property string cameraName: ""
+    property double fps: 0.0
     property int drops: 0
-    property bool isRecording: true
+    property bool isRecording: false
     property int status: 0
+    property string elapsedText: "00:00"
 
     signal closed()
 
-    function open(name, f, d, rec, s) {
-        cameraName = name || "CAM_A"
-        fps = f !== undefined ? f : 29.97
-        drops = d !== undefined ? d : 0
-        isRecording = rec !== undefined ? rec : true
-        status = s !== undefined ? s : 0
+    function open(data) {
+        cameraName = data.name || ""
+        fps = data.fps !== undefined ? data.fps : 0.0
+        drops = data.drops !== undefined ? data.drops : 0
+        isRecording = data.isRecording !== undefined ? data.isRecording : false
+        status = data.status !== undefined ? data.status : 0
         visible = true
     }
 
@@ -107,7 +108,7 @@ Rectangle {
                 Item { Layout.fillWidth: true }
 
                 Text {
-                    text: "00:42:17"
+                    text: root.elapsedText
                     font.family: Theme.fontMono
                     font.pixelSize: 13
                     color: "#99FFFFFF"
@@ -216,7 +217,7 @@ Rectangle {
                     }
 
                     Text {
-                        text: "H.265 / 1080p"
+                        text: root.fps.toFixed(0) + " fps"
                         color: "#CCCCCC"
                         font.family: Theme.fontPrimary
                         font.pixelSize: 12

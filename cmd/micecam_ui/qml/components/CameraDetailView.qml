@@ -6,40 +6,26 @@ import "../theme"
 Item {
     id: root
 
-    property string cameraName: "CAM_A"
-    property double cameraFps: 29.97
+    property string cameraName: ""
+    property double cameraFps: 0.0
     property int cameraDrops: 0
     property int cameraStatus: 0
-    property bool cameraRecording: true
+    property bool cameraRecording: false
+    property var resolutionOptionsList: []
+    property var framerateOptionsList: []
+    property var formatOptionsList: []
+    property string elapsedText: "00:00"
 
     property int selectedResolutionIndex: 0
     property int selectedFrameRateIndex: 1
     property int selectedStreamModeIndex: 1
 
-    readonly property string selectedResolution: resolutionOptions.get(selectedResolutionIndex).label
-    readonly property string selectedFrameRate: frameRateOptions.get(selectedFrameRateIndex).label
-    readonly property string selectedPixelFormat: streamModeOptions.get(selectedStreamModeIndex).label
+    readonly property string selectedResolution: resolutionOptionsList.length > selectedResolutionIndex ? resolutionOptionsList[selectedResolutionIndex] : ""
+    readonly property string selectedFrameRate: framerateOptionsList.length > selectedFrameRateIndex ? framerateOptionsList[selectedFrameRateIndex] : ""
+    readonly property string selectedPixelFormat: formatOptionsList.length > selectedStreamModeIndex ? formatOptionsList[selectedStreamModeIndex] : ""
 
-    ListModel {
-        id: resolutionOptions
-        ListElement { label: "1920\u00d71080"; value: "1920x1080" }
-        ListElement { label: "1280\u00d7720"; value: "1280x720" }
-        ListElement { label: "640\u00d7480"; value: "640x480" }
-    }
-
-    ListModel {
-        id: frameRateOptions
-        ListElement { label: "15 fps"; value: "15" }
-        ListElement { label: "30 fps"; value: "30" }
-        ListElement { label: "60 fps"; value: "60" }
-    }
-
-    ListModel {
-        id: streamModeOptions
-        ListElement { label: "Mono8"; value: "Mono8" }
-        ListElement { label: "BGR"; value: "BGR" }
-        ListElement { label: "NV12"; value: "NV12" }
-    }
+    // Options come from backend via properties (set in main.qml)
+    // Fallback ListModels are no longer used
 
     signal backClicked()
     signal fullscreenClicked(string name, real fps, int drops, bool isRecording, int status)
@@ -227,7 +213,7 @@ Item {
                         Item { Layout.fillWidth: true }
 
                         Text {
-                            text: "00:42:17"
+                            text: root.elapsedText
                             color: "#99FFFFFF"
                             font.family: Theme.fontMono
                             font.pixelSize: 12
@@ -282,7 +268,7 @@ Item {
                             { label: "Bitrate", value: "12.0 Mbps" },
                             { label: "Frame Drops", value: root.cameraDrops.toString() },
                             { label: "Buffer", value: "48/64" },
-                            { label: "Uptime", value: "00:42:17" }
+                            { label: "Uptime", value: root.elapsedText }
                         ]
 
                         delegate: ColumnLayout {
@@ -374,17 +360,15 @@ Item {
                                 id: resolutionCombo
                                 Layout.alignment: Qt.AlignVCenter
                                 Layout.preferredWidth: 180
-                                model: resolutionOptions
-                                textRole: "label"
+                                model: resolutionOptionsList.length > 0 ? resolutionOptionsList : ["No options"]
                                 currentIndex: root.selectedResolutionIndex
                                 onActivated: root.selectedResolutionIndex = currentIndex
 
                                 delegate: ItemDelegate {
-                                    required property string label
-                                    required property string value
+                                    required property var modelData
                                     width: resolutionCombo.width
                                     contentItem: Text {
-                                        text: label
+                                        text: modelData
                                         font.family: Theme.fontMono
                                         font.pixelSize: 13
                                         color: highlighted ? "white" : Theme.textPrimary
@@ -397,7 +381,8 @@ Item {
                                 }
 
                                 contentItem: Text {
-                                    text: resolutionOptions.get(resolutionCombo.currentIndex).label
+                                    text: resolutionCombo.currentIndex >= 0 && resolutionOptionsList.length > resolutionCombo.currentIndex
+                                        ? resolutionOptionsList[resolutionCombo.currentIndex] : ""
                                     font.family: Theme.fontMono
                                     font.pixelSize: 13
                                     font.weight: Font.Medium
@@ -507,17 +492,15 @@ Item {
                                 id: frameRateCombo
                                 Layout.alignment: Qt.AlignVCenter
                                 Layout.preferredWidth: 160
-                                model: frameRateOptions
-                                textRole: "label"
+                                model: framerateOptionsList.length > 0 ? framerateOptionsList : ["No options"]
                                 currentIndex: root.selectedFrameRateIndex
                                 onActivated: root.selectedFrameRateIndex = currentIndex
 
                                 delegate: ItemDelegate {
-                                    required property string label
-                                    required property string value
+                                    required property var modelData
                                     width: frameRateCombo.width
                                     contentItem: Text {
-                                        text: label
+                                        text: modelData
                                         font.family: Theme.fontMono
                                         font.pixelSize: 13
                                         color: highlighted ? "white" : Theme.textPrimary
@@ -530,7 +513,8 @@ Item {
                                 }
 
                                 contentItem: Text {
-                                    text: frameRateOptions.get(frameRateCombo.currentIndex).label
+                                    text: frameRateCombo.currentIndex >= 0 && framerateOptionsList.length > frameRateCombo.currentIndex
+                                        ? framerateOptionsList[frameRateCombo.currentIndex] : ""
                                     font.family: Theme.fontMono
                                     font.pixelSize: 13
                                     font.weight: Font.Medium
@@ -640,17 +624,15 @@ Item {
                                 id: streamModeCombo
                                 Layout.alignment: Qt.AlignVCenter
                                 Layout.preferredWidth: 160
-                                model: streamModeOptions
-                                textRole: "label"
+                                model: formatOptionsList.length > 0 ? formatOptionsList : ["No options"]
                                 currentIndex: root.selectedStreamModeIndex
                                 onActivated: root.selectedStreamModeIndex = currentIndex
 
                                 delegate: ItemDelegate {
-                                    required property string label
-                                    required property string value
+                                    required property var modelData
                                     width: streamModeCombo.width
                                     contentItem: Text {
-                                        text: label
+                                        text: modelData
                                         font.family: Theme.fontMono
                                         font.pixelSize: 13
                                         color: highlighted ? "white" : Theme.textPrimary
@@ -663,7 +645,8 @@ Item {
                                 }
 
                                 contentItem: Text {
-                                    text: streamModeOptions.get(streamModeCombo.currentIndex).label
+                                    text: streamModeCombo.currentIndex >= 0 && formatOptionsList.length > streamModeCombo.currentIndex
+                                        ? formatOptionsList[streamModeCombo.currentIndex] : ""
                                     font.family: Theme.fontMono
                                     font.pixelSize: 13
                                     font.weight: Font.Medium

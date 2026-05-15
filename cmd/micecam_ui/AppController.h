@@ -37,6 +37,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString preflightMessage READ preflightMessage NOTIFY preflightMessageChanged)
     Q_PROPERTY(QString lastSessionId READ lastSessionId NOTIFY lastSessionIdChanged)
 
+    Q_PROPERTY(QStringList recentLogEntries READ recentLogEntries NOTIFY logEntriesChanged)
+
 public:
     explicit AppController(BackendMode mode, QObject* parent = nullptr);
 
@@ -53,6 +55,7 @@ public:
     QString diskRemainingText() const;
     QString preflightMessage() const;
     QString lastSessionId() const;
+    QStringList recentLogEntries() const;
 
     Q_INVOKABLE void refreshCameras();
     Q_INVOKABLE bool startRecording();
@@ -73,6 +76,7 @@ signals:
     void diskRemainingTextChanged();
     void preflightMessageChanged();
     void lastSessionIdChanged();
+    void logEntriesChanged();
 
 private:
     struct ActiveStream {
@@ -96,10 +100,12 @@ private:
     uint64_t bytes_written_ = 0;
     QString disk_remaining_;
     QString preflight_message_;
+    std::chrono::steady_clock::time_point session_start_;
 
     std::atomic<bool> capture_running_{false};
     std::thread capture_thread_;
     std::vector<ActiveStream> active_streams_;
+    QStringList log_entries_;
 
     void captureLoop();
     void stopCaptureLoop();

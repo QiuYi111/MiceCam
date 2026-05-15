@@ -15,17 +15,23 @@ ApplicationWindow {
 
     property int currentViewIndex: 0
     property string selectedCameraName: ""
-    property double selectedCameraFps: 29.97
+    property double selectedCameraFps: 0.0
     property int selectedCameraDrops: 0
     property int selectedCameraStatus: 0
-    property bool selectedCameraRecording: true
+    property bool selectedCameraRecording: false
+    property var selectedResolutionOptions: []
+    property var selectedFramerateOptions: []
+    property var selectedFormatOptions: []
 
-    function openCameraDetail(name, fps, drops, isRecording, status) {
-        selectedCameraName = name
-        selectedCameraFps = fps !== undefined ? fps : 29.97
-        selectedCameraDrops = drops !== undefined ? drops : 0
-        selectedCameraRecording = isRecording !== undefined ? isRecording : true
-        selectedCameraStatus = status !== undefined ? status : 0
+    function openCameraDetail(data) {
+        selectedCameraName = data.name || ""
+        selectedCameraFps = data.fps !== undefined ? data.fps : 0.0
+        selectedCameraDrops = data.drops !== undefined ? data.drops : 0
+        selectedCameraRecording = data.isRecording !== undefined ? data.isRecording : false
+        selectedCameraStatus = data.status !== undefined ? data.status : 0
+        selectedResolutionOptions = data.resolutionOptions || []
+        selectedFramerateOptions = data.framerateOptions || []
+        selectedFormatOptions = data.formatOptions || []
         currentViewIndex = 5
     }
 
@@ -52,9 +58,13 @@ ApplicationWindow {
             isRecording: appController.isRecording
             recordText: appController.recordButtonText
             alertModel: appController.alertModel
+            elapsedText: appController.elapsedText
 
             onFullscreenClicked: {
-                fullscreenView.open("CAM_A", 29.97, 0, true, 0)
+                var idx = appController.cameraModel.rowCount() > 0 ? 0 : -1
+                if (idx >= 0) {
+                    fullscreenView.open(appController.cameraAt(idx))
+                }
             }
 
             onRecordClicked: {
@@ -88,12 +98,16 @@ ApplicationWindow {
             }
 
             onCameraSelected: function(name, status) {
-                var fps = 29.97
-                var drops = 0
-                var rec = true
-                var st = status
-                if (name === "CAM_D") { fps = 18.45; drops = 152; }
-                appRoot.openCameraDetail(name, fps, drops, rec, st)
+                var idx = sidebar.cameraList.currentIndex
+                if (idx >= 0) {
+                    var row = appController.cameraAt(idx)
+                    if (row && Object.keys(row).length > 0) {
+                        row.resolutionOptions = row.resolutionLabels || []
+                        row.framerateOptions = row.framerateLabels || []
+                        row.formatOptions = row.formatLabels || []
+                        appRoot.openCameraDetail(row)
+                    }
+                }
             }
         }
 
@@ -122,11 +136,12 @@ ApplicationWindow {
 
             CameraGridView {
                 id: cameraGridPage
-                onCardFullscreen: function(name, fps, drops, isRecording, status) {
-                    fullscreenView.open(name, fps, drops, isRecording, status)
+                onCardFullscreen: function(name, fps, drops, isRecording, status, resOpts, fpsOpts, fmtOpts) {
+                    fullscreenView.open({name: name, fps: fps, drops: drops, isRecording: isRecording, status: status})
                 }
-                onCardConfigure: function(name, fps, drops, isRecording, status) {
-                    appRoot.openCameraDetail(name, fps, drops, isRecording, status)
+                onCardConfigure: function(name, fps, drops, isRecording, status, resOpts, fpsOpts, fmtOpts) {
+                    appRoot.openCameraDetail({name: name, fps: fps, drops: drops, isRecording: isRecording, status: status,
+                        resolutionOptions: resOpts, framerateOptions: fpsOpts, formatOptions: fmtOpts})
                 }
             }
             EncodingSettings {}
@@ -142,13 +157,17 @@ ApplicationWindow {
                 cameraDrops: appRoot.selectedCameraDrops
                 cameraStatus: appRoot.selectedCameraStatus
                 cameraRecording: appRoot.selectedCameraRecording
+                resolutionOptionsList: appRoot.selectedResolutionOptions
+                framerateOptionsList: appRoot.selectedFramerateOptions
+                formatOptionsList: appRoot.selectedFormatOptions
+                elapsedText: appController.elapsedText
 
                 onBackClicked: {
                     currentViewIndex = 0
                 }
 
                 onFullscreenClicked: function(name, fps, drops, isRecording, status) {
-                    fullscreenView.open(name, fps, drops, isRecording, status)
+                    fullscreenView.open({name: name, fps: fps, drops: drops, isRecording: isRecording, status: status})
                 }
             }
         }

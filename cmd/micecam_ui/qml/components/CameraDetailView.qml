@@ -12,6 +12,10 @@ Item {
     property int cameraStatus: 0
     property bool cameraRecording: true
 
+    property string selectedResolution: "1920\u00d71080"
+    property string selectedFrameRate: "30 fps"
+    property string selectedPixelFormat: "BGR"
+
     signal backClicked()
     signal fullscreenClicked(string name, real fps, int drops, bool isRecording, int status)
 
@@ -27,8 +31,9 @@ Item {
             id: detailContent
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.margins: 32
-            spacing: 20
+            anchors.rightMargin: 24
+            anchors.leftMargin: 32
+            spacing: 16
 
             RowLayout {
                 Layout.fillWidth: true
@@ -83,58 +88,54 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 16
+                spacing: 12
 
-                RowLayout {
-                    spacing: 12
+                Text {
+                    text: root.cameraName
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 28
+                    font.weight: Font.Bold
+                    color: Theme.textPrimary
+                }
 
-                    Text {
-                        text: root.cameraName
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 28
-                        font.weight: Font.Bold
-                        color: Theme.textPrimary
+                Rectangle {
+                    width: 10
+                    height: 10
+                    radius: 5
+                    color: root.cameraStatus === 0 ? Theme.statusGreen : (root.cameraStatus === 1 ? Theme.statusAmber : Theme.statusRed)
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Text {
+                    text: root.cameraStatus === 0 ? "Connected" : (root.cameraStatus === 1 ? "Warning" : "Disconnected")
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 14
+                    color: root.cameraStatus === 0 ? Theme.statusGreen : (root.cameraStatus === 1 ? Theme.statusAmber : Theme.statusRed)
+                    font.weight: Font.Medium
+                }
+
+                Rectangle {
+                    visible: root.cameraRecording
+                    width: 8
+                    height: 8
+                    radius: 4
+                    color: Theme.recordRed
+                    Layout.alignment: Qt.AlignVCenter
+
+                    SequentialAnimation on opacity {
+                        loops: Animation.Infinite
+                        NumberAnimation { from: 1.0; to: 0.3; duration: 800 }
+                        NumberAnimation { from: 0.3; to: 1.0; duration: 800 }
                     }
+                }
 
-                    Rectangle {
-                        width: 10
-                        height: 10
-                        radius: 5
-                        color: root.cameraStatus === 0 ? Theme.statusGreen : (root.cameraStatus === 1 ? Theme.statusAmber : Theme.statusRed)
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    Text {
-                        text: root.cameraStatus === 0 ? "Connected" : (root.cameraStatus === 1 ? "Warning" : "Disconnected")
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 14
-                        color: root.cameraStatus === 0 ? Theme.statusGreen : (root.cameraStatus === 1 ? Theme.statusAmber : Theme.statusRed)
-                        font.weight: Font.Medium
-                    }
-
-                    Rectangle {
-                        visible: root.cameraRecording
-                        width: 8
-                        height: 8
-                        radius: 4
-                        color: Theme.recordRed
-                        Layout.alignment: Qt.AlignVCenter
-
-                        SequentialAnimation on opacity {
-                            loops: Animation.Infinite
-                            NumberAnimation { from: 1.0; to: 0.3; duration: 800 }
-                            NumberAnimation { from: 0.3; to: 1.0; duration: 800 }
-                        }
-                    }
-
-                    Text {
-                        visible: root.cameraRecording
-                        text: "REC"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 11
-                        font.weight: Font.Bold
-                        color: Theme.recordRed
-                    }
+                Text {
+                    visible: root.cameraRecording
+                    text: "REC"
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 11
+                    font.weight: Font.Bold
+                    color: Theme.recordRed
                 }
 
                 Item { Layout.fillWidth: true }
@@ -142,7 +143,7 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(root.height * 0.45, 360)
+                Layout.preferredHeight: Math.min(root.height * 0.35, 300)
                 radius: 12
                 color: "#1A1A1E"
                 clip: true
@@ -188,7 +189,7 @@ Item {
                         anchors.rightMargin: 12
 
                         Text {
-                            text: root.cameraFps.toFixed(2) + " fps"
+                            text: root.selectedFrameRate
                             color: "white"
                             font.family: Theme.fontPrimary
                             font.pixelSize: 12
@@ -199,6 +200,15 @@ Item {
 
                         Text {
                             text: "00:42:17"
+                            color: "#99FFFFFF"
+                            font.family: Theme.fontMono
+                            font.pixelSize: 12
+                        }
+
+                        Item { width: 16 }
+
+                        Text {
+                            text: root.selectedResolution
                             color: "#99FFFFFF"
                             font.family: Theme.fontMono
                             font.pixelSize: 12
@@ -235,14 +245,14 @@ Item {
 
                     Repeater {
                         model: [
-                            { label: "Frame Rate", value: root.cameraFps.toFixed(2) + " fps" },
-                            { label: "Frame Drops", value: root.cameraDrops.toString() },
-                            { label: "Resolution", value: "1920\u00d71080" },
+                            { label: "Resolution", value: root.selectedResolution },
+                            { label: "Frame Rate", value: root.selectedFrameRate },
+                            { label: "Pixel Format", value: root.selectedPixelFormat },
                             { label: "Encoder", value: "H.265 (HEVC)" },
                             { label: "Bitrate", value: "12.0 Mbps" },
-                            { label: "Uptime", value: "00:42:17" },
+                            { label: "Frame Drops", value: root.cameraDrops.toString() },
                             { label: "Buffer", value: "48/64" },
-                            { label: "Quality", value: "85%" }
+                            { label: "Uptime", value: "00:42:17" }
                         ]
 
                         delegate: ColumnLayout {
@@ -271,18 +281,314 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                implicitHeight: configContent.height + 24
+                implicitHeight: acquisitionContent.height + 24
                 color: "white"
                 radius: 10
                 border.color: Theme.borderColor
                 border.width: 1
 
                 ColumnLayout {
-                    id: configContent
+                    id: acquisitionContent
                     anchors.fill: parent
                     anchors.topMargin: 12
                     anchors.bottomMargin: 12
                     spacing: 0
+
+                    Text {
+                        text: "Acquisition Configuration"
+                        font.family: Theme.fontPrimary
+                        font.weight: Font.Bold
+                        font.pixelSize: 14
+                        color: Theme.textPrimary
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        Layout.bottomMargin: 8
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: 1
+                        color: Theme.divider
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        Layout.topMargin: 4
+                        Layout.bottomMargin: 4
+                        height: resolutionRow.height + 16
+                        color: "transparent"
+
+                        RowLayout {
+                            id: resolutionRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            spacing: 16
+
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 2
+
+                                Text {
+                                    text: "Resolution"
+                                    font.family: Theme.fontPrimary
+                                    font.weight: Font.Bold
+                                    font.pixelSize: 13
+                                    color: Theme.textPrimary
+                                }
+
+                                Text {
+                                    text: "Camera output resolution."
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 12
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Row {
+                                spacing: 0
+                                Layout.alignment: Qt.AlignVCenter
+
+                                Repeater {
+                                    model: ["1920\u00d71080", "1280\u00d7720", "640\u00d7480"]
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        property bool isSelected: root.selectedResolution === modelData
+                                        width: modelData.length > 8 ? 96 : 88
+                                        height: 30
+                                        color: isSelected ? Theme.navyPrimary : Theme.bgSecondary
+                                        border.color: isSelected ? Theme.navyPrimary : Theme.borderColor
+                                        border.width: 1
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            font.family: Theme.fontMono
+                                            font.pixelSize: 12
+                                            font.weight: isSelected ? Font.Bold : Font.Normal
+                                            color: isSelected ? "white" : Theme.textSecondary
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.selectedResolution = modelData
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: 1
+                        color: Theme.divider
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        Layout.topMargin: 4
+                        Layout.bottomMargin: 4
+                        height: fpsRow.height + 16
+                        color: "transparent"
+
+                        RowLayout {
+                            id: fpsRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            spacing: 16
+
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 2
+
+                                Text {
+                                    text: "Frame Rate"
+                                    font.family: Theme.fontPrimary
+                                    font.weight: Font.Bold
+                                    font.pixelSize: 13
+                                    color: Theme.textPrimary
+                                }
+
+                                Text {
+                                    text: "Target acquisition frame rate."
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 12
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Row {
+                                spacing: 0
+                                Layout.alignment: Qt.AlignVCenter
+
+                                Repeater {
+                                    model: ["15 fps", "30 fps", "60 fps"]
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        property bool isSelected: root.selectedFrameRate === modelData
+                                        width: 72
+                                        height: 30
+                                        color: isSelected ? Theme.navyPrimary : Theme.bgSecondary
+                                        border.color: isSelected ? Theme.navyPrimary : Theme.borderColor
+                                        border.width: 1
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            font.family: Theme.fontMono
+                                            font.pixelSize: 12
+                                            font.weight: isSelected ? Font.Bold : Font.Normal
+                                            color: isSelected ? "white" : Theme.textSecondary
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.selectedFrameRate = modelData
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: 1
+                        color: Theme.divider
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        Layout.topMargin: 4
+                        Layout.bottomMargin: 4
+                        height: pixelRow.height + 16
+                        color: "transparent"
+
+                        RowLayout {
+                            id: pixelRow
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            spacing: 16
+
+                            ColumnLayout {
+                                Layout.preferredWidth: 200
+                                spacing: 2
+
+                                Text {
+                                    text: "Stream Mode"
+                                    font.family: Theme.fontPrimary
+                                    font.weight: Font.Bold
+                                    font.pixelSize: 13
+                                    color: Theme.textPrimary
+                                }
+
+                                Text {
+                                    text: "Pixel format / stream mode."
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 12
+                                    color: Theme.textSecondary
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Row {
+                                spacing: 0
+                                Layout.alignment: Qt.AlignVCenter
+
+                                Repeater {
+                                    model: ["Mono8", "BGR", "NV12"]
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        property bool isSelected: root.selectedPixelFormat === modelData
+                                        width: 72
+                                        height: 30
+                                        color: isSelected ? Theme.navyPrimary : Theme.bgSecondary
+                                        border.color: isSelected ? Theme.navyPrimary : Theme.borderColor
+                                        border.width: 1
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            font.family: Theme.fontMono
+                                            font.pixelSize: 12
+                                            font.weight: isSelected ? Font.Bold : Font.Normal
+                                            color: isSelected ? "white" : Theme.textSecondary
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root.selectedPixelFormat = modelData
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: recordingContent.height + 24
+                color: "white"
+                radius: 10
+                border.color: Theme.borderColor
+                border.width: 1
+
+                ColumnLayout {
+                    id: recordingContent
+                    anchors.fill: parent
+                    anchors.topMargin: 12
+                    anchors.bottomMargin: 12
+                    spacing: 0
+
+                    Text {
+                        text: "Recording & Preview"
+                        font.family: Theme.fontPrimary
+                        font.weight: Font.Bold
+                        font.pixelSize: 14
+                        color: Theme.textPrimary
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        Layout.bottomMargin: 8
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 16
+                        Layout.rightMargin: 16
+                        height: 1
+                        color: Theme.divider
+                    }
 
                     Rectangle {
                         Layout.fillWidth: true

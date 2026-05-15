@@ -68,6 +68,8 @@ private:
 
     mutable std::mutex stats_mutex_;
     TransportStats transport_stats_;
+    uint64_t last_reader_drops_ = 0;
+    uint64_t last_reader_bp_events_ = 0;
     uint64_t lag_sample_count_ = 0;
     double lag_sum_ = 0.0;
     double lag_max_ = 0.0;

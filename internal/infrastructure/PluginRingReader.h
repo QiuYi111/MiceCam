@@ -34,7 +34,9 @@ struct ReadSlotData {
 struct ReaderStats {
     uint64_t total_reads = 0;
     uint64_t total_drops = 0;
+    uint64_t backpressure_events = 0;
     int64_t current_lag = 0;
+    int64_t max_lag = 0;
 };
 
 class PluginRingReader {
@@ -70,7 +72,9 @@ private:
     mutable std::mutex stats_mutex_;
     uint64_t total_reads_ = 0;
     uint64_t total_drops_ = 0;
+    uint64_t backpressure_events_ = 0;
     int64_t current_lag_ = 0;
+    int64_t max_lag_ = 0;
 };
 
 } // namespace micecam::infrastructure

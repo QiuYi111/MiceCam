@@ -17,7 +17,8 @@ bool TranscodeStage::initialize(const domain::EncoderConfig& config) {
 }
 
 std::vector<uint8_t> TranscodeStage::process(const uint8_t* data, size_t size, int width, int height, int64_t pts, const std::string& source_format) {
-    if (source_format == "h264" || source_format == "H264") {
+    if (source_format == "h264" || source_format == "H264" ||
+        source_format == "h265" || source_format == "H265") {
         return std::vector<uint8_t>(data, data + size);
     }
 

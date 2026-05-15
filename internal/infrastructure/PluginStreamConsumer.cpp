@@ -62,6 +62,11 @@ void PluginStreamConsumer::consumerLoop() {
 
         auto reader_stats = reader_->stats();
 
+        uint64_t drop_delta = reader_stats.total_drops - last_reader_drops_;
+        uint64_t bp_delta = reader_stats.backpressure_events - last_reader_bp_events_;
+        last_reader_drops_ = reader_stats.total_drops;
+        last_reader_bp_events_ = reader_stats.backpressure_events;
+
         std::string source_format = payloadKindToSourceFormat(slot.payload_kind);
 
         pipeline::FrameData frame;
@@ -78,7 +83,8 @@ void PluginStreamConsumer::consumerLoop() {
         {
             std::lock_guard<std::mutex> lock(stats_mutex_);
             transport_stats_.frames_read++;
-            transport_stats_.frames_dropped += reader_stats.total_drops;
+            transport_stats_.frames_dropped += drop_delta;
+            transport_stats_.backpressure_events += bp_delta;
 
             double lag = static_cast<double>(reader_stats.current_lag);
             lag_sample_count_++;

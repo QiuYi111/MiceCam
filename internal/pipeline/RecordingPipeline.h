@@ -82,6 +82,8 @@ public:
 
     void set_watchdog(infrastructure::Watchdog* wd) { watchdog_ = wd; }
     void set_alert_manager(infrastructure::AlertManager* am) { alert_mgr_ = am; }
+    void set_plugin_source(const nlohmann::json& plugin_source);
+    void set_stream_transport_stats(const std::string& stream_id, const nlohmann::json& transport);
 
 private:
     bool create_stream_pipeline(const domain::StreamConfig& sc,
@@ -94,6 +96,8 @@ private:
     std::unordered_map<std::string, std::unique_ptr<StreamPipeline>> streams_;
     infrastructure::Watchdog* watchdog_ = nullptr;
     infrastructure::AlertManager* alert_mgr_ = nullptr;
+    nlohmann::json plugin_source_;
+    std::unordered_map<std::string, nlohmann::json> stream_transport_stats_;
 };
 
 } // namespace micecam::pipeline

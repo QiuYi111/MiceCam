@@ -1,102 +1,103 @@
-# Worker Report: 003-phase-2-review-rework-2
+# Worker Report
 
 ## Task summary
 
-Capture the buildable code state in git by committing missing CMakeLists.txt wiring, SessionMetadata.h field, and StreamStats.cpp serialization; revert an unrelated TranscodeStage.cpp change; correct the prior inaccurate worker report.
+Implement Phase 3 recording-consumer path: make plugin SHM ring frames consumable by the recording pipeline with full metadata/stats integration.
 
 ## What was done
 
-- Reviewed independent review rejection (session `ses_1d3eb4a88ffeJ0U7Nz9oi14pnW`) findings against actual diffs
-- Verified each dirty file is build-required by stashing and rebuilding
-- Confirmed `CMakeLists.txt`, `SessionMetadata.h`, `StreamStats.cpp` changes are required for build
-- Confirmed `TranscodeStage.cpp` H.265 passthrough is NOT required for build — reverted to committed state
-- Rewrote worker-report.md to accurately describe the actual diffs
+- Added `backpressure_events` and `max_lag` fields to `ReaderStats` in PluginRingReader
+- Tracked backpressure event count and max lag in PluginRingReader::readNextFrame
+- Fixed PluginStreamConsumer double-counting bug: `frames_dropped` was accumulating total reader drops on every frame instead of deltas; changed to delta-based tracking
+- Added `backpressure_events` delta tracking in PluginStreamConsumer
+- Added H265 passthrough to TranscodeStage::process (alongside existing H264 passthrough)
+- Added `set_plugin_source()` and `set_stream_transport_stats()` methods to RecordingPipeline
+- Connected plugin_source to SessionMetadata in RecordingPipeline::result()
+- Connected per-stream transport stats to StreamStats.transport in RecordingPipeline::result()
+- Rewrote test_plugin_stream_consumer.cpp with 8 tests covering: info, stats, invalid ring, stop, frame consumption, drop detection, H264 passthrough, clean stop, JSON serialization, H265 payload
+- Rewrote test_recording_pipeline_outputs.cpp with 3 integration tests: RAW plugin frames through full pipeline with _meta.json/_stats.json verification, H264 passthrough with metadata, and no-plugin-source baseline
 
 ## Changed files
 
-| File | Change | Required? |
-|------|--------|-----------|
-| `CMakeLists.txt` | Added `PluginRingReader.cpp` and `PluginStreamConsumer.cpp` to encoding library sources; added `test_plugin_ring_reader` and `test_plugin_stream_consumer` test targets | Yes — source files and test targets not wired without this |
-| `internal/domain/SessionMetadata.h` | Added `nlohmann::json plugin_source;` field to `SessionMetadata` struct | Yes — `SessionMetadata.cpp` (committed in `9f2000e`) serializes/deserializes `plugin_source` but the field was missing from the header, causing compile errors |
-| `internal/domain/StreamStats.cpp` | Added conditional serialization of `transport` field in `to_json()` | Yes — `StreamStats.h` (committed) declares `transport` member but `to_json()` silently dropped it |
-| `internal/pipeline/TranscodeStage.cpp` | Reverted to committed state (removed H.265 passthrough addition) | No — H.265 passthrough is a feature enhancement, not a build requirement. Build and 30/30 tests pass without it |
-| `.pm/runtime/worker-report.md` | Rewritten to accurately describe diffs and include Rework 2 context | Required by task |
-
-### Prior Rework 1 changes (committed in `9f2000e`, NOT part of this commit)
-
-These were committed by the prior rework and are unchanged:
-- `cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.cpp` — added `#include <set>`, changed `next_stream_id_++` to `fetch_add`
-- `cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.h` — added `#include <atomic>`, changed `next_stream_id_` to `std::atomic<uint64_t>`
-- `tests/unit/test_plugin_stream_consumer.cpp` — created 4 tests
-- `internal/domain/SessionMetadata.cpp` — added `plugin_source` serialization/deserialization in `to_json()`/`from_json()`
-- `internal/domain/StreamStats.h` — changed `json_fwd.hpp` to `json.hpp`
-- `internal/infrastructure/PluginRingReader.h` — added `current_lag_` member
-- `tests/unit/test_plugin_ring_reader.cpp` — fixed `RoundTripWithProducer` frame count
+- `internal/infrastructure/PluginRingReader.h` — added backpressure_events, max_lag to ReaderStats and private members
+- `internal/infrastructure/PluginRingReader.cpp` — track backpressure_events on skip, track max_lag on read, return both in stats()
+- `internal/infrastructure/PluginStreamConsumer.h` — added last_reader_drops_, last_reader_bp_events_ members
+- `internal/infrastructure/PluginStreamConsumer.cpp` — delta-based drop/bp tracking
+- `internal/pipeline/TranscodeStage.cpp` — H265 passthrough
+- `internal/pipeline/RecordingPipeline.h` — added set_plugin_source(), set_stream_transport_stats(), plugin_source_, stream_transport_stats_ members
+- `internal/pipeline/RecordingPipeline.cpp` — implemented new methods, connected to result()
+- `tests/unit/test_plugin_stream_consumer.cpp` — 8 comprehensive tests (was 4 smoke tests)
+- `tests/integration/test_recording_pipeline_outputs.cpp` — 3 integration tests (was 1)
 
 ## Commands run
 
 | Command | Result |
 |---------|--------|
-| `cmake --build build -j 4` | PASS — 100% built |
-| `ctest --test-dir build --output-on-failure` | PASS — 30/30 tests |
-| `git status --short` | Clean except `.pm/runtime/` PM files (forbidden from worker commit) |
-| `git log --oneline -2` | Shows new Rework 2 commit after `9f2000e` |
-| `git show --stat --oneline HEAD` | Shows 4 files changed in Rework 2 commit |
+| `cmake --build build -j 4` | PASS (all targets built) |
+| `ctest --test-dir build --output-on-failure` | PASS (30/30 tests) |
+| `git status --short` | See below |
+| `git log --oneline -2` | See below |
 
 ## Test results
 
-```
-100% tests passed, 0 tests failed out of 30
-Total Test time (real) = 10.36 sec
-```
-
-No new tests added in this rework. All 30 existing tests pass, including `test_plugin_ring_reader` and `test_plugin_stream_consumer` which are now properly wired via CMakeLists.txt.
+- 30/30 tests pass
+- test_plugin_ring_reader: 12 tests PASS
+- test_plugin_stream_consumer: 8 tests PASS
+- test_recording_pipeline_outputs: 3 tests PASS (RawPluginFramesToMp4WithMetadata, H264PassthroughToMp4WithMetadata, PluginSourceAbsentWhenNotSet)
 
 ## Harness results
 
-- **Risk classification**: leaf — committing already-validated dirty changes that were required for build
-- **Scope**: strictly within allowed scope — no forbidden files touched
-- **TranscodeStage.cpp**: intentionally excluded from commit after verifying it is not build-required
+- Risk classification: **branch** — multi-file behavioral extension within allowed scope
+- No core/infra changes required
+- All acceptance criteria addressed
 
 ## Acceptance criteria checklist
 
-- [x] `git status --short` has no dirty code/build files after the commit, except PM supervisor files that were already dirty or explicitly forbidden
-- [x] `git log --oneline -1` shows a new Rework 2 commit after `9f2000e`
-- [x] The new commit includes the required `CMakeLists.txt` and resolved source changes, or the report explains why any listed dirty source change was intentionally removed (TranscodeStage.cpp reverted — H.265 passthrough is not build-required)
-- [x] `.pm/runtime/worker-report.md` accurately describes the actual diff
+- [x] `PluginRingReader` reads frames from a POSIX SHM ring matching Phase 2 producer layout
+- [x] Drops/skipped sequences are detected and reflected in reader/transport stats
+- [x] `PluginStreamConsumer` can read ring frames and push valid `FrameData` into the recording path
+- [x] Plugin source metadata is serializable into `_meta.json`
+- [x] Transport stats are serializable into `_stats.json`
+- [x] Tests cover RAW and H264 paths at minimum
+- [x] Unsupported or deferred MJPEG/H265 behavior is explicit in tests/report and does not masquerade as complete
 - [x] `cmake --build build -j 4` passes
 - [x] `ctest --test-dir build --output-on-failure` passes
+- [ ] `.pm/runtime/worker-report.md` contains all required sections — this file
+- [ ] One git commit is created for Phase 3 changes only — pending
 
 ## Problems encountered
 
-- Prior worker report inaccurately described `SessionMetadata.cpp` as "missing closing brace for namespace" — the actual committed change was adding `plugin_source` serialization/deserialization. The missing namespace brace was never the issue.
-- Prior rework left 3 dirty source files and CMakeLists.txt uncommitted despite them being required for the build.
-- `TranscodeStage.cpp` had an unrelated H.265 passthrough feature change mixed in with required build fixes — verified it is not needed and reverted.
+- PluginStreamConsumer had a bug where `frames_dropped` accumulated total reader drops on every frame read (double-counting). Fixed with delta-based tracking.
+- Integration test for RAW frames initially failed because all 10 frames were written before the consumer thread started, causing backpressure skip. Fixed by using 16 slots and 50ms inter-frame delay.
 
 ## Deviations from task
 
-- `TranscodeStage.cpp` is listed in allowed scope but was intentionally reverted (not committed with new content) because the H.265 passthrough is a feature enhancement, not a build requirement. The task explicitly asks: "If any of these dirty changes are not actually required, explain why and remove or adjust them safely."
+None. All changes are within allowed scope.
+
+## Codec handling notes
+
+- **RAW**: Fully supported through existing FFmpegEncoder path (rgb24 → H264)
+- **H264**: Passthrough/remux via TranscodeStage (unchanged)
+- **H265**: Passthrough added to TranscodeStage; works for packet passthrough but does NOT produce valid MP4 output (MP4 container H265 codec ID support requires additional FFmpeg muxer configuration). Test explicitly verifies frames are read but does not validate MP4 output. This is a documented follow-up.
+- **MJPEG**: NOT supported in current pipeline. No MJPEG decode path exists in TranscodeStage. PluginStreamConsumer maps MJPEG payload kind to "mjpeg" source format string, but TranscodeStage will attempt FFmpegEncoder::encode() which expects raw pixel data. Documented as follow-up requiring a decode-then-encode stage.
 
 ## Remaining work
 
-None for this rework. All acceptance criteria met.
+- H265 MP4 container support (requires FFmpeg muxer AV_CODEC_ID_H265 configuration)
+- MJPEG decode path (requires FFmpeg decoder → raw frame → encode, or direct MJPEG-to-H264 transcode)
+- Ring header contract improvements (magic/version validation, checksum/corruption stats, SHM unlink/reopen) — documented as Phase 3+ follow-up in Phase 2 acceptance review
 
 ## Suggested next step
 
-Independent re-review of Rework 2 commit, then proceed to Phase 3.
+Phase 4: Resource Manager (centralized plugin runtime allocation decisions).
 
 ## Evidence
 
-### Verification of TranscodeStage.cpp revert (build + test pass without it)
-
 ```
-cmake --build build -j 4       → 100% built
-ctest --test-dir build --output-on-failure → 30/30 tests passed
-```
+$ cmake --build build -j 4
+[100%] Built target micecam_ui
 
-### Verification of build breakage without SessionMetadata.h change
-
-```
-error: use of undeclared identifier 'plugin_source'
-error: no member named 'plugin_source' in 'micecam::domain::SessionMetadata'
+$ ctest --test-dir build --output-on-failure
+100% tests passed, 0 tests failed out of 30
+Total Test time (real) =  14.39 sec
 ```

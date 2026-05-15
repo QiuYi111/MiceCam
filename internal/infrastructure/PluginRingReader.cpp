@@ -128,6 +128,7 @@ bool PluginRingReader::readNextFrame(ReadSlotData& out, int timeout_ms) {
 
             std::lock_guard<std::mutex> lock(stats_mutex_);
             total_drops_ += skip_count;
+            backpressure_events_++;
             spdlog::warn("PluginRingReader: backpressure, skipped {} frames (lag={})", skip_count, lag);
             continue;
         }
@@ -158,6 +159,7 @@ bool PluginRingReader::readNextFrame(ReadSlotData& out, int timeout_ms) {
             std::lock_guard<std::mutex> lock(stats_mutex_);
             total_reads_++;
             current_lag_ = static_cast<int64_t>(header_->producer_seq.load(std::memory_order_acquire) - next_consumer_seq_);
+            if (current_lag_ > max_lag_) max_lag_ = current_lag_;
         }
 
         if (actual_checksum != out.checksum) {
@@ -190,7 +192,9 @@ ReaderStats PluginRingReader::stats() const {
     ReaderStats s;
     s.total_reads = total_reads_;
     s.total_drops = total_drops_;
+    s.backpressure_events = backpressure_events_;
     s.current_lag = current_lag_;
+    s.max_lag = max_lag_;
     return s;
 }
 

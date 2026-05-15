@@ -146,6 +146,16 @@ void RecordingPipeline::stop() {
     state_ = PipelineState::FINALIZED;
 }
 
+void RecordingPipeline::set_plugin_source(const nlohmann::json& plugin_source) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    plugin_source_ = plugin_source;
+}
+
+void RecordingPipeline::set_stream_transport_stats(const std::string& stream_id, const nlohmann::json& transport) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    stream_transport_stats_[stream_id] = transport;
+}
+
 std::pair<domain::SessionMetadata, std::vector<domain::StreamStats>>
 RecordingPipeline::result() {
     domain::SessionMetadata meta;
@@ -154,11 +164,16 @@ RecordingPipeline::result() {
     meta.encoder_name = streams_.empty() ? "" : streams_.begin()->second->transcoder->encoder_name();
     meta.bitrate_kbps = config_.encoder.bitrate_kbps;
     meta.keyframe_interval = config_.encoder.keyframe_interval;
+    meta.plugin_source = plugin_source_;
 
     std::vector<domain::StreamStats> stats_list;
     for (auto& [id, sp] : streams_) {
         if (sp->initialized) {
             auto stats = sp->stats->finalize();
+            auto tr_it = stream_transport_stats_.find(id);
+            if (tr_it != stream_transport_stats_.end()) {
+                stats.transport = tr_it->second;
+            }
             stats_list.push_back(stats);
             meta.stream_configs.push_back(domain::StreamConfig{
                 id, 0, sp->width, sp->height, sp->fps, ""

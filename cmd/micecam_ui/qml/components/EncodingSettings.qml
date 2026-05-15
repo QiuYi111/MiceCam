@@ -59,7 +59,7 @@ Flickable {
                         spacing: 16
                         Slider { 
                             id: bitrateSlider
-                            Layout.fillWidth: true; value: 6; from: 3; to: 10
+                            Layout.fillWidth: true; value: appController.settings.defaultBitrateKbps / 1000; from: 3; to: 10
                             background: Rectangle {
                                 x: bitrateSlider.leftPadding
                                 y: bitrateSlider.topPadding + bitrateSlider.availableHeight / 2 - height / 2
@@ -78,7 +78,7 @@ Flickable {
                         }
                         Rectangle {
                             width: 80; height: 36; radius: 8; border.color: Theme.bgTertiary; border.width: 1; color: "white"
-                            Text { anchors.centerIn: parent; text: "6 Mbps"; font.family: Theme.fontPrimary; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.textPrimary }
+                            Text { anchors.centerIn: parent; text: Math.round(appController.settings.defaultBitrateKbps / 1000) + " Mbps"; font.family: Theme.fontPrimary; font.pixelSize: 13; font.weight: Font.Medium; color: Theme.textPrimary }
                         }
                     }
                 }

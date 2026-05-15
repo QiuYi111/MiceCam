@@ -49,11 +49,25 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.right: parent.right
 
+            isRecording: appController.isRecording
+            recordText: appController.recordButtonText
+            alertModel: appController.alertModel
+
             onFullscreenClicked: {
                 fullscreenView.open("CAM_A", 29.97, 0, true, 0)
             }
 
+            onRecordClicked: {
+                if (appController.isRecording) {
+                    appController.stopRecording()
+                } else if (!appController.startRecording()) {
+                    preflightModal.items = appController.preflightItems()
+                    preflightModal.open()
+                }
+            }
+
             onPreflightTriggered: {
+                preflightModal.items = appController.preflightItems()
                 preflightModal.open()
             }
 
@@ -88,6 +102,14 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
+
+            elapsedText: appController.elapsedText
+            cameraCountText: appController.cameraCountText
+            totalFramesText: appController.totalFramesText
+            averageFpsText: appController.averageFpsText
+            bytesWrittenText: appController.bytesWrittenText
+            diskRemainingText: appController.diskRemainingText
+            recording: appController.isRecording
         }
 
         StackLayout {

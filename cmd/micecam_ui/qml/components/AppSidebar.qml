@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import MiceCam.Models
 import "../theme"
 
 Rectangle {
@@ -79,7 +78,7 @@ Rectangle {
             id: cameraList
             Layout.fillWidth: true
             Layout.preferredHeight: contentHeight
-            model: CameraModel {}
+            model: appController.cameraModel
             interactive: false
 
             delegate: Rectangle {

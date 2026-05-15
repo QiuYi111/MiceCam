@@ -64,11 +64,11 @@ Flickable {
                     title: "Feishu webhook URL"
                     description: "Send alert notifications to a Feishu group via incoming webhook."
                     Layout.fillWidth: true
-                    controlItem: TextField {
+                    controlItem:                         TextField {
                         id: webhookField
                         width: 320
                         height: 32
-                        text: ""
+                        text: appController.settings.webhookUrl
                         placeholderText: "Enter webhook URL"
                         echoMode: TextInput.Password
                         font.family: Theme.fontPrimary
@@ -104,7 +104,7 @@ Flickable {
                         spacing: 8
                         StepperControl {
                             id: watchdogStepper
-                            value: 3
+                            value: appController.settings.watchdogTimeout
                             minValue: 1
                             maxValue: 120
                         }
@@ -120,7 +120,7 @@ Flickable {
                     Layout.fillWidth: true
                     controlItem: ThresholdControl {
                         id: yellowThreshold
-                        initialValue: 0.1
+                        initialValue: appController.settings.yellowDropThreshold
                         sliderFrom: 0.0
                         sliderTo: 5.0
                         sliderStep: 0.1
@@ -137,7 +137,7 @@ Flickable {
                     Layout.fillWidth: true
                     controlItem: ThresholdControl {
                         id: redThreshold
-                        initialValue: 1.0
+                        initialValue: appController.settings.redDropThreshold
                         sliderFrom: 0.0
                         sliderTo: 10.0
                         sliderStep: 0.1

@@ -97,7 +97,7 @@ Flickable {
                                     required property int index
                                     width: 72
                                     height: 30
-                                    color: modelData === "Info" ? Theme.navyPrimary : Theme.bgSecondary
+                                    color: modelData === appController.settings.logLevel ? Theme.navyPrimary : Theme.bgSecondary
                                     border.color: Theme.borderColor
                                     border.width: 1
 
@@ -106,8 +106,8 @@ Flickable {
                                         text: modelData
                                         font.family: Theme.fontPrimary
                                         font.pixelSize: 12
-                                        font.weight: modelData === "Info" ? Font.Bold : Font.Normal
-                                        color: modelData === "Info" ? "white" : Theme.textSecondary
+                                        font.weight: modelData === appController.settings.logLevel ? Font.Bold : Font.Normal
+                                        color: modelData === appController.settings.logLevel ? "white" : Theme.textSecondary
                                     }
 
                                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor }
@@ -204,7 +204,7 @@ Flickable {
                                     anchors.fill: parent
                                     anchors.leftMargin: 10
                                     verticalAlignment: Text.AlignVCenter
-                                    text: "~/Library/Logs/MiceCam/"
+                                    text: appController.settings.outputDirectory
                                     font.family: Theme.fontMono
                                     font.pixelSize: 12
                                     color: Theme.textSecondary

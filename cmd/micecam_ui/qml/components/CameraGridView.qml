@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import MiceCam.Models
 import "../theme"
 
 Item {
@@ -17,57 +16,28 @@ Item {
     property int menuTargetStatus: 0
 
     ScrollView {
+        id: gridScroll
         anchors.fill: parent
         clip: true
         contentWidth: availableWidth
 
-        ColumnLayout {
-            x: 24
-            y: 16
-            width: root.width - 48
+        Flow {
+            width: gridScroll.availableWidth
             spacing: 12
+            padding: 16
 
-            RowLayout {
-                spacing: 12
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.height / 2 - 22
-
-                CameraCard {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    cameraName: "CAM_A"; fps: 29.97; drops: 0; status: 0; isRecording: true
-                    onContextFullscreen: root.cardFullscreen(cameraName, fps, drops, isRecording, status)
-                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(cameraName, fps, drops, isRecording, status, gx, gy) }
-                }
-                CameraCard {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    cameraName: "CAM_B"; fps: 29.97; drops: 0; status: 0; isRecording: true
-                    onContextFullscreen: root.cardFullscreen(cameraName, fps, drops, isRecording, status)
-                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(cameraName, fps, drops, isRecording, status, gx, gy) }
-                }
-            }
-
-            RowLayout {
-                spacing: 12
-                Layout.fillWidth: true
-                Layout.preferredHeight: root.height / 2 - 22
-
-                CameraCard {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    cameraName: "CAM_C"; fps: 29.97; drops: 0; status: 0; isRecording: true
-                    onContextFullscreen: root.cardFullscreen(cameraName, fps, drops, isRecording, status)
-                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(cameraName, fps, drops, isRecording, status, gx, gy) }
-                }
-                CameraCard {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    cameraName: "CAM_D"; fps: 18.45; drops: 152; status: 1; isRecording: true
-                    onContextFullscreen: root.cardFullscreen(cameraName, fps, drops, isRecording, status)
-                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(cameraName, fps, drops, isRecording, status, gx, gy) }
-                }
-                CameraCard {
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    cameraName: "USB-1"; fps: 29.97; drops: 0; status: 0; isRecording: true
-                    onContextFullscreen: root.cardFullscreen(cameraName, fps, drops, isRecording, status)
-                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(cameraName, fps, drops, isRecording, status, gx, gy) }
+            Repeater {
+                model: appController.cameraModel
+                delegate: CameraCard {
+                    width: index < 2 ? (parent.width - 12) / 2 : (parent.width - 24) / 3
+                    height: index < 2 ? root.height / 2 - 22 : root.height / 2 - 22
+                    cameraName: model.name
+                    fps: model.fps
+                    drops: model.dropCount
+                    status: model.status
+                    isRecording: model.isRecording
+                    onContextFullscreen: root.cardFullscreen(model.name, model.fps, model.dropCount, model.isRecording, model.status)
+                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(model.name, model.fps, model.dropCount, model.isRecording, model.status, gx, gy) }
                 }
             }
         }

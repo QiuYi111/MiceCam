@@ -10,6 +10,8 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+    property var alertModel: null
+
     background: Rectangle {
         color: "white"
         radius: 12
@@ -73,12 +75,7 @@ Popup {
             clip: true
             spacing: 0
 
-            model: ListModel {
-                ListElement { severity: 2; title: "High drop rate detected on CAM_D"; source: "CAM_D"; relTime: "2 min ago"; badge: 1 }
-                ListElement { severity: 1; title: "Encoder fallback on USB-1"; source: "USB-1"; relTime: "5 min ago"; badge: 2 }
-                ListElement { severity: 1; title: "High drop rate detected on CAM_C"; source: "CAM_C"; relTime: "6 min ago"; badge: 0 }
-                ListElement { severity: 0; title: "Camera disconnect recovered on CAM_B"; source: "CAM_B"; relTime: "12 min ago"; badge: 0 }
-            }
+            model: root.alertModel
 
             delegate: Item {
                 width: alertList.width
@@ -134,7 +131,7 @@ Popup {
 
                             Text {
                                 Layout.alignment: Qt.AlignRight
-                                text: model.relTime
+                                text: model.relativeTime
                                 font.family: Theme.fontPrimary
                                 font.pixelSize: 10
                                 color: Theme.textTertiary
@@ -142,7 +139,7 @@ Popup {
 
                             Rectangle {
                                 Layout.alignment: Qt.AlignRight
-                                visible: model.badge > 0
+                                visible: model.severity > 1
                                 width: badgeText.implicitWidth + 8
                                 height: 16
                                 radius: 8
@@ -151,7 +148,7 @@ Popup {
                                 Text {
                                     id: badgeText
                                     anchors.centerIn: parent
-                                    text: model.badge
+                                    text: model.severity
                                     color: "white"
                                     font.family: Theme.fontPrimary
                                     font.pixelSize: 10

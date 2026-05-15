@@ -8,9 +8,14 @@ Rectangle {
     height: 56
     color: Theme.bgPrimary
 
+    property bool isRecording: false
+    property string recordText: "Record"
+    property var alertModel: null
+
     signal fullscreenClicked()
     signal preflightTriggered()
     signal settingsClicked()
+    signal recordClicked()
 
     Rectangle {
         anchors.bottom: parent.bottom
@@ -35,8 +40,6 @@ Rectangle {
                 radius: 8
                 color: Theme.recordRed
 
-                property bool isRecording: true
-
                 RowLayout {
                     anchors.centerIn: parent
                     spacing: 8
@@ -50,7 +53,7 @@ Rectangle {
                     }
 
                     Text {
-                        text: recordBtn.isRecording ? "Stop" : "Record"
+                        text: root.recordText
                         font.family: Theme.fontPrimary
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
@@ -61,11 +64,7 @@ Rectangle {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (!recordBtn.isRecording) {
-                            root.preflightTriggered()
-                        }
-                    }
+                    onClicked: root.recordClicked()
                 }
             }
 
@@ -74,7 +73,7 @@ Rectangle {
                 height: 36
                 radius: 8
                 color: Theme.bgSecondary
-                visible: recordBtn.isRecording
+                visible: root.isRecording
 
                 Text {
                     anchors.centerIn: parent
@@ -100,13 +99,21 @@ Rectangle {
                 width: 36; height: 36; radius: 8; color: "transparent"; border.color: Theme.bgTertiary; border.width: 1
                 AppIcon { anchors.centerIn: parent; name: "alerts"; size: 18 }
                 Rectangle {
+                    id: alertBadge
                     anchors.top: parent.top; anchors.right: parent.right; anchors.topMargin: -4; anchors.rightMargin: -4
                     width: 18; height: 18; radius: 9; color: Theme.statusRed
-                    Text { anchors.centerIn: parent; text: "3"; color: "white"; font.pixelSize: 11; font.weight: Font.Bold }
+                    visible: alertBadgeText.text !== "0"
+                    Text {
+                        id: alertBadgeText
+                        anchors.centerIn: parent
+                        text: root.alertModel ? root.alertModel.badgeCount : "0"
+                        color: "white"; font.pixelSize: 11; font.weight: Font.Bold
+                    }
                 }
                 MouseArea { anchors.fill: parent; onClicked: notifyPopup.open() }
                 NotificationPopup {
                     id: notifyPopup
+                    alertModel: root.alertModel
                     y: parent.height + 8
                     x: Math.max(0, root.width - notifyPopup.width - 12)
                 }

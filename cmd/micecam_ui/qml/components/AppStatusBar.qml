@@ -8,6 +8,14 @@ Rectangle {
     height: 48
     color: Theme.bgPrimary
     radius: 16
+
+    property string elapsedText: "00:00:00"
+    property string cameraCountText: "0 cameras"
+    property string totalFramesText: "0 frames"
+    property string averageFpsText: "0.00 fps avg"
+    property string bytesWrittenText: "0 B"
+    property string diskRemainingText: "Disk unknown"
+    property bool recording: false
     
     // Cover the top rounded corners to keep them sharp
     Rectangle {
@@ -31,15 +39,13 @@ Rectangle {
         anchors.rightMargin: 24
         spacing: 0
         
-        property bool isRecording: true // Mock state
-        
         StatusSegment {
             Layout.minimumWidth: 130
             Layout.preferredWidth: 130
             icon: "clock"
-            labelText: "00:42:17"
-            textColor: Theme.statusRed
-            iconColor: Theme.statusRed
+            labelText: root.elapsedText
+            textColor: root.recording ? Theme.statusRed : Theme.textPrimary
+            iconColor: root.recording ? Theme.statusRed : Theme.textPrimary
         }
 
         Divider {}
@@ -48,7 +54,7 @@ Rectangle {
             Layout.minimumWidth: 130
             Layout.preferredWidth: 130
             icon: "camera"
-            labelText: "5 cameras"
+            labelText: root.cameraCountText
         }
 
         Divider {}
@@ -57,7 +63,7 @@ Rectangle {
             Layout.minimumWidth: 150
             Layout.preferredWidth: 150
             icon: "film"
-            labelText: "76,230 frames"
+            labelText: root.totalFramesText
         }
 
         Divider {}
@@ -66,7 +72,7 @@ Rectangle {
             Layout.minimumWidth: 150
             Layout.preferredWidth: 150
             icon: "chart"
-            labelText: "29.97 fps avg"
+            labelText: root.averageFpsText
         }
 
         Item { Layout.fillWidth: true }
@@ -75,7 +81,7 @@ Rectangle {
             Layout.minimumWidth: 100
             Layout.preferredWidth: 100
             icon: "disk"
-            labelText: "3.2 GB"
+            labelText: root.bytesWrittenText
         }
 
         Divider {}
@@ -84,7 +90,7 @@ Rectangle {
             Layout.minimumWidth: 170
             Layout.preferredWidth: 170
             icon: "chart"
-            labelText: "45% disk remaining"
+            labelText: root.diskRemainingText
             textColor: Theme.statusAmber
             iconColor: Theme.statusAmber
         }

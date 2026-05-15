@@ -10,6 +10,8 @@ Rectangle {
     visible: false
     z: 200
 
+    property var items: []
+
     signal adjustSettings()
     signal dismissed()
 
@@ -76,136 +78,49 @@ Rectangle {
                 Layout.fillWidth: true
                 spacing: 8
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 52
-                    radius: 8
-                    color: "#FEF2F2"
+                Repeater {
+                    model: root.items
+                    delegate: Rectangle {
+                        Layout.fillWidth: true
+                        height: 52
+                        radius: 8
+                        color: modelData.severity === 2 ? "#FEF2F2" : "#FFFBEB"
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        spacing: 12
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+                            spacing: 12
 
-                        Rectangle {
-                            width: 20; height: 20; radius: 10
-                            color: "#FEE2E2"
-                            Text {
-                                anchors.centerIn: parent
-                                text: "D"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 10
-                                font.weight: Font.Bold
-                                color: Theme.statusRed
+                            Rectangle {
+                                width: 20; height: 20; radius: 10
+                                color: modelData.severity === 2 ? "#FEE2E2" : "#FEF3C7"
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.title ? modelData.title.charAt(0) : "!"
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                    color: modelData.severity === 2 ? Theme.statusRed : Theme.statusAmber
+                                }
                             }
-                        }
 
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: "Disk Space"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                color: Theme.textPrimary
-                            }
-                            Text {
-                                text: "Only 3.2 GB remaining (need 10 GB minimum)"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 11
-                                color: Theme.textSecondary
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 52
-                    radius: 8
-                    color: "#FFFBEB"
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        spacing: 12
-
-                        Rectangle {
-                            width: 20; height: 20; radius: 10
-                            color: "#FEF3C7"
-                            Text {
-                                anchors.centerIn: parent
-                                text: "C"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 10
-                                font.weight: Font.Bold
-                                color: Theme.statusAmber
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: "Camera CAM_D"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                color: Theme.textPrimary
-                            }
-                            Text {
-                                text: "High frame drop rate (152 drops in 42 min)"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 11
-                                color: Theme.textSecondary
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 52
-                    radius: 8
-                    color: "#FFFBEB"
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 14
-                        spacing: 12
-
-                        Rectangle {
-                            width: 20; height: 20; radius: 10
-                            color: "#FEF3C7"
-                            Text {
-                                anchors.centerIn: parent
-                                text: "E"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 10
-                                font.weight: Font.Bold
-                                color: Theme.statusAmber
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: "Encoder Capability"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                                color: Theme.textPrimary
-                            }
-                            Text {
-                                text: "H.265 not supported on USB-1, using H.264 fallback"
-                                font.family: Theme.fontPrimary
-                                font.pixelSize: 11
-                                color: Theme.textSecondary
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                Text {
+                                    text: modelData.title || ""
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    color: Theme.textPrimary
+                                }
+                                Text {
+                                    text: modelData.message || ""
+                                    font.family: Theme.fontPrimary
+                                    font.pixelSize: 11
+                                    color: Theme.textSecondary
+                                }
                             }
                         }
                     }

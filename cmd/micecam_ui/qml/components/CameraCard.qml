@@ -38,9 +38,29 @@ Rectangle {
         Canvas {
             id: previewCanvas
             anchors.fill: parent
+
+            function roundedRectPath(ctx, x, y, w, h, r) {
+                ctx.beginPath()
+                ctx.moveTo(x + r, y)
+                ctx.lineTo(x + w - r, y)
+                ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+                ctx.lineTo(x + w, y + h - r)
+                ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+                ctx.lineTo(x + r, y + h)
+                ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+                ctx.lineTo(x, y + r)
+                ctx.quadraticCurveTo(x, y, x + r, y)
+                ctx.closePath()
+            }
+
             onPaint: {
                 var ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
+
+                ctx.save()
+                roundedRectPath(ctx, 0, 0, width, height, root.cardRadius)
+                ctx.clip()
+
                 var cellW = width / 32
                 var cellH = height / 24
                 for (var gx = 0; gx < 32; gx++) {
@@ -81,6 +101,8 @@ Rectangle {
                 grd.addColorStop(1, "rgba(10, 10, 15, 0.4)")
                 ctx.fillStyle = grd
                 ctx.fillRect(0, 0, width, height)
+
+                ctx.restore()
             }
             Component.onCompleted: requestPaint()
         }
@@ -163,16 +185,31 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 30
-        radius: root.cardRadius
-        clip: true
+        radius: 0
         color: "#B2000000"
 
-        Rectangle {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: root.cardRadius
-            color: parent.color
+        Canvas {
+            id: bottomBarCorners
+            anchors.fill: parent
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                ctx.save()
+                var r = root.cardRadius
+                ctx.beginPath()
+                ctx.moveTo(0, 0)
+                ctx.lineTo(width, 0)
+                ctx.lineTo(width, height - r)
+                ctx.quadraticCurveTo(width, height, width - r, height)
+                ctx.lineTo(r, height)
+                ctx.quadraticCurveTo(0, height, 0, height - r)
+                ctx.closePath()
+                ctx.clip()
+                ctx.fillStyle = "#B2000000"
+                ctx.fillRect(0, 0, width, height)
+                ctx.restore()
+            }
+            Component.onCompleted: requestPaint()
         }
 
         RowLayout {

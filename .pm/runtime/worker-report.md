@@ -86,8 +86,14 @@ Implement a bounded Phase 5 OAK plugin skeleton with manifest validation and no-
 ## Commands Run
 
 ```bash
+# Original implementation
 cmake --build build -j 4     # PASS — all targets built
 ctest --test-dir build --output-on-failure  # PASS — 32/32 tests (including 25 new OAK tests)
+
+# Cleanup rework verification
+git checkout -- tests/unit/test_plugin_contract.cpp  # restored to committed baseline
+cmake --build build -j 4     # PASS — all targets rebuilt
+ctest --test-dir build --output-on-failure  # PASS — 32/32 tests, 0 failed
 ```
 
 ## Test Results
@@ -107,12 +113,24 @@ ctest --test-dir build --output-on-failure  # PASS — 32/32 tests (including 25
 - [x] `cmake --build build -j 4` passes
 - [x] `ctest --test-dir build --output-on-failure` passes (32/32)
 - [x] `.pm/runtime/worker-report.md` written
-- [ ] One git commit created (pending)
+- [x] One git commit created: `e16e9a8 feat(003): Phase 5 — OAK plugin skeleton, manifest, no-hardware contract tests`
+
+## Cleanup Rework (this task)
+
+Removed unauthorized dirty change in `tests/unit/test_plugin_contract.cpp` (40 lines of stale OAK manifest tests with wrong path, version `1.0.0` vs `0.1.0`, platform key `darwin` vs `macos-arm64`, process model `SINGLETON` vs `PER_DEVICE`). Restored file to committed baseline via `git checkout --`.
+
+Verification after cleanup:
+```bash
+cmake --build build -j 4     # PASS — all targets built
+ctest --test-dir build --output-on-failure  # PASS — 32/32 tests, 0 failed
+git status --short -- tests/unit/test_plugin_contract.cpp  # clean (no output)
+```
 
 ## Problems Encountered
 
 - Stale files from a previous failed worker attempt were present on disk (`OAKPluginServer.h`, `OAKPluginServer.cpp`, `test_oak_plugin_server.cpp`) referencing non-existent proto types (`DiagnosticInfo`, `mutable_diagnostics`, `set_encoder_name`). Overwrote all files with clean implementations matching the actual proto contract.
 - Initial test link failed due to missing `micecam_encoding` dependency for `PluginManifest`. Added to link libraries.
+- Unauthorized dirty change in `test_plugin_contract.cpp` from a prior worker run was cleaned up in this rework pass.
 
 ## Deviations from Task
 

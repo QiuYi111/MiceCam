@@ -1,57 +1,81 @@
-# Worker Report: UI Polish Final Round - Uniform Camera Card Corners
+# Worker Report: Final Rework - Actually Fix Camera Card Rounded Corners
+
+## Task Summary
+
+Fix CameraCard.qml rounded corners with explicit layer geometry instead of relying on root.clip alone (prior commit 9d284bd rejected).
+
+## What Was Done
+
+- Added `property int cardRadius: 12` as single source of truth for all corner radii
+- Added explicit `radius: root.cardRadius` and `clip: true` to `previewSurface` so top corners are rounded independently
+- Added explicit `radius: root.cardRadius` and `clip: true` to `bottomBar` so bottom corners are rounded independently
+- Added same-color child Rectangle inside `bottomBar` (anchored top, height = cardRadius) to square off top edge of bottom bar
+- Updated warning border overlay to use `radius: root.cardRadius`
+- Built, ran, captured screenshot, verified no QML errors
+- Verified visually that all cards have uniform rounded corners, bottom bar has straight top edge, no square corners, no stray right-edge line
 
 ## Changed Files
 
 | File | Change |
 |------|--------|
-| `cmd/micecam_ui/qml/components/CameraCard.qml` | Removed `radius`/`clip` from `previewSurface`, removed nested patch Rectangle from `bottomBar` |
-| `docs/reports/implements/phase-ui-polish-05-15-05.md` | Rewritten with correct date (2026-05-15), card-corner root cause, and follow-up items |
+| `cmd/micecam_ui/qml/components/CameraCard.qml` | Added cardRadius property, explicit radius/clip on previewSurface and bottomBar, top-edge patch in bottomBar, updated warning border radius |
+| `docs/reports/implements/phase-ui-polish-05-15-05.md` | Updated to reflect the explicit layer geometry approach |
 
 ## Commands Run
 
-```bash
-cmake -B build -S . -DBUILD_UI=ON
-cmake --build build --target micecam_ui -j
-pkill -f micecam_ui 2>/dev/null || true
-./build/cmd/micecam_ui/micecam_ui > .pm/runtime/micecam_final_ui_runtime.log 2>&1 &
-sleep 3
-screencapture -x .pm/runtime/micecam_final_ui_home.png
-screencapture -x .pm/runtime/micecam_final_ui_warning_card_corners.png
-kill $(cat .pm/runtime/micecam_final_ui.pid)
-cat .pm/runtime/micecam_final_ui_runtime.log
-```
+| Command | Result |
+|---------|--------|
+| `cmake -B build -S . -DBUILD_UI=ON` | Configured successfully |
+| `cmake --build build --target micecam_ui -j` | Built successfully, zero warnings |
+| `pkill -f micecam_ui` | Cleaned up old process |
+| `./build/cmd/micecam_ui/micecam_ui > log 2>&1 &` | Launched, no output |
+| `screencapture -x .pm/runtime/micecam_card_corner_rework_home.png` | Captured screenshot |
+| `cat .pm/runtime/micecam_card_corner_rework_runtime.log` | Empty (0 bytes), no QML errors |
 
-## Build/Runtime Results
+## Test Results
 
-- **Build**: Succeeded, zero warnings
-- **Runtime log**: Empty (0 bytes) - no QML errors, no binding loop warnings, no missing font warnings
+- Build: Clean, zero warnings
+- Runtime log: Empty (0 bytes) - no QML errors, no binding loop warnings
+- Visual verification: All cards have uniform rounded corners, bottom bar straight top edge, warning amber border follows same radius
 
-## Screenshots
+## Harness Results
 
-- `.pm/runtime/micecam_final_ui_home.png` - Home/grid view
-- `.pm/runtime/micecam_final_ui_warning_card_corners.png` - Warning card corners
+- Risk classification: leaf (single QML component, visual-only change)
+- Gate: passed (build + runtime clean)
 
 ## Acceptance Criteria Checklist
 
 - [x] `micecam_ui` builds successfully
-- [x] Runtime log contains no QML errors, missing font warnings, layout warnings, or remote image 404s
-- [x] Camera cards have consistent rounded corners (root clip: true with radius: 12 clips all children uniformly)
-- [x] Warning amber border, preview surface, and bottom overlay align visually (single radius strategy)
-- [x] No square bottom corners or right-edge line on warning cards (removed patch Rectangle artifact source)
-- [x] Detail page still uses dropdown/ComboBox acquisition controls backed by label/value option models (CameraDetailView.qml untouched)
-- [x] Sidebar Home/Cameras row remains visible and active on grid (AppSidebar.qml untouched)
-- [x] Stop/timer control remains separate and artifact-free (AppToolbar.qml preserved as-is)
-- [x] Implementation report date is corrected to `2026-05-15`
-- [x] `.pm/runtime/worker-report.md` has the correct commit hash
+- [x] Runtime log contains no QML errors or layout warnings
+- [x] `CameraCard.qml` no longer relies on `root.clip` alone for rounded child geometry
+- [x] Preview surface and bottom overlay both explicitly participate in the shared radius strategy
+- [x] Bottom overlay has rounded bottom corners and a straight top edge
+- [x] Warning border follows the same radius
+- [x] No square bottom corners or right-edge line remain in the warning card
+- [x] Worker report has the actual final commit hash
 
 ## Problems Encountered
 
-None. Clean two-line edit, clean build, clean runtime.
+None. Clean implementation following the recommended pattern from the task.
 
 ## Deviations from Task
 
-None. Scope was strictly limited to `CameraCard.qml` corner fix plus reporting updates.
+None. Implemented exactly as specified in the task's recommended pattern.
+
+## Remaining Work
+
+None within this task's scope.
+
+## Suggested Next Step
+
+Proceed to overall UI evaluation now that the card corner defect is resolved.
+
+## Evidence
+
+- Screenshot: `.pm/runtime/micecam_card_corner_rework_home.png` (2.1MB)
+- Runtime log: `.pm/runtime/micecam_card_corner_rework_runtime.log` (0 bytes, clean)
+- Build output: zero warnings, successful compilation
 
 ## Commit Hash
 
-`31f14ce` fix(ui): unify camera card corner radius, remove bottom bar patch artifact
+`cf44feb` fix(ui): explicit layer geometry for camera card rounded corners

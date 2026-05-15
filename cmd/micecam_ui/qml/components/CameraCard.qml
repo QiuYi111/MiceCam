@@ -21,9 +21,13 @@ Rectangle {
     color: "#1A1A1E"
     clip: true
 
+    property int cardRadius: 12
+
     Rectangle {
         id: previewSurface
         anchors.fill: parent
+        radius: root.cardRadius
+        clip: true
         gradient: Gradient {
             GradientStop { position: 0.0; color: "#2C3040" }
             GradientStop { position: 0.3; color: "#252830" }
@@ -97,7 +101,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         color: "transparent"
-        radius: root.radius
+        radius: root.cardRadius
         border.width: root.status === 1 ? 2 : 0
         border.color: root.status === 1 ? Theme.statusAmber : "transparent"
     }
@@ -159,7 +163,17 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 30
+        radius: root.cardRadius
+        clip: true
         color: "#B2000000"
+
+        Rectangle {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: root.cardRadius
+            color: parent.color
+        }
 
         RowLayout {
             anchors.fill: parent

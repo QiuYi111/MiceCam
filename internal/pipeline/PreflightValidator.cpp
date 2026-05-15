@@ -78,4 +78,82 @@ PreflightResult PreflightValidator::validate(
     return result;
 }
 
+PreflightResult PreflightValidator::validate_stream_capabilities(
+    const domain::StreamConfig& config,
+    const domain::Capabilities& caps) const {
+
+    PreflightResult result;
+    result.passed = true;
+
+    const domain::StreamInfo* matched_stream = nullptr;
+    for (const auto& si : caps.streams) {
+        if (si.index == config.stream_index) {
+            matched_stream = &si;
+            break;
+        }
+    }
+
+    if (!matched_stream) {
+        result.passed = false;
+        result.items.push_back({
+            .severity = PreflightSeverity::Error,
+            .code = "missing_capabilities",
+            .stream_id = config.device_id,
+        });
+        result.message = "Stream index not found in device capabilities";
+        return result;
+    }
+
+    if (!matched_stream->resolutions.empty()) {
+        bool res_ok = false;
+        for (const auto& res : matched_stream->resolutions) {
+            if (res.width == config.width && res.height == config.height) {
+                res_ok = true;
+                break;
+            }
+        }
+        if (!res_ok) {
+            result.items.push_back({
+                .severity = PreflightSeverity::Error,
+                .code = "unsupported_resolution",
+                .stream_id = config.device_id,
+            });
+        }
+    }
+
+    bool fps_ok = false;
+    for (auto fps : matched_stream->supported_framerates) {
+        if (fps == config.framerate) {
+            fps_ok = true;
+            break;
+        }
+    }
+    if (!fps_ok) {
+        result.items.push_back({
+            .severity = PreflightSeverity::Error,
+            .code = "unsupported_framerate",
+            .stream_id = config.device_id,
+        });
+    }
+
+    bool format_ok = false;
+    for (const auto& fmt : matched_stream->supported_formats) {
+        if (fmt == config.pixel_format) {
+            format_ok = true;
+            break;
+        }
+    }
+    if (!format_ok) {
+        result.items.push_back({
+            .severity = PreflightSeverity::Error,
+            .code = "unsupported_format",
+            .stream_id = config.device_id,
+        });
+    }
+
+    result.passed = result.items.empty();
+    result.message = result.passed ? "Preflight checks passed" : "Preflight checks failed";
+    return result;
+}
+
 } // namespace micecam::pipeline

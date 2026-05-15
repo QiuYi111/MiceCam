@@ -61,7 +61,7 @@ grpc::Status OAKPluginServer::GetPluginInfo(
     resp->set_version(kPluginVersion);
     resp->set_plugin_api_version(kApiVersion);
     resp->set_min_micecam_version(kMinMicecamVersion);
-    resp->set_preferred_process_model(ProcessModel::SINGLETON);
+    resp->set_preferred_process_model(ProcessModel::PER_DEVICE);
     resp->add_supported_process_models(ProcessModel::SINGLETON);
     resp->add_supported_process_models(ProcessModel::PER_DEVICE);
     resp->add_optional_features("depthai_sdk");

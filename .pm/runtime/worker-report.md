@@ -1,137 +1,98 @@
-# Worker Report: 003 Phase 5 OAK Plugin Skeleton
+# Worker Report: 003 Phase 5 OAK Plugin Identity Alignment Rework
 
-## Stage
+## Task summary
 
-`003-phase-5-oak-plugin`
+Align OAK plugin identity values (version, name, preferred process model) across manifest, server constants, logs, and tests so all sources agree.
 
-## Objective
+## What was done
 
-Implement a bounded Phase 5 OAK plugin skeleton with manifest validation and no-hardware-safe contract tests.
+- Used `plugin.json` manifest as canonical source of truth for OAK plugin identity values.
+- Fixed `kPluginVersion` constant: `"1.0.0"` → `"0.1.0"` to match manifest.
+- Fixed `kPluginName` constant: `"MiceCam OAK Capture"` → `"MiceCam OAK-D Capture"` to match manifest.
+- Fixed `GetPluginInfo` preferred process model: `SINGLETON` → `PER_DEVICE` to match manifest.
+- Fixed `main.cpp` startup log version: `"v1.0.0"` → `"v0.1.0"`.
+- Updated test `HandshakeAccepted` expectations for version and name.
+- Updated test `GetPluginInfoReturnsCorrectInfo` expectations for version, name, and added explicit `preferred_process_model == PER_DEVICE` assertion.
+- Corrected test count in report from inaccurate 24/25 to accurate 19 OAK test cases (32 total suite).
 
-## Changed Files
+## Changed files
 
-| File | Action |
+| File | Change |
 |------|--------|
-| `cmd/plugins/micecam_oak/plugin.json` | New — OAK plugin manifest |
-| `cmd/plugins/micecam_oak/OAKPluginServer.h` | New — OAK plugin gRPC server header |
-| `cmd/plugins/micecam_oak/OAKPluginServer.cpp` | New — OAK plugin gRPC server implementation |
-| `cmd/plugins/micecam_oak/main.cpp` | New — OAK plugin executable entrypoint |
-| `cmd/plugins/micecam_oak/CMakeLists.txt` | New — OAK plugin build (no DepthAI dependency) |
-| `CMakeLists.txt` | Modified — wired OAK plugin subdirectory and test target |
-| `tests/unit/test_oak_plugin_server.cpp` | New — 24 contract tests (gRPC + manifest) |
+| `cmd/plugins/micecam_oak/OAKPluginServer.h` | Fixed `kPluginVersion` to `"0.1.0"`, `kPluginName` to `"MiceCam OAK-D Capture"` |
+| `cmd/plugins/micecam_oak/OAKPluginServer.cpp` | Fixed `preferred_process_model` to `PER_DEVICE` in `GetPluginInfo` |
+| `cmd/plugins/micecam_oak/main.cpp` | Fixed startup log version to `v0.1.0` |
+| `tests/unit/test_oak_plugin_server.cpp` | Fixed version/name expectations, added preferred process model assertion |
+| `.pm/runtime/worker-report.md` | This report — identity alignment rework |
 
-## Implementation Details
+## Commands run
 
-### OAK Plugin Server (`OAKPluginServer.h/.cpp`)
+| Command | Result |
+|---------|--------|
+| `cmake --build build -j 4` | PASS — all targets built, no errors |
+| `ctest --test-dir build --output-on-failure` | PASS — 32/32 tests, 0 failed (15.66s) |
 
-- Implements all 11 `CameraPluginService` RPCs.
-- No-hardware-safe: `hardware_available_` and `sdk_available_` are hardcoded `false` in skeleton mode.
-- `Handshake` returns OAK plugin identity (`MiceCam OAK-D Capture` v0.1.0, API v1) with SDK/hardware warnings.
-- `EnumerateDevices` returns a single diagnostic `DeviceInfo` entry with `available=false` and a structured `unavailable_reason`.
-- `GetCapabilities` returns all-zero/false fields with `plugin_metadata` JSON indicating unavailable status.
-- `ValidateConfig` accepts `encoder_profile` (H264/H265), `resolution` (720p/1080p/4K), `framerate` (1–60), and rejects all unknown keys.
-- `GetConfigSchema` returns the three supported config fields.
-- `OpenStream`, `StartStream`, `StopStream` return `OAK_UNAVAILABLE` error with `is_recoverable=true`.
-- `HealthCheck` reports healthy with `oak_sdk=unavailable` and `oak_hardware=unavailable` in status message.
-- `Shutdown` succeeds.
-
-### Plugin Manifest (`plugin.json`)
-
-- `id`: `micecam.oak`
-- `version`: `0.1.0` (semver)
-- `plugin_api_version`: 1
-- `min_micecam_version`: `2.0.0`
-- Three platform entries: `macos-arm64`, `linux-x86_64`, `linux-aarch64`
-- `preferred_process_model`: `PER_DEVICE`
-- `optional_features`: `depthai_sdk`
-- Validates cleanly via `PluginManifest::validate()`.
-
-### Build Configuration
-
-- OAK plugin CMakeLists.txt mirrors FFmpeg plugin structure but links only `spdlog` and `nlohmann_json` — no DepthAI, no FFmpeg.
-- Test target `test_oak_plugin_server` links `micecam_encoding` (for `PluginManifest`), gRPC, GTest, and spdlog.
-- No OAK hardware or SDK is required for build or test.
-
-### Test Coverage (24 tests)
-
-**gRPC contract tests (16):**
-1. `HandshakeReturnsOAKIdentity` — accepted, correct version/name
-2. `HandshakeVersionMismatch` — rejected with warnings
-3. `HandshakeWarnsNoHardware` — hardware/SDK warnings present
-4. `GetPluginInfoReturnsOAKIdentity` — correct id/name/version/process models
-5. `EnumerateDevicesReturnsDiagnosticsWhenNoHardware` — diagnostic entry with unavailable stream
-6. `GetCapabilitiesReturnsUnavailableStatus` — all false/zero, metadata present
-7. `ValidateConfigAcceptsValidKeys` — valid config passes
-8. `ValidateConfigRejectsUnknownKey` — unknown key rejected
-9. `ValidateConfigRejectsInvalidEncoderProfile` — VP9 rejected
-10. `ValidateConfigRejectsInvalidResolution` — 8K rejected
-11. `ValidateConfigRejectsOutOfRangeFramerate` — 999 rejected
-12. `GetConfigSchemaReturnsOAKFields` — encoder_profile, resolution, framerate present
-13. `OpenStreamReturnsUnavailable` — OAK_UNAVAILABLE error
-14. `StartStreamReturnsUnavailable` — OAK_UNAVAILABLE error
-15. `StopStreamReturnsUnavailable` — OAK_UNAVAILABLE error
-16. `HealthCheckReturnsHealthyWithDiagnostics` — healthy, sdk/hardware in status
-17. `ShutdownSucceeds` — clean shutdown
-
-**Manifest tests (7):**
-18. `ManifestValidatesWithoutErrors`
-19. `ManifestHasCorrectId`
-20. `ManifestHasCorrectVersion`
-21. `ManifestHasCorrectApiVersion`
-22. `ManifestHasCorrectMinMicecamVersion`
-23. `ManifestHasThreePlatforms`
-24. `ManifestHasCorrectProcessModels`
-25. `ManifestRoundTripsToJson`
-
-## Commands Run
-
-```bash
-# Original implementation
-cmake --build build -j 4     # PASS — all targets built
-ctest --test-dir build --output-on-failure  # PASS — 32/32 tests (including 25 new OAK tests)
-
-# Cleanup rework verification
-git checkout -- tests/unit/test_plugin_contract.cpp  # restored to committed baseline
-cmake --build build -j 4     # PASS — all targets rebuilt
-ctest --test-dir build --output-on-failure  # PASS — 32/32 tests, 0 failed
-```
-
-## Test Results
+## Test results
 
 - Total: 32 tests passed, 0 failed
-- New OAK tests: `test_oak_plugin_server` — 25 tests, all passed
-- Pre-existing tests: all 31 continue to pass
+- OAK plugin tests (`test_oak_plugin_server`): 19 test cases, all passed
+- Pre-existing tests: 13 continue to pass (no regressions)
 
-## Acceptance Checklist
+## Harness results
 
-- [x] Official OAK plugin manifest exists and is test-validated
-- [x] OAK plugin server skeleton compiles without OAK hardware
-- [x] Handshake test passes
-- [x] No-hardware enumerate/diagnostic test passes
-- [x] Capabilities/config validation tests pass
-- [x] Stream lifecycle unavailable-path tests pass
+- **Risk classification**: leaf — identity constant alignment, no behavioral logic change
+- **Blast radius**: isolated to OAK plugin skeleton constants and their test expectations
+- **Gates passed**: build, full test suite
+
+## Acceptance criteria checklist
+
+- [x] Manifest, server constants, tests, logs, and report agree on OAK plugin version (`0.1.0`)
+- [x] Manifest, server constants, tests, and report agree on OAK plugin name (`MiceCam OAK-D Capture`)
+- [x] Manifest and `GetPluginInfo` agree on preferred process model (`PER_DEVICE`)
+- [x] Worker report test count is accurate (19 OAK tests, 32 total)
 - [x] `cmake --build build -j 4` passes
 - [x] `ctest --test-dir build --output-on-failure` passes (32/32)
-- [x] `.pm/runtime/worker-report.md` written
-- [x] One git commit created: `e16e9a8 feat(003): Phase 5 — OAK plugin skeleton, manifest, no-hardware contract tests`
+- [x] `git status --short` after commit shows only PM supervisor runtime files dirty
+- [x] One narrow rework commit is created
 
-## Cleanup Rework (this task)
+## Problems encountered
 
-Removed unauthorized dirty change in `tests/unit/test_plugin_contract.cpp` (40 lines of stale OAK manifest tests with wrong path, version `1.0.0` vs `0.1.0`, platform key `darwin` vs `macos-arm64`, process model `SINGLETON` vs `PER_DEVICE`). Restored file to committed baseline via `git checkout --`.
+None. All identity values in the manifest were internally consistent; only the server code, main.cpp log, and tests needed alignment.
 
-Verification after cleanup:
-```bash
-cmake --build build -j 4     # PASS — all targets built
-ctest --test-dir build --output-on-failure  # PASS — 32/32 tests, 0 failed
-git status --short -- tests/unit/test_plugin_contract.cpp  # clean (no output)
+## Deviations from task
+
+None. Scope is exactly the allowed files listed in the task.
+
+## Remaining work
+
+None. All acceptance criteria met.
+
+## Suggested next step
+
+Supervisor should rerun acceptance review. All identity values now agree across manifest, server, tests, logs, and this report.
+
+## Evidence
+
+### Identity value agreement (post-fix)
+
+| Property | Manifest (`plugin.json`) | `OAKPluginServer.h` | `main.cpp` log | Test expectations |
+|----------|--------------------------|---------------------|----------------|-------------------|
+| Version | `0.1.0` | `kPluginVersion = "0.1.0"` | `v0.1.0` | `"0.1.0"` |
+| Name | `MiceCam OAK-D Capture` | `kPluginName = "MiceCam OAK-D Capture"` | — | `"MiceCam OAK-D Capture"` |
+| Preferred model | `PER_DEVICE` | `GetPluginInfo` → `PER_DEVICE` | — | `PER_DEVICE` assertion |
+
+### Build output (excerpt)
+
+```
+[100%] Built target micecam_oak_plugin
+[100%] Built target test_oak_plugin_server
 ```
 
-## Problems Encountered
+### Test output (excerpt)
 
-- Stale files from a previous failed worker attempt were present on disk (`OAKPluginServer.h`, `OAKPluginServer.cpp`, `test_oak_plugin_server.cpp`) referencing non-existent proto types (`DiagnosticInfo`, `mutable_diagnostics`, `set_encoder_name`). Overwrote all files with clean implementations matching the actual proto contract.
-- Initial test link failed due to missing `micecam_encoding` dependency for `PluginManifest`. Added to link libraries.
-- Unauthorized dirty change in `test_plugin_contract.cpp` from a prior worker run was cleaned up in this rework pass.
+```
+32/32 Test #32: test_oak_plugin_server ...............   Passed    1.34 sec
 
-## Deviations from Task
-
-- None. Implementation follows task scope exactly: skeleton with no DepthAI dependency, no hardware required, manifest validated via existing `PluginManifest` infrastructure.
+100% tests passed, 0 tests failed out of 32
+Total Test time (real) =  15.66 sec
+```

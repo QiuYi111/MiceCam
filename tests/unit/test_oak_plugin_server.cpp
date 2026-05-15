@@ -66,8 +66,8 @@ TEST_F(OAKPluginServerTest, HandshakeAccepted) {
     ASSERT_TRUE(status.ok()) << status.error_message();
     EXPECT_TRUE(resp.accepted());
     EXPECT_EQ(resp.negotiated_api_version(), 1u);
-    EXPECT_EQ(resp.plugin_version(), "1.0.0");
-    EXPECT_EQ(resp.plugin_name(), "MiceCam OAK Capture");
+    EXPECT_EQ(resp.plugin_version(), "0.1.0");
+    EXPECT_EQ(resp.plugin_name(), "MiceCam OAK-D Capture");
 }
 
 TEST_F(OAKPluginServerTest, HandshakeVersionMismatch) {
@@ -111,10 +111,11 @@ TEST_F(OAKPluginServerTest, GetPluginInfoReturnsCorrectInfo) {
     auto status = stub_->GetPluginInfo(&ctx, req, &resp);
     ASSERT_TRUE(status.ok());
     EXPECT_EQ(resp.id(), "micecam.oak");
-    EXPECT_EQ(resp.name(), "MiceCam OAK Capture");
-    EXPECT_EQ(resp.version(), "1.0.0");
+    EXPECT_EQ(resp.name(), "MiceCam OAK-D Capture");
+    EXPECT_EQ(resp.version(), "0.1.0");
     EXPECT_EQ(resp.plugin_api_version(), 1u);
     EXPECT_EQ(resp.min_micecam_version(), "2.0.0");
+    EXPECT_EQ(resp.preferred_process_model(), micecam::plugin::ProcessModel::PER_DEVICE);
     EXPECT_GT(resp.supported_process_models_size(), 0);
 }
 

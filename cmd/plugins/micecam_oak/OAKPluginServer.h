@@ -59,8 +59,8 @@ public:
                              micecam::plugin::HealthStatus* resp) override;
 
 private:
-    static constexpr const char* kPluginVersion = "1.0.0";
-    static constexpr const char* kPluginName = "MiceCam OAK Capture";
+    static constexpr const char* kPluginVersion = "0.1.0";
+    static constexpr const char* kPluginName = "MiceCam OAK-D Capture";
     static constexpr uint32_t kApiVersion = 1;
     static constexpr const char* kMinMicecamVersion = "2.0.0";
 

@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    spdlog::info("MiceCam OAK Plugin v1.0.0 starting on port {}", port);
+    spdlog::info("MiceCam OAK Plugin v0.1.0 starting on port {}", port);
 
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);

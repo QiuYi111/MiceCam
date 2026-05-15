@@ -2,20 +2,20 @@
 
 ## Current state
 
-UI polish stage active. User decided sidebar camera clicks should open camera detail/config pages; right-click remains a quick configuration shortcut.
+Backend/UI wiring stage complete. All 8/8 tasks done. 24/24 tests pass (100%). Zero QML runtime errors. Stage exit reached.
 
 ## Last action
 
-Accepted card-corner Canvas clip fix at `3be4133` after independent build/runtime and code inspection. This supersedes earlier rejected/insufficient corner fixes.
+Completed Task 8/8: QML binding. 10 QML files wired to AppController models. All hardcoded mock values replaced with real backend data properties.
 
 ## Next expected action
 
-Implementation should now stop. Next action is PM-level overall UI completeness and wiring-up readiness evaluation.
+Stage EXIT reached. Proceed to next roadmap stage (Stage 7: Cross-platform CI/CD, or Stage 8: Integration/Hardware testing).
 
 ## Open decisions
 
-- None. The product direction is decided: sidebar click opens camera detail/config, and that page must include acquisition configuration controls for resolution/frame rate.
+- None. All product direction decisions resolved.
 
 ## Branch
 
-`codex/ui-polish-hig`
+`codex/backend-gui-wiring` — 8 commits from `7b11e1b` to `2ba1433`.

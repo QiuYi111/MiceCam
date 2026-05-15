@@ -1,100 +1,225 @@
-# Next Task: CameraCard Canvas Rounded Clip Fix
+# Next Task: Bind Existing QML to AppController Without Visual Polish (Task 8/8)
 
 ## Objective
 
-Actually fix the video card rounded corners. The last rework still did not change the visible result.
+Replace all hardcoded mock values in existing QML files with bindings to `appController` properties and models. The visual design must NOT change — only data sources and click actions are replaced.
 
-User evidence, 2026-05-15:
-- All video cards still look square/hard-cornered.
-- CAM_D still has amber border radius that does not match the visual content.
+## Required Harness Process
 
-## Root Cause
+`harness-context` → `harness-eval` → `harness-report`
 
-`CameraCard.qml` uses a `Canvas` that fills the whole card and paints square pixels to the full rectangular bounds. Adding `radius`/`clip` to surrounding `Rectangle` layers is not enough, because the visible canvas content is still square.
-
-The fix must make the actual painted preview respect a rounded rectangle.
+Risk classification: **BRANCH** — 11 QML files modified, integration surface, no backend code changes.
 
 ## Allowed Scope
 
-You may edit only:
-- `cmd/micecam_ui/qml/components/CameraCard.qml`
+You may edit:
+- `cmd/micecam_ui/main.cpp` — replace MockCameraModel registration with AppController
+- `cmd/micecam_ui/qml/main.qml` — wire toolbar/sidebar/grid/statusbar/preflight/notification to controller
+- `cmd/micecam_ui/qml/components/AppToolbar.qml` — add properties for isRecording, recordText, recordClicked, alertModel
+- `cmd/micecam_ui/qml/components/AppSidebar.qml` — replace CameraModel {} with appController.cameraModel
+- `cmd/micecam_ui/qml/components/CameraGridView.qml` — replace hardcoded cards with Repeater over cameraModel
+- `cmd/micecam_ui/qml/components/AppStatusBar.qml` — add properties for each status metric
+- `cmd/micecam_ui/qml/components/PreflightModal.qml` — add items property, replace hardcoded items with Repeater
+- `cmd/micecam_ui/qml/components/NotificationPopup.qml` — add alertModel property, bind ListView.model
 - `.pm/runtime/worker-report.md`
-- `docs/reports/implements/phase-ui-polish-05-15-05.md`
 
-Do not edit:
-- Other QML files.
-- Backend/C++.
-- Git history.
-- New UI features.
+## Forbidden Scope — CRITICAL
 
-## Required Fix
+- **Do NOT change any colors, fonts, spacing, sizes, or layout tokens.** This is binding-only.
+- **Do NOT change any visual design.** The existing QML appearance must remain exactly as-is.
+- Do NOT edit backend files (domain, infrastructure, pipeline)
+- Do NOT edit Qt adapter files (AppCameraModel, AppAlertModel, AppSettings, AppController)
+- Do NOT delete the build directory
+- Do NOT use image-analysis MCP tools
+- Do NOT use `#pragma region` or `#pragma mark`
 
-In `CameraCard.qml`, ensure the actual video card visual content is rounded.
+## Background — Read ALL QML Files First
 
-Required approach:
-- Implement a rounded-rectangle clipping path in `previewCanvas.onPaint` before painting noise/grid/vignette.
-- Use `root.cardRadius` as the single radius source.
-- The canvas must not paint outside that rounded rect.
-- The bottom bar must still have rounded bottom corners and a straight top edge.
-- The warning border must trace the same rounded rect.
-- All cards must show rounded corners, not only CAM_D.
+Read every file in the allowed scope before making any changes. Understand the current hardcoded values, property names, ids, and structure.
 
-Suggested Canvas pattern:
+## Implementation Steps
 
+### Step 1: main.cpp
+
+Replace the MockCameraModel registration with AppController. Read `cmd/micecam_ui/main.cpp` and change:
+- Replace `#include "MockCameraModel.h"` with `#include "AppController.h"`
+- Replace `MockCameraModel` instance with `micecam::ui::AppController controller;` (or appropriate constructor)
+- Call `controller.refreshCameras();`
+- Set context property: `engine.rootContext()->setContextProperty("appController", &controller);`
+
+### Step 2: AppToolbar.qml
+
+Read the current file. Find where `isRecording` is set (hardcoded to true) and the record button click handler. 
+
+Add root-level properties:
 ```qml
-function roundedRectPath(ctx, x, y, w, h, r) {
-    ctx.beginPath()
-    ctx.moveTo(x + r, y)
-    ctx.lineTo(x + w - r, y)
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r)
-    ctx.lineTo(x + w, y + h - r)
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-    ctx.lineTo(x + r, y + h)
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r)
-    ctx.lineTo(x, y + r)
-    ctx.quadraticCurveTo(x, y, x + r, y)
-    ctx.closePath()
+property bool isRecording: false
+property string recordText: isRecording ? "Stop" : "Record"
+property var alertModel: null
+signal recordClicked()
+```
+
+Replace the existing `isRecording` assignments with `root.isRecording`. Replace the record button text with `root.recordText`. Replace the click handler with `root.recordClicked()`.
+
+Pass alertModel into NotificationPopup (if present in toolbar).
+
+### Step 3: main.qml
+
+Read the current file. Find `AppToolbar`, `AppSidebar`, `AppStatusBar`, `PreflightModal`.
+
+Wire toolbar:
+```qml
+AppToolbar {
+    id: toolbar
+    isRecording: appController.isRecording
+    recordText: appController.recordButtonText
+    alertModel: appController.alertModel
+    onRecordClicked: {
+        if (appController.isRecording) {
+            appController.stopRecording()
+        } else if (!appController.startRecording()) {
+            preflightModal.items = appController.preflightItems()
+            preflightModal.open()
+        }
+    }
 }
 ```
 
-Then in `onPaint`:
-- Clear whole canvas.
-- Save context.
-- Create rounded path and `ctx.clip()`.
-- Paint all preview noise/grid/vignette inside the clip.
-- Restore context.
+Wire sidebar: replace `model: CameraModel {}` with `model: appController.cameraModel`.
 
-Important:
-- Do not claim success from QML build alone.
-- Do not use image-analysis MCP tools.
-- If a visual screenshot still shows square corners, report failure.
+Wire status bar:
+```qml
+AppStatusBar {
+    id: statusBar
+    elapsedText: appController.elapsedText
+    cameraCountText: appController.cameraCountText
+    totalFramesText: appController.totalFramesText
+    averageFpsText: appController.averageFpsText
+    bytesWrittenText: appController.bytesWrittenText
+    diskRemainingText: appController.diskRemainingText
+    recording: appController.isRecording
+}
+```
 
-## Verification
+Wire preflight: before opening, set `preflightModal.items = appController.preflightItems()`.
 
-Run:
+### Step 4: AppSidebar.qml
+
+Read the current file. Find the model assignment. Replace `model: CameraModel {}` or equivalent with `model: appController.cameraModel`. Keep the existing delegate layout unchanged.
+
+### Step 5: CameraGridView.qml
+
+Read the current file. Find the hardcoded 5 camera cards. Replace with a Repeater over `appController.cameraModel`:
+
+```qml
+Flow {
+    Layout.fillWidth: true
+    Layout.fillHeight: true
+    spacing: 12
+    Repeater {
+        model: appController.cameraModel
+        delegate: CameraCard {
+            // Use existing sizing logic from original cards
+            width: index < 2 ? (parent.width - 12) / 2 : (parent.width - 24) / 3
+            height: index < 2 ? root.height / 2 - 22 : root.height / 2 - 22
+            cameraName: model.name
+            fps: model.fps
+            drops: model.dropCount
+            status: model.status
+            isRecording: model.isRecording
+        }
+    }
+}
+```
+
+Keep existing CameraCard visual styling completely unchanged. Only replace the data bindings. Keep existing fullscreen/context-menu signal connections if present.
+
+### Step 6: AppStatusBar.qml
+
+Read the current file. Find hardcoded labels like "00:42:17", "5 cameras", "76,230 frames", etc.
+
+Add root-level properties:
+```qml
+property string elapsedText: "00:00:00"
+property string cameraCountText: "0 cameras"
+property string totalFramesText: "0 frames"
+property string averageFpsText: "0.00 fps avg"
+property string bytesWrittenText: "0 B"
+property string diskRemainingText: "Disk unknown"
+property bool recording: false
+```
+
+Bind each existing `StatusSegment` or label's `labelText` (or equivalent property) to these root properties. Keep the exact same control IDs, layout structure, and styling.
+
+### Step 7: PreflightModal.qml
+
+Read the current file. Find the hardcoded failure/warning items (typically 3 Rectangle items).
+
+Add root property:
+```qml
+property var items: []
+```
+
+Replace the hardcoded failure items with a `Repeater`:
+```qml
+Repeater {
+    model: root.items
+    delegate: Rectangle {
+        // Use existing rectangle style from original items
+        // Bind modelData.severity, modelData.title, modelData.message
+    }
+}
+```
+
+### Step 8: NotificationPopup.qml
+
+Read the current file. Add property:
+```qml
+property var alertModel: null
+```
+
+Set `ListView.model: root.alertModel`. Keep existing delegate styling unchanged.
+
+### Step 9: Other QML Files
+
+Check every QML file in `cmd/micecam_ui/qml/components/` for hardcoded demo data:
+- `CameraDetailView.qml` — if it has hardcoded camera info, bind to cameraModel or cameraAt()
+- `EncodingSettings.qml` — if it has hardcoded settings, bind to appController.settings
+- `AlertsSettings.qml` — if it has hardcoded values, bind to appController.settings
+- `LoggingSettings.qml` — same
+
+## Verification Commands
 
 ```bash
 cmake -B build -S . -DBUILD_UI=ON
 cmake --build build --target micecam_ui -j
+
+# Runtime smoke test
 pkill -f micecam_ui 2>/dev/null || true
-(./build/cmd/micecam_ui/micecam_ui > .pm/runtime/micecam_canvas_corner_fix_runtime.log 2>&1 & echo $! > .pm/runtime/micecam_canvas_corner_fix.pid)
+./build/cmd/micecam_ui/micecam_ui > /tmp/micecam_ui_wiring.log 2>&1 &
 sleep 3
-screencapture -x .pm/runtime/micecam_canvas_corner_fix_home.png
-kill $(cat .pm/runtime/micecam_canvas_corner_fix.pid) 2>/dev/null || true
-cat .pm/runtime/micecam_canvas_corner_fix_runtime.log
+cat /tmp/micecam_ui_wiring.log
+# Verify: no QML errors, no binding errors
+kill %1 2>/dev/null || true
 ```
 
 ## Acceptance Criteria
 
-- [ ] `micecam_ui` builds successfully.
-- [ ] Runtime log is clean.
-- [ ] `previewCanvas.onPaint` clips preview drawing to a rounded rectangle path.
-- [ ] All video cards have visible rounded top corners.
-- [ ] Bottom overlay has rounded bottom corners and straight top edge.
-- [ ] CAM_D amber border matches card/content radius.
-- [ ] No right-edge or bottom-corner mismatch remains.
-- [ ] Worker report has the actual final commit hash.
+- [ ] `cmake --build build --target micecam_ui -j` builds successfully
+- [ ] Runtime log has NO QML errors (no "ReferenceError", "TypeError", "Cannot assign" messages)
+- [ ] AppToolbar uses `appController.isRecording` and `appController.recordButtonText`
+- [ ] AppSidebar model is `appController.cameraModel`
+- [ ] CameraGridView uses Repeater over `appController.cameraModel`
+- [ ] AppStatusBar metric strings are bound to `appController.*` properties
+- [ ] PreflightModal items are populated from `appController.preflightItems()`
+- [ ] NotificationPopup ListView model is `alertModel`
+- [ ] Visual appearance is preserved (no color/font/spacing/layout changes)
+- [ ] No existing tests break
+- [ ] Worker report has correct commit hash and all required sections
 
 ## Commit
 
-Create one commit on top of `07da9d9`.
+Create one commit on top of current HEAD with ALL QML binding changes in ONE commit:
+```
+feat(ui): wire qml views to appcontroller models
+```

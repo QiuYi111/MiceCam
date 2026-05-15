@@ -24,3 +24,5 @@
 | 13r | review | User/PM rejected final corner polish commit 9d284bd | Wrote explicit rework task: do not rely on root clip; make preview and bottom overlay participate in shared radius strategy |
 | 13r2 | review | Reviewed card corner rework commit 07da9d9 | Accepted code with caveat: worker report hash stale; independent build/runtime clean; stop implementation for overall evaluation |
 | 13r3 | review | User rejected unchanged visual corners; delegated Canvas clip root-cause fix | Accepted commit 3be4133: preview canvas clips to rounded path; bottom bar draws bottom-only rounded corners; independent build/runtime clean |
+| 14 | delegate | Stage handoff: ui-polish complete (4/4 EC passed). New stage: backend-ui-wiring. Delegated Task 1: Backend UI Contract for Camera Data and Capabilities | Accepted: 20/20 tests pass, 2 new tests, 9 source files changed, clean scope. Commit 7b11e1b. |
+| 15 | delegate | Task 2: Detailed Preflight Contract for UI Failures and Warnings | Accepted: 8/8 preflight tests pass (2 new + 6 existing), zero regressions, clean scope. Commit fb3c555. |

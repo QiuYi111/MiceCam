@@ -2,58 +2,55 @@
 
 ## Stage ID
 
-ui-polish
+backend-ui-wiring
 
 ## Stage goal
 
-Bring the Qt/QML native UI into close alignment with `specs/001-micecam-v2-rewrite/ui-spec.md` and the full `UIDesign/*.png` reference set, following Apple HIG system-level desktop patterns.
+Wire the existing polished QML UI to real v2 C++ backend data: camera discovery, configuration, preflight validation, recording pipeline, stream stats, and alerts. Do NOT change visual design. Only replace data sources and click actions.
 
 ## Why this stage matters
 
-The current UI has the broad structure, but several surfaces still read as prototype: Alerts does not match the reference design, Logging was replaced by an over-prominent Output page, theme tokens drifted from the approved navy system, and major recording/preview states are hardcoded. This stage turns the existing QML into a polished laboratory monitoring tool.
+The UI currently uses hardcoded mock values (`MockCameraModel`, fixed text, demo states). The backend modules exist (OAK/FFmpeg backends, RecordingPipeline, AlertManager, ConfigLoader, PreflightValidator) but are not yet exposed through Qt models and controller. This stage creates the narrow app-facing contract.
 
 ## Inputs
 
-- `specs/001-micecam-v2-rewrite/spec.md` — full system spec
-- `specs/001-micecam-v2-rewrite/ui-spec.md` — approved Apple HIG UI spec
-- `specs/001-micecam-v2-rewrite/UIDesign/*.png` — visual reference screens
+- `docs/superpowers/plans/2026-05-15-v2-backend-ui-wiring.md` — 8-task implementation plan
 - `.pm/stable/product.md` — product definition
-- `.pm/stable/ui-direction.md` — approved UI direction
+- `.pm/stable/architecture-guardrails.md` — architecture constraints
 
 ## Allowed work
 
-- Scoped QML UI polish
-- UI-facing state/model binding only where needed for visual fidelity
-- Build and runtime visual verification after each round
-- Focused implementation reports
+- Modify domain types (DeviceInfo, Capabilities, StreamStats) for UI contract
+- Modify backend implementations (Mock, OAK, FFmpeg) for richer data
+- Modify pipeline (RecordingPipeline, PreflightValidator, StatsCollector) for UI-ready outputs
+- Modify ConfigLoader, AlertManager for UI consumption
+- Create Qt adapter files in `cmd/micecam_ui/` (AppCameraModel, AppAlertModel, AppSettings, AppController)
+- Add/update unit and integration tests
+- Bind existing QML views to new controller/models
 
 ## Forbidden work
 
-- Backend recording pipeline changes
-- Camera hardware/FFmpeg pipeline changes
+- QML visual design changes (colors, fonts, spacing, layout)
 - Product positioning changes
+- Core tech stack changes
 - CI/CD configuration
-- Large unrelated refactors
+- New QML surfaces or components
 
 ## Exit criteria
 
-- [ ] EC-001: Alerts and Logging settings match the reference screens
-  Evidence: screenshots compared against `alerts.png` and `logging.png`
-  Blocking: true
-- [ ] EC-002: Camera workspace, toolbar, status bar, context menu, fullscreen, and modals match UI spec
-  Evidence: screenshots compared against `home.png`, `notification.png`, `right-click.png`, `enlarge.png`, `preflight.png`
-  Blocking: true
-- [ ] EC-003: `micecam_ui` builds cleanly after every polish round
-  Evidence: `cmake --build build --target micecam_ui -j` output
-  Blocking: true
-- [ ] EC-004: implementation report produced
-  Evidence: `docs/reports/implements/phase-ui-polish-*.md`
-  Blocking: true
-
-## Current progress
-
-Round 1 ready: theme/navigation/Alerts/Logging polish.
+- [ ] EC-001: All 8 tasks pass their tests
+- [ ] EC-002: `micecam_ui` builds and links to backend modules
+- [ ] EC-003: QML views bind to AppController/model properties (no mock data)
+- [ ] EC-004: Recording pipeline encodes frames through TranscodeStage
+- [ ] EC-005: Preflight modal shows detailed backend-reported failures
+- [ ] EC-006: Settings panel reads/writes via ConfigLoader
+- [ ] EC-007: Notification popup renders AlertManager history
+- [ ] EC-008: Camera grid shows backend-discovered devices
 
 ## Open blockers
 
 None.
+
+## Current progress
+
+Task 1/8 ready: Backend UI contract for camera data and capabilities.

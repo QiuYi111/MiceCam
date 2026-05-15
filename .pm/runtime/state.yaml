@@ -1,19 +1,29 @@
 project_id: "micecam-v2"
 status: active
 current_stage: "delivery"
-current_stage_goal: "Stage 6: Qt/QML UI implementation (delegated to Gemini/Codex)"
-current_phase: "stage_evaluation_ready"
-loop_iteration: 12
-iteration_valid_count: 6
-iteration_total_count: 10
-consecutive_failures: 2
+current_stage_goal: "Backend/UI Wiring: connect real backend data, pipeline, preflight, recording, stats, and alerts to the polished QML UI"
+current_phase: "stage_exit_reached"
+loop_iteration: 21
+iteration_valid_count: 15
+iteration_total_count: 19
+consecutive_failures: 0
+feasibility_ready: true
+product_definition_ready: true
+roadmap_ready: true
+ux_ready: true
+ux_depth: "full"
+ui_direction_ready: true
 last_verified:
-  commit: 3be4133
-  test_command: "PM independent build/runtime and code inspection"
-  test_result: "accepted: Canvas preview drawing clips to rounded rect path; bottom bar draws bottom-only rounded corners; runtime clean"
+  commit: 2ba1433
+  test_command: "ctest --test-dir build --output-on-failure -j4"
+  test_result: "24/24 passed (100%). 8/8 tasks complete. Zero QML runtime errors. Stage exit criteria met."
 next_action:
-  type: "review"
-  summary: "Stop implementation; overall UI completeness and wiring-up readiness evaluation is ready."
+  type: "stop"
+  summary: "All 8 wiring tasks complete. Stage exit reached."
   blocked: false
   needs_user_decision: false
-last_updated: "2026-05-15 10:31:00 +0800"
+last_updated: "2026-05-15 12:20:00 +0800"
+max_iterations: null
+max_consecutive_failures: 3
+max_iterations: null
+max_consecutive_failures: 3

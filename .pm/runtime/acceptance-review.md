@@ -478,3 +478,119 @@ Intern again used forbidden image-analysis tooling during verification, so PM ac
 ## Next Action
 
 Stop implementation. UI stage is ready for overall completeness and wiring-up readiness evaluation.
+
+---
+
+# Stage Evaluation — UI Polish Stage Exit
+
+## Verdict
+
+**PASSED.** The ui-polish stage exit criteria are met. Transition to backend-ui-wiring stage authorized.
+
+## Exit Criteria
+
+- [x] **EC-001: Alerts and Logging match reference screens** — Alerts page uses full-width slider tracks, custom stepper, custom switches; Logging preview is light bordered monospaced panel. Acceptance-review iterations 6r2-fix and later confirm.
+- [x] **EC-002: Camera workspace matches UI spec** — Home grid, toolbar, status bar, context menu, fullscreen, modals all verified through screenshots over iterations 7-13r3. Final card-corner Canvas clip fix at `3be4133` resolves last visual issue.
+- [x] **EC-003: `micecam_ui` builds cleanly** — Every iteration verified `cmake --build build --target micecam_ui -j` passes. Empty runtime logs in final verification.
+- [x] **EC-004: Implementation report produced** — `docs/reports/implements/phase-ui-polish-05-15-05.md` and prior reports exist.
+
+## Evidence
+
+- Build: `cmake -B build -S . -DBUILD_UI=ON && cmake --build build --target micecam_ui -j` passes
+- Runtime: `.pm/runtime/micecam_pm_canvas_corner_runtime.log` is empty
+- Code: `3be4133` — CameraCard canvas clips to rounded rect path, bottom bar has bottom-only corners
+- Reports: 7 implementation reports under `docs/reports/implements/phase-ui-polish-*.md`
+
+## Next Action
+
+Start new stage: backend-ui-wiring. User provided plan `docs/superpowers/plans/2026-05-15-v2-backend-ui-wiring.md`. Begin delegating Task 1 (Backend UI Contract for Camera Data and Capabilities).
+
+---
+
+# Acceptance Review — Task 1: Backend UI Contract
+
+## Verdict
+
+**ACCEPTED**
+
+## Evidence
+
+- Commit: `7b11e1b` — `feat(ui): define backend camera capability contract`
+- PM independent `ctest`: **20/20 passed (100%)**
+- 2 new tests in `test_backend_ui_contract` both pass
+- Diff confirms exactly the allowed files: `DeviceInfo.h`, `ICameraBackend.h`, `MockCameraBackend.{h,cpp}`, `OAKCameraBackend.cpp`, `FFmpegCameraBackend.cpp`, `test_backend_ui_contract.cpp`, `CMakeLists.txt`
+- No forbidden scope touched (no QML, no pipeline changes, no product changes)
+
+---
+
+# Acceptance Review — Task 8: QML Binding
+
+## Verdict
+
+**ACCEPTED**
+
+## Evidence
+
+- Commit: `2ba1433` — `feat(ui): wire qml views to appcontroller models`
+- Build: passes (`cmake --build build --target micecam_ui -j`)
+- Runtime log: empty (zero QML errors)
+- 10 QML files changed, 132+ / 216- lines, visual design preserved
+
+## Issues
+
+None.
+
+## Next Action
+
+`stop` — all 8 tasks complete. Perform final stage evaluation.
+
+---
+
+# Final Stage Evaluation — Backend/UI Wiring
+
+## Verdict
+
+**PASSED.** All 8/8 tasks complete. Stage exit criteria met.
+
+## Evidence
+
+- `ctest`: **24/24 passed (100%)** — zero regressions across all test suites
+- 8 commits, 2 new test files, 8 new source files created, 10 QML files wired
+- Runtime log: empty (no QML errors)
+- `micecam_ui` builds and links to `micecam_encoding`
+
+## Exit Criteria
+
+- [x] **EC-001: All 8 tasks pass their tests** — Each task has verified passing tests: 2 test_backend_ui_contract, 2 test_preflight_detail + 6 existing, 1 test_recording_pipeline_outputs + 7+2 existing, 1 test_config_loader, 1 test_alert_manager, 2 test_app_models, 3 test_app_controller
+- [x] **EC-002: `micecam_ui` builds and links to backend** — Verified in Task 6 and 8
+- [x] **EC-003: QML views bind to AppController** — 10 QML files wired in Task 8, zero runtime errors
+- [x] **EC-004: Recording pipeline encodes through TranscodeStage** — Verified in Task 3 (valid H264 MP4 output)
+- [x] **EC-005: Preflight modal shows detailed failures** — Verified in Task 2 (PreflightItem with severity/code/title/message)
+- [x] **EC-006: Settings panel reads/writes ConfigLoader** — Verified in Task 4 (round-trip save/load)
+- [x] **EC-007: Notification popup renders AlertManager history** — Verified in Task 5 (history/clear_history)
+- [x] **EC-008: Camera grid shows backend-discovered devices** — Verified in Task 1 (5 labeled streams) + Task 6 (AppCameraModel)
+
+## Commit Timeline
+
+| # | Commit | Task |
+|---|--------|------|
+| 1 | `7b11e1b` | Backend UI contract |
+| 2 | `fb3c555` | Preflight contract |
+| 3 | `593904a` | RecordingPipeline fix |
+| 4 | `fdaa6a5` | Mutable settings |
+| 5 | `f3ae2ed` | Alert history |
+| 6 | `b6901f4` | Qt app models |
+| 7 | `70dab9f` | Capture pump |
+| 8 | `2ba1433` | QML binding |
+
+## Notes
+
+- No visual design changes were made — all QML changes are binding-only
+- Mock mode provides 5 camera streams with full capability data
+- Recording pipeline now produces valid H264 MP4 output
+- Preflight returns structured failure details for UI rendering
+- Alert history is queryable for notification popup
+
+## Next Action
+
+**STOP** — stage complete. Ready for next roadmap stage (Stage 7: Cross-platform CI/CD or integration testing).

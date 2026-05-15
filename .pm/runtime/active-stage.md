@@ -2,58 +2,57 @@
 
 ## Stage ID
 
-feasibility
+ui-polish
 
 ## Stage goal
 
-Prove the two riskiest technical assumptions are viable before committing to full build.
+Bring the Qt/QML native UI into close alignment with `specs/001-micecam-v2-rewrite/ui-spec.md` and the full `UIDesign/*.png` reference set, following Apple HIG system-level desktop patterns.
 
 ## Why this stage matters
 
-Top 3 user fears: timestamp accuracy, frame drops, silent failures. Both spikes directly address the root causes.
-Without feasibility validation, we risk building on unproven foundations.
+The current UI has the broad structure, but several surfaces still read as prototype: Alerts does not match the reference design, Logging was replaced by an over-prominent Output page, theme tokens drifted from the approved navy system, and major recording/preview states are hardcoded. This stage turns the existing QML into a polished laboratory monitoring tool.
 
 ## Inputs
 
 - `specs/001-micecam-v2-rewrite/spec.md` — full system spec
-- `specs/001-micecam-v2-rewrite/plan.md` — implementation plan
+- `specs/001-micecam-v2-rewrite/ui-spec.md` — approved Apple HIG UI spec
+- `specs/001-micecam-v2-rewrite/UIDesign/*.png` — visual reference screens
 - `.pm/stable/product.md` — product definition
-- DepthAI SDK documentation
-- FFmpeg documentation (hardware encoding)
+- `.pm/stable/ui-direction.md` — approved UI direction
 
 ## Allowed work
 
-- Technical spikes
-- Prototyping
-- Proof-of-concept experiments
-- Dependency evaluation
-- Writing spike-report.md
+- Scoped QML UI polish
+- UI-facing state/model binding only where needed for visual fidelity
+- Build and runtime visual verification after each round
+- Focused implementation reports
 
 ## Forbidden work
 
-- Production implementation
-- Schema changes
-- UI implementation
+- Backend recording pipeline changes
+- Camera hardware/FFmpeg pipeline changes
+- Product positioning changes
 - CI/CD configuration
+- Large unrelated refactors
 
 ## Exit criteria
 
-- [ ] EC-001: OAK H264 spike complete with valid output
-  Evidence: buildable prototype that enumerates OAK-D and produces H264 stream from VideoEncoder node
+- [ ] EC-001: Alerts and Logging settings match the reference screens
+  Evidence: screenshots compared against `alerts.png` and `logging.png`
   Blocking: true
-- [ ] EC-002: FFmpeg hardware encoder spike complete with fallback chain verified
-  Evidence: buildable prototype that selects platform encoder (VideoToolbox on macOS), encodes test frame, falls back to libx264 on failure
+- [ ] EC-002: Camera workspace, toolbar, status bar, context menu, fullscreen, and modals match UI spec
+  Evidence: screenshots compared against `home.png`, `notification.png`, `right-click.png`, `enlarge.png`, `preflight.png`
   Blocking: true
-- [ ] EC-003: spike-report.md produced with recommendation: continue
-  Evidence: spike-report.md in .pm/runtime/
+- [ ] EC-003: `micecam_ui` builds cleanly after every polish round
+  Evidence: `cmake --build build --target micecam_ui -j` output
   Blocking: true
-- [ ] EC-004: feasibility_ready: true in state.yaml
-  Evidence: state.yaml updated
+- [ ] EC-004: implementation report produced
+  Evidence: `docs/reports/implements/phase-ui-polish-*.md`
   Blocking: true
 
 ## Current progress
 
-Not started.
+Round 1 ready: theme/navigation/Alerts/Logging polish.
 
 ## Open blockers
 

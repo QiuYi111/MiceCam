@@ -2,22 +2,20 @@
 
 ## Current state
 
-Bootstrap complete. Product defined (grill session done), spec and plan written, PM structure initialized. Ready to begin feasibility stage.
+UI polish stage active. User decided sidebar camera clicks should open camera detail/config pages; right-click remains a quick configuration shortcut.
 
 ## Last action
 
-PM directory initialized with all product definition files referencing spec.md and ui-spec.md.
+Accepted card-corner Canvas clip fix at `3be4133` after independent build/runtime and code inspection. This supersedes earlier rejected/insufficient corner fixes.
 
 ## Next expected action
 
-Write feasibility spike task for OAK H264 + FFmpeg hardware encoder, delegate to Intern.
+Implementation should now stop. Next action is PM-level overall UI completeness and wiring-up readiness evaluation.
 
 ## Open decisions
 
-- OAK H264 encoder maturity → spike to verify
-- Cross-platform FFmpeg encoder → spike to verify
-- Timestamp precision → designed in spec, validate during integration tests
+- None. The product direction is decided: sidebar click opens camera detail/config, and that page must include acquisition configuration controls for resolution/frame rate.
 
 ## Branch
 
-`main` (no branch created yet — will create `feat/v2-rewrite` before first task)
+`codex/ui-polish-hig`

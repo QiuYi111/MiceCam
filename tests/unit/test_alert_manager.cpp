@@ -132,3 +132,23 @@ TEST(AlertManager, NoDedupForDifferentStreams) {
 
     EXPECT_EQ(obs.alerts().size(), 2u);
 }
+
+TEST(AlertManager, StoresHistoryForUiNotificationList) {
+    infrastructure::AlertManager manager;
+
+    domain::AlertRecord alert;
+    alert.type = domain::AlertType::HIGH_DROP_RATE;
+    alert.severity = domain::AlertSeverity::YELLOW;
+    alert.stream_id = "mock_cam_0";
+    alert.message = "Drop rate exceeded warning threshold";
+
+    manager.emit(alert);
+
+    auto history = manager.history();
+    ASSERT_EQ(history.size(), 1u);
+    EXPECT_EQ(history.front().stream_id, "mock_cam_0");
+    EXPECT_EQ(history.front().message, "Drop rate exceeded warning threshold");
+
+    manager.clear_history();
+    EXPECT_TRUE(manager.history().empty());
+}

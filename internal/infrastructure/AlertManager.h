@@ -17,11 +17,14 @@ public:
     void unregister_observer(api::WatchdogObserver* observer);
     void emit(const domain::AlertRecord& alert);
     void set_dedup_cooldown_ms(int ms);
+    std::vector<domain::AlertRecord> history() const;
+    void clear_history();
 
 private:
     bool is_duplicate(const domain::AlertRecord& alert);
 
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
+    std::vector<domain::AlertRecord> history_;
     std::vector<api::WatchdogObserver*> observers_;
     int dedup_cooldown_ms_ = 5000;
 

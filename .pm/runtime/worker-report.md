@@ -1,48 +1,65 @@
-# Worker Report: Mutable Settings Contract for UI (Task 4/8)
+# Worker Report: Alert History Contract for Notification UI
 
-## Summary
+## Task
 
-Added setters and `save()` to `ConfigLoader` so the Qt settings panel can write user-editable configuration back to JSON.
+Task 5/8: Add `history()` and `clear_history()` to `AlertManager` for notification popup queryable alert list and badge count reset.
 
 ## Risk Classification
 
-**LEAF** — single module, additive only. No changes to existing load behavior. Proceeded directly.
+**LEAF** — single module, additive only. No existing behavior changed.
 
-## Process
+## RED Phase
 
-| Phase | Result |
-|-------|--------|
-| RED | 8 compile errors (setters/save undefined) — confirmed failing |
-| GREEN | Implemented 7 setters + `save()` — 5/5 tests pass |
-| REFACTOR | N/A — no refactoring needed; code is minimal and clean |
+- Appended `StoresHistoryForUiNotificationList` test to `tests/unit/test_alert_manager.cpp`
+- Build failed with 3 errors: `history()`, `clear_history()`, `history()` not members of `AlertManager`
+- RED confirmed.
 
-## Files Changed
+## GREEN Phase
+
+### Files changed
 
 | File | Change |
 |------|--------|
-| `internal/infrastructure/ConfigLoader.h` | +7 inline setters, +1 `save()` declaration |
-| `internal/infrastructure/ConfigLoader.cpp` | +`save()` implementation using nlohmann_json |
-| `tests/unit/test_config_loader.cpp` | +`SavePersistsUiEditableSettings` test |
+| `internal/infrastructure/AlertManager.h` | Added `history()`, `clear_history()` declarations; added `std::vector<domain::AlertRecord> history_`; changed `mutex_` to `mutable` for const-method locking |
+| `internal/infrastructure/AlertManager.cpp` | Push alert into `history_` inside `emit()` after dedup check; implemented `history()` (const, lock, return copy) and `clear_history()` (lock, clear) |
+| `tests/unit/test_alert_manager.cpp` | Added `StoresHistoryForUiNotificationList` test |
+
+### Implementation details
+
+- `AlertManager::history()` returns a copy of `history_` under `mutex_` lock (thread-safe snapshot)
+- `AlertManager::clear_history()` clears `history_` under `mutex_` lock
+- `AlertManager::emit()` stores alert in `history_` after passing dedup check, before observer notification
+- Existing `std::mutex mutex_` changed to `mutable std::mutex mutex_` to allow locking in `const` method `history()`
 
 ## Test Results
 
 ```
-[==========] Running 5 tests from 1 test suite.
-[  PASSED  ] 5 tests.
+[==========] Running 7 tests from 1 test suite.
+[----------] 7 tests from AlertManager
+[ RUN      ] AlertManager.EmitNotifiesRegisteredObserver
+[       OK ] AlertManager.EmitNotifiesRegisteredObserver (0 ms)
+[ RUN      ] AlertManager.UnregisteredObserverNotNotified
+[       OK ] AlertManager.UnregisteredObserverNotNotified (0 ms)
+[ RUN      ] AlertManager.MultipleObserversAllNotified
+[       OK ] AlertManager.MultipleObserversAllNotified (0 ms)
+[ RUN      ] AlertManager.DedupSuppressesRepeatAlerts
+[       OK ] AlertManager.DedupSuppressesRepeatAlerts (0 ms)
+[ RUN      ] AlertManager.NoDedupForDifferentTypes
+[       OK ] AlertManager.NoDedupForDifferentTypes (0 ms)
+[ RUN      ] AlertManager.NoDedupForDifferentStreams
+[       OK ] AlertManager.NoDedupForDifferentStreams (0 ms)
+[ RUN      ] AlertManager.StoresHistoryForUiNotificationList
+[       OK ] AlertManager.StoresHistoryForUiNotificationList (0 ms)
+[----------] 7 tests from AlertManager (0 ms total)
+
+[==========] 7 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 7 tests.
 ```
 
-- `LoadValidConfig` — PASSED
-- `MissingFileReturnsDefaults` — PASSED
-- `PartialConfigMergesWithDefaults` — PASSED
-- `InvalidJsonReturnsFalse` — PASSED
-- `SavePersistsUiEditableSettings` — PASSED (new)
+All 7 tests pass. No regressions.
 
 ## Acceptance Criteria
 
-- [x] `SavePersistsUiEditableSettings` test passes
-- [x] All existing `test_config_loader` tests still pass (no regressions)
+- [x] `StoresHistoryForUiNotificationList` test passes
+- [x] All existing `test_alert_manager` tests still pass
 - [x] Worker report has correct commit hash and all required sections
-
-## Known Issues
-
-None.

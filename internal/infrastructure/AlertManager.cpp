@@ -25,6 +25,8 @@ void AlertManager::emit(const domain::AlertRecord& alert) {
     DedupKey key{alert.type, alert.stream_id};
     last_emit_[key] = std::chrono::steady_clock::now();
 
+    history_.push_back(alert);
+
     for (auto* obs : observers_) {
         if (obs) {
             obs->on_alert(alert);
@@ -45,6 +47,16 @@ bool AlertManager::is_duplicate(const domain::AlertRecord& alert) {
     }
     auto elapsed = std::chrono::steady_clock::now() - it->second;
     return std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() < dedup_cooldown_ms_;
+}
+
+std::vector<domain::AlertRecord> AlertManager::history() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return history_;
+}
+
+void AlertManager::clear_history() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    history_.clear();
 }
 
 } // namespace micecam::infrastructure

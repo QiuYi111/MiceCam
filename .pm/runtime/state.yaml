@@ -2,10 +2,10 @@ project_id: "micecam-v2"
 status: active
 current_stage: "delivery"
 current_stage_goal: "Backend/UI Wiring: connect real backend data, pipeline, preflight, recording, stats, and alerts to the polished QML UI"
-current_phase: "stage_exit_reached"
-loop_iteration: 21
-iteration_valid_count: 15
-iteration_total_count: 19
+current_phase: "needs_user_decision"
+loop_iteration: 22
+iteration_valid_count: 16
+iteration_total_count: 20
 consecutive_failures: 0
 feasibility_ready: true
 product_definition_ready: true
@@ -14,16 +14,14 @@ ux_ready: true
 ux_depth: "full"
 ui_direction_ready: true
 last_verified:
-  commit: 2ba1433
-  test_command: "ctest --test-dir build --output-on-failure -j4"
-  test_result: "24/24 passed (100%). 8/8 tasks complete. Zero QML runtime errors. Stage exit criteria met."
+  commit: 6d1347b
+  test_command: "cmake --build build --target micecam_ui test_app_controller -j 4 && ctest --test-dir build --output-on-failure -R test_app_controller && 4s native app smoke"
+  test_result: "PASS. Build succeeded, test_app_controller CTest target passed, short native app smoke emitted no QML stderr output."
 next_action:
-  type: "stop"
-  summary: "All 8 wiring tasks complete. Stage exit reached."
+  type: "request_user_decision"
+  summary: "Backend/UI regression repair accepted for targeted scope; user visual confirmation is required before full verification/commit."
   blocked: false
-  needs_user_decision: false
-last_updated: "2026-05-15 12:20:00 +0800"
-max_iterations: null
-max_consecutive_failures: 3
+  needs_user_decision: true
+last_updated: "2026-05-15 14:41:47 +0800"
 max_iterations: null
 max_consecutive_failures: 3

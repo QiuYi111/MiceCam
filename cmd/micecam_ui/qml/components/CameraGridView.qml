@@ -14,6 +14,7 @@ Item {
     property int menuTargetDrops: 0
     property bool menuTargetRecording: false
     property int menuTargetStatus: 0
+    readonly property bool empty: appController.cameraCount === 0
 
     ScrollView {
         id: gridScroll
@@ -41,6 +42,44 @@ Item {
                         model.resolutionLabels, model.framerateLabels, model.formatLabels)
                     onContextMenuRequested: function(gx, gy) { root.showContextMenu(model.name, model.fps, model.dropCount, model.isRecording, model.status, gx, gy) }
                 }
+            }
+        }
+    }
+
+    Item {
+        anchors.fill: parent
+        visible: root.empty
+
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 48, 360)
+            spacing: 10
+
+            AppIcon {
+                name: "camera"
+                size: 32
+                color: Theme.statusAmber
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            Text {
+                text: "No cameras detected"
+                font.family: Theme.fontPrimary
+                font.pixelSize: 18
+                font.weight: Font.DemiBold
+                color: Theme.textPrimary
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: appController.preflightMessage
+                font.family: Theme.fontPrimary
+                font.pixelSize: 13
+                color: Theme.textSecondary
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
         }
     }

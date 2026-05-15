@@ -8,7 +8,7 @@ int main(int argc, char* argv[]) {
     QQuickStyle::setStyle("Basic");
     QGuiApplication app(argc, argv);
 
-    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
+    micecam::ui::AppController controller(micecam::ui::BackendMode::Production);
     controller.refreshCameras();
 
     QQmlApplicationEngine engine;

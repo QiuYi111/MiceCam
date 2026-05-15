@@ -4,6 +4,9 @@
 #include <sstream>
 
 #include "domain/Capabilities.h"
+#include "infrastructure/FFmpegCameraBackend.h"
+#include "infrastructure/MockCameraBackend.h"
+#include "infrastructure/OAKCameraBackend.h"
 #include "pipeline/PreflightValidator.h"
 
 namespace micecam::ui {
@@ -15,7 +18,10 @@ AppController::AppController(BackendMode mode, QObject* parent)
     , alert_model_(new AppAlertModel(this))
     , settings_(new AppSettings(this))
 {
-    if (mode_ == BackendMode::MockOnly) {
+    if (mode_ == BackendMode::Production) {
+        manager_.register_backend(std::make_unique<infrastructure::FFmpegCameraBackend>());
+        manager_.register_backend(std::make_unique<infrastructure::OAKCameraBackend>());
+    } else {
         manager_.register_backend(std::make_unique<infrastructure::MockCameraBackend>());
     }
 }
@@ -27,12 +33,22 @@ AppSettings* AppController::settings() const { return settings_; }
 bool AppController::isRecording() const { return recording_; }
 
 QString AppController::recordButtonText() const {
-    return recording_ ? QStringLiteral("Stop") : QStringLiteral("Record");
+    if (recording_) {
+        return QStringLiteral("Stop");
+    }
+    return canStartRecording() ? QStringLiteral("Start") : QStringLiteral("No Device");
+}
+
+bool AppController::canStartRecording() const {
+    return !recording_ && camera_model_->rowCount() > 0;
+}
+
+int AppController::cameraCount() const {
+    return camera_model_->rowCount();
 }
 
 QString AppController::cameraCountText() const {
-    int count = camera_model_->rowCount();
-    return QStringLiteral("%1 cameras").arg(count);
+    return QStringLiteral("%1 cameras").arg(cameraCount());
 }
 
 QString AppController::elapsedText() const {
@@ -63,7 +79,10 @@ QString AppController::diskRemainingText() const {
 }
 
 QString AppController::preflightMessage() const {
-    return preflight_message_.isEmpty() ? QStringLiteral("Ready") : preflight_message_;
+    if (!preflight_message_.isEmpty()) {
+        return preflight_message_;
+    }
+    return cameraCount() == 0 ? QStringLiteral("No cameras detected") : QStringLiteral("Ready");
 }
 
 QString AppController::lastSessionId() const {
@@ -114,15 +133,31 @@ void AppController::refreshCameras() {
         }
     }
 
+    const int previous_count = cameraCount();
     camera_model_->replaceRows(std::move(rows));
+    preflight_message_ = cameraCount() == 0
+        ? QStringLiteral("No cameras detected")
+        : QStringLiteral("Ready");
     pushLogEntry(log_entries_, QStringLiteral("[INFO] Camera refresh: %1").arg(cameraCountText()));
+    if (cameraCount() != previous_count) {
+        emit cameraCountChanged();
+        emit canStartRecordingChanged();
+        emit recordButtonTextChanged();
+    }
     emit cameraCountTextChanged();
+    emit preflightMessageChanged();
 }
 
 bool AppController::startRecording() {
     if (recording_) return false;
 
-    if (camera_model_->rowCount() == 0) return false;
+    if (camera_model_->rowCount() == 0) {
+        preflight_message_ = QStringLiteral("No cameras detected");
+        emit preflightMessageChanged();
+        emit canStartRecordingChanged();
+        emit recordButtonTextChanged();
+        return false;
+    }
 
     auto now = std::chrono::system_clock::now().time_since_epoch().count();
     std::ostringstream sid;
@@ -168,6 +203,7 @@ bool AppController::startRecording() {
     session_start_ = std::chrono::steady_clock::now();
     recording_ = true;
     emit isRecordingChanged();
+    emit canStartRecordingChanged();
     emit recordButtonTextChanged();
     emit lastSessionIdChanged();
     return true;
@@ -202,6 +238,7 @@ void AppController::stopRecording() {
     recording_ = false;
     session_start_ = {};
     emit isRecordingChanged();
+    emit canStartRecordingChanged();
     emit recordButtonTextChanged();
     emit totalFramesTextChanged();
     emit averageFpsTextChanged();

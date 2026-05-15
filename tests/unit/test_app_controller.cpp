@@ -21,20 +21,60 @@ TEST(AppController, MockModeDiscoversUiReadyCameras) {
     EXPECT_GE(controller.cameraModel()->rowCount(), 1);
     EXPECT_EQ(controller.cameraCountText().toStdString(), "5 cameras");
     EXPECT_FALSE(controller.isRecording());
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Record");
+    EXPECT_TRUE(controller.canStartRecording());
+    EXPECT_EQ(controller.cameraCount(), 5);
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "Start");
 }
 
 TEST(AppController, StartAndStopRecordingUpdatesState) {
     micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
     controller.setOutputDirectory("/tmp/micecam_app_controller");
     controller.refreshCameras();
+    ASSERT_EQ(controller.cameraCount(), 5);
+    EXPECT_TRUE(controller.canStartRecording());
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "Start");
+
     ASSERT_TRUE(controller.startRecording());
     EXPECT_TRUE(controller.isRecording());
+    EXPECT_FALSE(controller.canStartRecording());
     EXPECT_EQ(controller.recordButtonText().toStdString(), "Stop");
+    EXPECT_FALSE(controller.startRecording());
+    EXPECT_TRUE(controller.isRecording());
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "Stop");
+
     controller.stopRecording();
     EXPECT_FALSE(controller.isRecording());
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Record");
+    EXPECT_TRUE(controller.canStartRecording());
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "Start");
     EXPECT_FALSE(controller.lastSessionId().isEmpty());
+}
+
+TEST(AppController, ProductionModeWithoutRegisteredBackendsShowsEmptyIdleState) {
+    micecam::ui::AppController controller(micecam::ui::BackendMode::Production);
+    controller.refreshCameras();
+
+    EXPECT_EQ(controller.cameraCount(), 0);
+    ASSERT_NE(controller.cameraModel(), nullptr);
+    EXPECT_EQ(controller.cameraModel()->rowCount(), 0);
+    EXPECT_EQ(controller.cameraCountText().toStdString(), "0 cameras");
+    EXPECT_FALSE(controller.isRecording());
+    EXPECT_FALSE(controller.canStartRecording());
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "No Device");
+    EXPECT_EQ(controller.preflightMessage().toStdString(), "No cameras detected");
+    EXPECT_TRUE(controller.lastSessionId().isEmpty());
+}
+
+TEST(AppController, StartRecordingWithoutCamerasReportsPreflightFailure) {
+    micecam::ui::AppController controller(micecam::ui::BackendMode::Production);
+    controller.refreshCameras();
+
+    EXPECT_FALSE(controller.startRecording());
+    EXPECT_EQ(controller.cameraCount(), 0);
+    EXPECT_FALSE(controller.isRecording());
+    EXPECT_FALSE(controller.canStartRecording());
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "No Device");
+    EXPECT_EQ(controller.preflightMessage().toStdString(), "No cameras detected");
+    EXPECT_TRUE(controller.lastSessionId().isEmpty());
 }
 
 TEST(AppController, RecordingPumpUpdatesFrameCounters) {

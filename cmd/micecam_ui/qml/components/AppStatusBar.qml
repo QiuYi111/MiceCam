@@ -15,7 +15,11 @@ Rectangle {
     property string averageFpsText: "0.00 fps avg"
     property string bytesWrittenText: "0 B"
     property string diskRemainingText: "Disk unknown"
+    property string preflightMessage: "Ready"
+    property int cameraCount: 0
     property bool recording: false
+    readonly property bool readyToRecord: !recording && cameraCount > 0
+    readonly property bool missingCameras: !recording && cameraCount === 0
     
     // Cover the top rounded corners to keep them sharp
     Rectangle {
@@ -40,12 +44,12 @@ Rectangle {
         spacing: 0
         
         StatusSegment {
-            Layout.minimumWidth: 130
-            Layout.preferredWidth: 130
-            icon: "clock"
-            labelText: root.elapsedText
-            textColor: root.recording ? Theme.statusRed : Theme.textPrimary
-            iconColor: root.recording ? Theme.statusRed : Theme.textPrimary
+            Layout.minimumWidth: 150
+            Layout.preferredWidth: 150
+            icon: root.recording ? "clock" : (root.readyToRecord ? "check" : "warning")
+            labelText: root.recording ? root.elapsedText : (root.readyToRecord ? "Ready to start" : "Preflight required")
+            textColor: root.recording ? Theme.statusRed : (root.missingCameras ? Theme.statusAmber : Theme.textPrimary)
+            iconColor: root.recording ? Theme.statusRed : (root.missingCameras ? Theme.statusAmber : Theme.textPrimary)
         }
 
         Divider {}
@@ -55,38 +59,50 @@ Rectangle {
             Layout.preferredWidth: 130
             icon: "camera"
             labelText: root.cameraCountText
+            textColor: root.cameraCount === 0 ? Theme.statusAmber : Theme.textPrimary
+            iconColor: root.cameraCount === 0 ? Theme.statusAmber : Theme.textPrimary
         }
 
         Divider {}
 
         StatusSegment {
-            Layout.minimumWidth: 150
-            Layout.preferredWidth: 150
-            icon: "film"
-            labelText: root.totalFramesText
+            Layout.minimumWidth: 260
+            Layout.preferredWidth: 320
+            icon: root.recording ? "film" : "warning"
+            labelText: root.recording ? root.totalFramesText : root.preflightMessage
+            textColor: root.recording ? Theme.textPrimary : (root.missingCameras ? Theme.statusAmber : Theme.textSecondary)
+            iconColor: root.recording ? Theme.textPrimary : (root.missingCameras ? Theme.statusAmber : Theme.textSecondary)
         }
 
-        Divider {}
+        Item { Layout.fillWidth: true }
 
         StatusSegment {
+            visible: root.recording
             Layout.minimumWidth: 150
             Layout.preferredWidth: 150
             icon: "chart"
             labelText: root.averageFpsText
         }
 
-        Item { Layout.fillWidth: true }
-
-        StatusSegment {
-            Layout.minimumWidth: 100
-            Layout.preferredWidth: 100
-            icon: "disk"
-            labelText: root.bytesWrittenText
+        Divider {
+            visible: root.recording
         }
 
-        Divider {}
+        StatusSegment {
+            Layout.minimumWidth: root.recording ? 110 : 190
+            Layout.preferredWidth: root.recording ? 110 : 190
+            icon: "disk"
+            labelText: root.recording ? root.bytesWrittenText : "No session output"
+            textColor: root.recording ? Theme.textPrimary : Theme.textSecondary
+            iconColor: root.recording ? Theme.textPrimary : Theme.textSecondary
+        }
+
+        Divider {
+            visible: root.recording
+        }
 
         StatusSegment {
+            visible: root.recording
             Layout.minimumWidth: 170
             Layout.preferredWidth: 170
             icon: "chart"

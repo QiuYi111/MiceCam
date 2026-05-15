@@ -14,7 +14,6 @@
 #include "AppCameraModel.h"
 #include "AppSettings.h"
 #include "infrastructure/CameraManager.h"
-#include "infrastructure/MockCameraBackend.h"
 #include "pipeline/RecordingPipeline.h"
 
 namespace micecam::ui {
@@ -28,6 +27,8 @@ class AppController : public QObject {
     Q_PROPERTY(AppSettings* settings READ settings CONSTANT)
     Q_PROPERTY(bool isRecording READ isRecording NOTIFY isRecordingChanged)
     Q_PROPERTY(QString recordButtonText READ recordButtonText NOTIFY recordButtonTextChanged)
+    Q_PROPERTY(bool canStartRecording READ canStartRecording NOTIFY canStartRecordingChanged)
+    Q_PROPERTY(int cameraCount READ cameraCount NOTIFY cameraCountChanged)
     Q_PROPERTY(QString cameraCountText READ cameraCountText NOTIFY cameraCountTextChanged)
     Q_PROPERTY(QString elapsedText READ elapsedText NOTIFY elapsedTextChanged)
     Q_PROPERTY(QString totalFramesText READ totalFramesText NOTIFY totalFramesTextChanged)
@@ -47,6 +48,8 @@ public:
     AppSettings* settings() const;
     bool isRecording() const;
     QString recordButtonText() const;
+    bool canStartRecording() const;
+    int cameraCount() const;
     QString cameraCountText() const;
     QString elapsedText() const;
     QString totalFramesText() const;
@@ -68,6 +71,8 @@ public:
 signals:
     void isRecordingChanged();
     void recordButtonTextChanged();
+    void canStartRecordingChanged();
+    void cameraCountChanged();
     void cameraCountTextChanged();
     void elapsedTextChanged();
     void totalFramesTextChanged();
@@ -85,7 +90,6 @@ private:
     };
 
     BackendMode mode_;
-    infrastructure::MockCameraBackend mock_backend_;
     infrastructure::CameraManager manager_;
     pipeline::RecordingPipeline pipeline_;
     AppCameraModel* camera_model_;

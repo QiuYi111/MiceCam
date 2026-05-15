@@ -9,7 +9,10 @@ Rectangle {
     color: Theme.bgPrimary
 
     property bool isRecording: false
+    property bool canStartRecording: false
     property string recordText: "Record"
+    readonly property bool recordActionEnabled: isRecording || canStartRecording
+    readonly property bool startActionVisible: !isRecording && canStartRecording
     property var alertModel: null
     property string elapsedText: "00:00"
 
@@ -36,21 +39,23 @@ Rectangle {
 
             Rectangle {
                 id: recordBtn
-                width: 110
+                readonly property color actionColor: root.isRecording
+                    ? Theme.recordRed
+                    : (root.canStartRecording ? Theme.statusGreen : Theme.bgTertiary)
+                width: root.recordActionEnabled ? 104 : 128
                 height: 36
                 radius: 8
-                color: Theme.recordRed
+                color: actionColor
+                opacity: root.recordActionEnabled ? 1.0 : 0.72
 
                 RowLayout {
                     anchors.centerIn: parent
                     spacing: 8
 
-                    Rectangle {
-                        width: 18; height: 18; radius: 9; color: "white"
-                        Rectangle {
-                            width: 8; height: 8; radius: 1; color: Theme.recordRed
-                            anchors.centerIn: parent
-                        }
+                    AppIcon {
+                        name: root.isRecording ? "stop" : (root.startActionVisible ? "play" : "warning")
+                        size: 16
+                        color: root.recordActionEnabled ? "white" : Theme.textSecondary
                     }
 
                     Text {
@@ -58,13 +63,14 @@ Rectangle {
                         font.family: Theme.fontPrimary
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
-                        color: "white"
+                        color: root.recordActionEnabled ? "white" : Theme.textSecondary
                     }
                 }
 
                 MouseArea {
                     anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
+                    enabled: root.recordActionEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.recordClicked()
                 }
             }

@@ -56,6 +56,7 @@ ApplicationWindow {
             anchors.right: parent.right
 
             isRecording: appController.isRecording
+            canStartRecording: appController.canStartRecording
             recordText: appController.recordButtonText
             alertModel: appController.alertModel
             elapsedText: appController.elapsedText
@@ -123,6 +124,8 @@ ApplicationWindow {
             averageFpsText: appController.averageFpsText
             bytesWrittenText: appController.bytesWrittenText
             diskRemainingText: appController.diskRemainingText
+            preflightMessage: appController.preflightMessage
+            cameraCount: appController.cameraCount
             recording: appController.isRecording
         }
 

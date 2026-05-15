@@ -107,6 +107,14 @@ Canvas {
             ctx.moveTo(4, 4); ctx.lineTo(14, 14);
             ctx.moveTo(14, 4); ctx.lineTo(4, 14);
             ctx.stroke();
+        } else if (name === "play") {
+            ctx.beginPath();
+            ctx.moveTo(5, 3); ctx.lineTo(15, 9); ctx.lineTo(5, 15);
+            ctx.closePath(); ctx.fill();
+        } else if (name === "stop") {
+            ctx.beginPath();
+            ctx.rect(4, 4, 10, 10);
+            ctx.fill();
         } else if (name === "warning") {
             ctx.beginPath();
             ctx.moveTo(9, 2); ctx.lineTo(16, 15); ctx.lineTo(2, 15); ctx.closePath();

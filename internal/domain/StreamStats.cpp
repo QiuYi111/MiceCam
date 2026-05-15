@@ -18,6 +18,9 @@ nlohmann::json StreamStats::to_json() const {
     j["bytes_written"] = bytes_written;
     j["encoder_used"] = encoder_used;
     j["encoder_fallback"] = encoder_fallback;
+    if (!transport.is_null()) {
+        j["transport"] = transport;
+    }
     return j;
 }
 

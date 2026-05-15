@@ -2,15 +2,17 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QtQml>
-#include "MockCameraModel.h"
+#include "AppController.h"
 
 int main(int argc, char* argv[]) {
     QQuickStyle::setStyle("Basic");
     QGuiApplication app(argc, argv);
 
-    qmlRegisterType<MockCameraModel>("MiceCam.Models", 1, 0, "CameraModel");
+    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
+    controller.refreshCameras();
 
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("appController", &controller);
     engine.load(QUrl("qrc:/MiceCam/UI/qml/main.qml"));
 
     if (engine.rootObjects().isEmpty()) {

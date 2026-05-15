@@ -1,4 +1,11 @@
-add_executable(micecam_ui main.cpp MockCameraModel.cpp)
+add_executable(micecam_ui
+    main.cpp
+    MockCameraModel.cpp
+    AppCameraModel.cpp
+    AppAlertModel.cpp
+    AppSettings.cpp
+    AppController.cpp
+)
 
 qt_policy(SET QTP0004 NEW)
 
@@ -39,6 +46,7 @@ target_include_directories(micecam_ui PRIVATE
 )
 
 target_link_libraries(micecam_ui PRIVATE
+    micecam_encoding
     Qt6::Core
     Qt6::Gui
     Qt6::Qml

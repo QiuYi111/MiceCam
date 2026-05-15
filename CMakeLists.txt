@@ -210,6 +210,23 @@ add_micecam_test(test_recording_pipeline_outputs tests/integration/test_recordin
 add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
 add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
 
+if(BUILD_UI)
+    add_micecam_test(test_app_models tests/unit/test_app_models.cpp)
+    add_micecam_test(test_app_controller tests/unit/test_app_controller.cpp)
+    target_link_libraries(test_app_models PRIVATE Qt6::Core)
+    target_link_libraries(test_app_controller PRIVATE Qt6::Core Qt6::Qml)
+    target_sources(test_app_models PRIVATE
+        cmd/micecam_ui/AppCameraModel.cpp
+        cmd/micecam_ui/AppAlertModel.cpp
+    )
+    target_sources(test_app_controller PRIVATE
+        cmd/micecam_ui/AppCameraModel.cpp
+        cmd/micecam_ui/AppAlertModel.cpp
+        cmd/micecam_ui/AppSettings.cpp
+        cmd/micecam_ui/AppController.cpp
+    )
+endif()
+
 # Hardware-in-the-Loop tests (requires real camera hardware)
 if(BUILD_HIL)
     add_micecam_test(test_real_camera_hil tests/hil/test_real_camera.cpp)

@@ -30,4 +30,20 @@ bool ConfigLoader::load(const std::string& config_path) {
     return true;
 }
 
+bool ConfigLoader::save(const std::string& config_path) const {
+    nlohmann::json j;
+    j["watchdog_timeout_s"] = watchdog_timeout_s_;
+    j["drop_rate_yellow_pct"] = drop_rate_yellow_pct_;
+    j["drop_rate_red_pct"] = drop_rate_red_pct_;
+    j["webhook_url"] = webhook_url_;
+    j["default_bitrate_kbps"] = default_bitrate_kbps_;
+    j["output_dir"] = output_dir_;
+    j["log_level"] = log_level_;
+
+    std::ofstream file(config_path);
+    if (!file.is_open()) return false;
+    file << j.dump(2);
+    return file.good();
+}
+
 } // namespace micecam::infrastructure

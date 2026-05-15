@@ -96,3 +96,29 @@ TEST(ConfigLoader, InvalidJsonReturnsFalse) {
 
     std::remove(path.c_str());
 }
+
+TEST(ConfigLoader, SavePersistsUiEditableSettings) {
+    const std::string path = "/tmp/micecam_ui_settings_test.json";
+    std::remove(path.c_str());
+
+    micecam::infrastructure::ConfigLoader config;
+    config.set_watchdog_timeout_s(7);
+    config.set_drop_rate_yellow_pct(0.2);
+    config.set_drop_rate_red_pct(1.5);
+    config.set_webhook_url("https://example.invalid/hook");
+    config.set_default_bitrate_kbps(8000);
+    config.set_output_dir("/tmp/micecam-output");
+    config.set_log_level("debug");
+
+    ASSERT_TRUE(config.save(path));
+
+    micecam::infrastructure::ConfigLoader loaded;
+    ASSERT_TRUE(loaded.load(path));
+    EXPECT_EQ(loaded.watchdog_timeout_s(), 7);
+    EXPECT_DOUBLE_EQ(loaded.drop_rate_yellow_pct(), 0.2);
+    EXPECT_DOUBLE_EQ(loaded.drop_rate_red_pct(), 1.5);
+    EXPECT_EQ(loaded.webhook_url(), "https://example.invalid/hook");
+    EXPECT_EQ(loaded.default_bitrate_kbps(), 8000);
+    EXPECT_EQ(loaded.output_dir(), "/tmp/micecam-output");
+    EXPECT_EQ(loaded.log_level(), "debug");
+}

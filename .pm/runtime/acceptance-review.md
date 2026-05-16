@@ -1,38 +1,51 @@
-# Acceptance Review: Backend/UI Wiring Regression Repair
+# Acceptance Review: 003 Phase 6 Ubuntu Hardware/Stress Gate
 
 ## Verdict
 
-Accepted for targeted regression scope.
+Blocked by external infrastructure.
 
-The prior stage-exit claim was invalidated by user screenshots showing mock cameras in no-device mode and misleading idle recording/status UI. This repair pass corrects the production default, controller state contract, toolbar state expression, empty camera grid, and focused controller tests.
+The Worker followed the task correctly and stopped at the required blocker condition. `jingyi-lab` is unreachable over both LAN SSH and Tailscale, so Ubuntu compile, HIL, stress, and artifact validation gates could not execute.
+
+This is not a code rejection. No product code or tests were modified.
 
 ## Evidence Reviewed
 
-- OpenCode intern executed `.pm/runtime/next-task.md` and wrote `.pm/runtime/worker-report.md`.
-- PM independently reviewed the worker report and current diff.
-- PM verified `Theme.statusGreen` and `Theme.statusAmber` exist in `cmd/micecam_ui/qml/theme/Theme.qml`.
-- PM independently ran:
-  - `cmake --build build --target micecam_ui test_app_controller -j 4` — PASS
-  - `ctest --test-dir build --output-on-failure -R test_app_controller` — PASS, 1/1 CTest target
-  - short native app smoke via `build/cmd/micecam_ui/micecam_ui` for 4 seconds — no QML stderr output
+- Required commit confirmed locally: `8555131`
+- Local branch: `plugin-system`
+- Dirty files before remote execution were PM runtime files only.
+- SSH check:
+  - `ssh jingyi-lab 'hostname && whoami'`
+  - Result: `ssh: connect to host 192.168.2.2 port 22: No route to host`
+- Ping check:
+  - `ping -c 2 -W 3 192.168.2.2`
+  - Result: 100% packet loss, `No route to host`
+- Tailscale check:
+  - `tailscale status | grep lab`
+  - Result: `jingyi-lab` offline, last seen 120d ago
+- Worker files:
+  - `.pm/runtime/worker-report.md`
+  - `.pm/runtime/blockers.md`
 
-## Acceptance Checklist
+## Report Completeness
 
-- [x] Production startup no longer defaults to `MockOnly`.
-- [x] Production mode registers real FFmpeg/OAK backends rather than mock backend.
-- [x] No-camera state exposes `0 cameras`, `canStartRecording == false`, `recordButtonText == "No Device"`, and `preflightMessage == "No cameras detected"`.
-- [x] Idle with available devices uses `Start` semantics and green play affordance.
-- [x] Recording uses red stop affordance.
-- [x] Camera grid shows an explicit no-camera empty state.
-- [x] Bottom status bar distinguishes idle readiness/preflight from recording metrics.
-- [x] Focused controller tests cover no-camera and Start/Stop state transitions.
+- [x] Changed files listed.
+- [x] Commands run listed.
+- [x] Test/gate results present with blocked status.
+- [x] Acceptance criteria checklist present.
+- [x] Problems encountered present.
+- [x] Deviations present.
+- [x] Blocker evidence provided.
 
-## Findings
+## Gate Status
 
-- The repair is scoped and does not attempt worker-process architecture, full preflight contract, or real hardware validation.
-- QML runtime smoke produced no stderr warnings in a 4-second run, but PM has not visually inspected the rendered app after this patch.
-- Production backend behavior with actual FFmpeg/OAK hardware remains unvalidated in this pass.
+- [x] Local source commit confirmed: `8555131`
+- [ ] Remote checkout on `jingyi-lab` — BLOCKED
+- [ ] Ubuntu environment capture — BLOCKED
+- [ ] Ubuntu no-hardware build/test — BLOCKED
+- [ ] HIL build/test — BLOCKED
+- [ ] One-hour stress — BLOCKED
+- [ ] Artifact validation — BLOCKED
 
 ## Next Action
 
-`request_user_decision`: user should visually inspect the patched Production-mode UI. If acceptable, proceed to full verification and commit. If not, provide screenshot feedback and run another narrow repair task.
+`blocked`: user must power on or network-attach `jingyi-lab`, or provide a reachable Ubuntu/HIL target. After connectivity is restored, re-run the current `.pm/runtime/next-task.md`.

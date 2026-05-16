@@ -1,11 +1,10 @@
 project_id: "micecam-v2"
 status: active
-current_stage: "delivery"
-current_stage_goal: "Backend/UI Wiring: connect real backend data, pipeline, preflight, recording, stats, and alerts to the polished QML UI"
-current_phase: "needs_user_decision"
-loop_iteration: 22
-iteration_valid_count: 16
-iteration_total_count: 20
+current_stage: "003-phase-6-hardware-gate"
+current_stage_goal: "Run USB/FFmpeg plugin runtime hardware validation and Ubuntu lab stress gates with artifact validation and no-silent-drop checks."
+loop_iteration: 13
+iteration_valid_count: 8
+iteration_total_count: 14
 consecutive_failures: 0
 feasibility_ready: true
 product_definition_ready: true
@@ -13,15 +12,22 @@ roadmap_ready: true
 ux_ready: true
 ux_depth: "full"
 ui_direction_ready: true
+spec_003_phase: 2
+spec_003_total_phases: 7
 last_verified:
-  commit: 6d1347b
-  test_command: "cmake --build build --target micecam_ui test_app_controller -j 4 && ctest --test-dir build --output-on-failure -R test_app_controller && 4s native app smoke"
-  test_result: "PASS. Build succeeded, test_app_controller CTest target passed, short native app smoke emitted no QML stderr output."
+  commit: 8555131
+  test_command: "cmake --build build -j 4 && ctest --test-dir build --output-on-failure && python3 tests/unit/test_validate_session_artifacts.py -v && bash scripts/hardware_gate_two_source.sh --dry-run && independent OpenCode /harness review"
+  test_result: "PASS. Phase 6 preparation accepted: full build succeeds, 33/33 CTest tests pass, 30/30 validator tests pass, dry-run procedure works, independent review found 0 blocking issues. Ubuntu/jingyi-lab hardware gate is BLOCKED because remote host is unreachable."
 next_action:
   type: "request_user_decision"
-  summary: "Backend/UI regression repair accepted for targeted scope; user visual confirmation is required before full verification/commit."
-  blocked: false
+  summary: "Restore jingyi-lab connectivity or provide an alternate reachable Ubuntu/HIL target, then re-run the current gate task."
+  blocked: true
   needs_user_decision: true
-last_updated: "2026-05-15 14:41:47 +0800"
+current_phase: "blocked"
+last_updated: "2026-05-16 10:43:03 +0800"
 max_iterations: null
 max_consecutive_failures: 3
+failure_tracking:
+  last_failure_signature: "blocked_dependency"
+  last_failure_reason: "jingyi-lab is unreachable via LAN SSH and offline on Tailscale."
+  same_failure_count: 1

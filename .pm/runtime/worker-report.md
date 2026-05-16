@@ -1,85 +1,90 @@
-# Worker Report: Phase 3 — Preflight Two-Phase (Calibrate + Stress Test)
+# Worker Report: Phase 7 — FFmpeg/OAK Calibrate, CI, fMP4 Smoke Test
 
 ## Task
-Spec 004 Phase 3: two-phase preflight — Phase 1 per-stream Calibrate RPC integration (min_gop computation, blocking, retry-lower-res) + Phase 2 multi-stream parallel stress test with drop detection.
 
-## Risk classification
-**Branch** — multi-file pipeline change, requires tests. No infra/core changes.
+Implement spec 004 Phase 7 (final): FFmpeg/OAK plugin Calibrate RPC, three-platform CI, and fMP4 smoke test.
 
-## Files changed
+## Risk Classification
 
-| File | Action | Description |
-|------|--------|-------------|
-| `internal/domain/CalibrationResult.h` | NEW | Domain type with stream_id, latencies, min_gop, degraded_resolution, warnings |
-| `internal/pipeline/PreflightValidator.h` | MODIFIED | Added ICalibrationClient, IStreamTestController interfaces, StressTestResult, PreflightResult.calibration_results, new validate() overload, run_phase1_calibration(), run_phase2_stress_test(), compute_min_gop() |
-| `internal/pipeline/PreflightValidator.cpp` | MODIFIED | Implemented Phase 1 calibration with retry-lower-res, Phase 2 stress test with drop detection, integrated into validate() flow |
-| `tests/unit/test_preflight_calibration.cpp` | NEW | 16 tests covering min_gop computation, blocking, retry, drop detection, full integration |
-| `CMakeLists.txt` | MODIFIED | Added test_preflight_calibration target |
+**Branch** — touches plugin RPC implementations and test infrastructure. No core domain or infra changes.
 
-## Implementation details
+## Changes
 
-### Phase 1: run_phase1_calibration()
-- For each stream config, calls `ICalibrationClient::calibrate()`
-- Computes `min_gop = ceil(I_latency / (frame_interval - P_latency))` via static `compute_min_gop()`
-- If `P_latency >= frame_interval`: blocks recording (min_gop = -1, success = false)
-- If initial calibration fails: retries with 50% width/height, sets `degraded_resolution = true`
-- Returns `map<stream_id, CalibrationResult>`
+### 1. FFmpeg Plugin: Real Calibrate RPC
 
-### Phase 2: run_phase2_stress_test()
-- Opens all streams simultaneously via `IStreamTestController::openStream()`
-- Sleeps for configurable duration (default 3000ms)
-- Queries drop counts per stream via `getDropCount()`
-- Closes all streams
-- Phase 2 warnings are non-blocking (recording proceeds)
+**File**: `cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.cpp`
 
-### Integration: validate() overload
-- Runs existing disk space check first
-- Then Phase 1 calibration (if client provided) — blocks on failure
-- Then Phase 2 stress test (if controller provided) — warnings attached but non-blocking
-- Backward compatible: original validate() signature unchanged
+- Replaced stub `Calibrate()` with real encoder-based calibration
+- Uses `find_encoder_for_calibration()` — same hw detect + fallback logic as recording path
+- Encodes test frames (solid YUV420P gray) for `calibration_duration_ms` (default 3000ms)
+- Measures I-frame and P-frame latency via `steady_clock`
+- Computes `max_sustainable_fps = 1e9 / max(I, P)`
+- Computes `recommended_slot_size = max_encoded_frame_size * 1.5`
+- Returns all fields: `i_frame_latency_ns`, `p_frame_latency_ns`, `max_sustainable_fps`, `recommended_slot_size`, `actual_encoder_name`, `actual_width`, `actual_height`
 
-## Test evidence
+### 2. OAK Plugin: Placeholder Calibrate RPC
 
-16 new tests, all passing:
+**File**: `cmd/plugins/micecam_oak/OAKPluginServer.cpp`
 
-| Test | Description |
-|------|-------------|
-| MinGopComputation_BasicCase | I=2ms, P=7ms, fps=30 → min_gop=1 |
-| MinGopComputation_HigherI | I=50ms, P=5ms, fps=30 → min_gop=2 |
-| MinGopComputation_LargeGop | I=100ms, P=5ms → matches ceil formula |
-| BlocksWhenPExceedsFrameInterval | P=34ms > frame_interval=33.3ms → blocked |
-| BlocksWhenPIsExactlyFrameInterval | P == frame_interval → blocked |
-| BlocksWhenFpsZero | fps=0 → blocked |
-| Phase1SuccessfulCalibration | Happy path calibration |
-| Phase1RetryLowerResolution | First fails, retry at 50% succeeds |
-| Phase1RetryStillFails | Both attempts fail → blocked |
-| Phase1BlocksOnHighPLatency | Calibration succeeds but P too high → blocked |
-| Phase2DropDetection | Drops detected → warning with stream ID and count |
-| Phase2NoDrops | No drops → passed, no warnings |
-| Phase2OpensAndClosesAllStreams | Verifies open/close lifecycle |
-| FullValidateWithCalibrationAndStress | End-to-end with both phases |
-| FullValidateFailsWhenPhase1Blocked | Phase 1 failure stops validation |
-| FullValidateWithPhase2Warnings | Phase 2 warnings attached, recording proceeds |
+- Returns conservative estimates: I=2ms, P=0.5ms, max_fps=30.0
+- `recommended_slot_size = width * height * 3/2` (NV12 estimate)
+- `actual_encoder_name = "depthai_h264"`
+- Includes warning: "Calibration estimated -- no hardware available for testing"
 
-## Verification commands
+### 3. Three-Platform CI
+
+**File**: `.github/workflows/ci.yml` (new)
+
+- Three jobs: `build-macos`, `build-windows`, `build-linux`
+- macOS: Homebrew deps (ffmpeg, protobuf, grpc, spdlog, nlohmann-json, googletest)
+- Windows: vcpkg deps, `BUILD_UI=OFF`
+- Linux: apt-get deps, `BUILD_UI=OFF`
+- All exclude HIL and stress tests via `--exclude-regex`
+
+### 4. fMP4 Smoke Test
+
+**File**: `tests/integration/test_fmp4_smoke.cpp` (new)
+
+- Two tests:
+  1. `FileReadableWithoutTrailer` — writes fMP4 with `+frag_keyframe+empty_moov+default_base_moov`, encodes 15 frames via libx264, writes with trailer, verifies readable, frame count matches
+  2. `FileReadableAfterCrashNoTrailer` — same setup but closes WITHOUT `av_write_trailer` (crash simulation), verifies file is openable with valid H264 stream descriptor and dimensions
+
+### 5. Test Updates
+
+**File**: `tests/unit/test_ffmpeg_plugin_server.cpp`
+
+- `CalibrateReturnsNotImplemented` → now tests real calibration output
+- Uses small resolution (320x240) and 500ms duration for speed
+- Verifies: `success=true`, non-zero latencies, positive fps, non-empty encoder name, correct dimensions
+
+**File**: `tests/unit/test_oak_plugin_server.cpp`
+
+- `CalibrateReturnsNotImplemented` → `CalibrateReturnsPlaceholderValues`
+- Verifies exact placeholder values and warning message contains "estimated"
+
+### 6. CMakeLists.txt
+
+- Added `add_micecam_test(test_fmp4_smoke ...)` to integration test list
+
+## Verification
 
 ```
-cmake --build build -j 4 2>&1 | tail -5
-→ [100%] Built target test_preflight_calibration
-
-ctest --test-dir build --output-on-failure 2>&1 | tail -5
-→ 100% tests passed, 0 tests failed out of 36
+cmake --build build -j 4  # SUCCESS (0 errors, 0 warnings in changed files)
+ctest --test-dir build --output-on-failure  # 37/37 passed
 ```
 
-## Acceptance criteria
+## Acceptance Criteria
 
-- [x] CalibrationResult domain type exists with all specified fields
-- [x] Phase 1 calls Calibrate RPC per stream and computes min_gop correctly
-- [x] Phase 1 blocks recording when P_latency >= frame_interval
-- [x] Phase 1 retries with lower resolution on Calibrate failure
-- [x] Phase 2 starts all streams in parallel for configurable duration and detects drops
-- [x] Phase 2 generates warnings on drops, no warnings on clean run
-- [x] Existing PreflightValidator checks (disk space, etc.) still pass
-- [x] cmake --build succeeds
-- [x] ctest passes (36/36)
-- [x] 16 new tests (minimum 4 required)
+- [x] FFmpeg Calibrate RPC returns actual encoder latencies from test encoding
+- [x] OAK Calibrate RPC returns placeholder values with warning
+- [x] CI YAML has three jobs: macOS, Windows, Linux
+- [x] Windows CI uses BUILD_UI=OFF
+- [x] CI excludes HIL and stress tests
+- [x] fMP4 smoke test passes: file readable without trailer
+- [x] `cmake --build build -j 4` succeeds
+- [x] `ctest --test-dir build --output-on-failure` passes (37/37)
+- [x] At least 2 new/modified tests (3 new/modified test files)
+
+## Blockers
+
+None.

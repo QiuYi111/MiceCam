@@ -360,7 +360,7 @@ TEST_F(OAKPluginServerTest, ShutdownSucceeds) {
     EXPECT_TRUE(resp.success());
 }
 
-TEST_F(OAKPluginServerTest, CalibrateReturnsNotImplemented) {
+TEST_F(OAKPluginServerTest, CalibrateReturnsPlaceholderValues) {
     micecam::plugin::CalibrateRequest req;
     req.set_device_id("oak_0");
     req.set_stream_index(0);
@@ -374,9 +374,17 @@ TEST_F(OAKPluginServerTest, CalibrateReturnsNotImplemented) {
 
     auto status = stub_->Calibrate(&ctx, req, &resp);
     ASSERT_TRUE(status.ok());
-    EXPECT_FALSE(resp.success());
-    EXPECT_EQ(resp.error(), "Not yet implemented");
+    EXPECT_TRUE(resp.success()) << "error=" << resp.error();
     EXPECT_TRUE(resp.supported());
+    EXPECT_EQ(resp.i_frame_latency_ns(), 2000000u);
+    EXPECT_EQ(resp.p_frame_latency_ns(), 500000u);
+    EXPECT_DOUBLE_EQ(resp.max_sustainable_fps(), 30.0);
+    EXPECT_GT(resp.recommended_slot_size(), 0u);
+    EXPECT_EQ(resp.actual_encoder_name(), "depthai_h264");
+    EXPECT_EQ(resp.actual_width(), 1920);
+    EXPECT_EQ(resp.actual_height(), 1080);
+    ASSERT_GT(resp.warnings_size(), 0);
+    EXPECT_NE(resp.warnings(0).find("estimated"), std::string::npos);
 }
 
 } // namespace

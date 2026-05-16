@@ -351,19 +351,29 @@ TEST_F(FFmpegPluginServerTest, CalibrateReturnsNotImplemented) {
     micecam::plugin::CalibrateRequest req;
     req.set_device_id("0");
     req.set_stream_index(0);
-    req.set_width(1920);
-    req.set_height(1080);
-    req.set_fps(30.0);
+    req.set_width(320);
+    req.set_height(240);
+    req.set_fps(10.0);
+    req.set_calibration_duration_ms(500);
+    req.set_prefer_hardware_encoder(false);
 
     micecam::plugin::CalibrateResponse resp;
     grpc::ClientContext ctx;
-    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(15000));
 
     auto status = stub_->Calibrate(&ctx, req, &resp);
-    ASSERT_TRUE(status.ok());
-    EXPECT_FALSE(resp.success());
-    EXPECT_EQ(resp.error(), "Not yet implemented");
+    ASSERT_TRUE(status.ok()) << status.error_message();
+    EXPECT_TRUE(resp.success()) << "error=" << resp.error();
     EXPECT_TRUE(resp.supported());
+    EXPECT_GT(resp.i_frame_latency_ns(), 0u);
+    EXPECT_GT(resp.p_frame_latency_ns(), 0u);
+    EXPECT_GT(resp.max_sustainable_fps(), 0.0);
+    EXPECT_GT(resp.recommended_slot_size(), 0u);
+    EXPECT_FALSE(resp.actual_encoder_name().empty());
+    EXPECT_EQ(resp.actual_width(), 320);
+    EXPECT_EQ(resp.actual_height(), 240);
+    EXPECT_LT(resp.i_frame_latency_ns(), 1'000'000'000u);
+    EXPECT_LT(resp.p_frame_latency_ns(), 1'000'000'000u);
 }
 
 // RingFrameProducer standalone test

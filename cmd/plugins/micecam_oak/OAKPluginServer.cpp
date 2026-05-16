@@ -287,11 +287,21 @@ grpc::Status OAKPluginServer::HealthCheck(
 
 grpc::Status OAKPluginServer::Calibrate(
     grpc::ServerContext*,
-    const CalibrateRequest*,
+    const CalibrateRequest* req,
     CalibrateResponse* resp) {
-    resp->set_success(false);
-    resp->set_error("Not yet implemented");
+    int width = req->width() > 0 ? req->width() : 1920;
+    int height = req->height() > 0 ? req->height() : 1080;
+
     resp->set_supported(true);
+    resp->set_success(true);
+    resp->set_i_frame_latency_ns(2000000);
+    resp->set_p_frame_latency_ns(500000);
+    resp->set_max_sustainable_fps(30.0);
+    resp->set_recommended_slot_size(static_cast<uint64_t>(width) * height * 3 / 2);
+    resp->set_actual_encoder_name("depthai_h264");
+    resp->set_actual_width(width);
+    resp->set_actual_height(height);
+    resp->add_warnings("Calibration estimated -- no hardware available for testing");
     return grpc::Status::OK;
 }
 

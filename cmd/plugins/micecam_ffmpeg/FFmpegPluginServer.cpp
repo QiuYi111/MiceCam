@@ -1,10 +1,17 @@
 #include "FFmpegPluginServer.h"
 
 #include <algorithm>
+#include <numeric>
 #include <set>
 #include <sstream>
 
 #include <spdlog/spdlog.h>
+
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavutil/opt.h>
+#include <libavutil/imgutils.h>
+}
 
 namespace micecam::plugin {
 
@@ -457,13 +464,173 @@ bool FFmpegPluginServer::validateDeviceId(const std::string& device_id) const {
                        [&](const auto& d) { return d.device_id == device_id; });
 }
 
+namespace {
+const AVCodec* find_encoder_for_calibration(bool prefer_hw, std::string& out_name) {
+    if (prefer_hw) {
+#ifdef __APPLE__
+        if (auto* c = avcodec_find_encoder_by_name("h264_videotoolbox")) {
+            out_name = "h264_videotoolbox";
+            return c;
+        }
+#endif
+        for (auto name : {"h264_nvenc", "h264_qsv", "h264_vaapi", "h264_amf"}) {
+            if (auto* c = avcodec_find_encoder_by_name(name)) {
+                out_name = name;
+                return c;
+            }
+        }
+    }
+    if (auto* c = avcodec_find_encoder_by_name("libx264")) {
+        out_name = "libx264";
+        return c;
+    }
+    if (auto* c = avcodec_find_encoder(AV_CODEC_ID_H264)) {
+        out_name = c->name;
+        return c;
+    }
+    return nullptr;
+}
+
+bool open_calib_context(AVCodecContext*& ctx, const AVCodec* codec,
+                        int width, int height, int fps, const std::string& name) {
+    ctx = avcodec_alloc_context3(codec);
+    if (!ctx) return false;
+    ctx->width = width;
+    ctx->height = height;
+    ctx->time_base = {1, fps};
+    ctx->framerate = {fps, 1};
+    ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+    ctx->bit_rate = 2000000;
+    ctx->gop_size = 60;
+    ctx->max_b_frames = 0;
+    if (name == "libx264") {
+        av_opt_set_int(ctx->priv_data, "crf", 23, 0);
+        av_opt_set(ctx->priv_data, "preset", "fast", 0);
+        av_opt_set(ctx->priv_data, "tune", "zerolatency", 0);
+    }
+    if (avcodec_open2(ctx, codec, nullptr) < 0) {
+        avcodec_free_context(&ctx);
+        return false;
+    }
+    return true;
+}
+
+std::vector<uint8_t> drain_encoder(AVCodecContext* ctx) {
+    std::vector<uint8_t> result;
+    AVPacket* pkt = av_packet_alloc();
+    int ret = avcodec_receive_packet(ctx, pkt);
+    while (ret >= 0) {
+        result.insert(result.end(), pkt->data, pkt->data + pkt->size);
+        av_packet_unref(pkt);
+        ret = avcodec_receive_packet(ctx, pkt);
+    }
+    av_packet_free(&pkt);
+    return result;
+}
+}
+
 grpc::Status FFmpegPluginServer::Calibrate(
     grpc::ServerContext*,
-    const CalibrateRequest*,
+    const CalibrateRequest* req,
     CalibrateResponse* resp) {
-    resp->set_success(false);
-    resp->set_error("Not yet implemented");
     resp->set_supported(true);
+
+    int width = req->width() > 0 ? req->width() : 1920;
+    int height = req->height() > 0 ? req->height() : 1080;
+    double fps = req->fps() > 0 ? req->fps() : 30.0;
+    int fps_int = static_cast<int>(fps);
+    int duration_ms = req->calibration_duration_ms() > 0 ? req->calibration_duration_ms() : 3000;
+    bool prefer_hw = req->prefer_hardware_encoder();
+
+    std::string enc_name;
+    const AVCodec* codec = find_encoder_for_calibration(prefer_hw, enc_name);
+    if (!codec) {
+        resp->set_success(false);
+        resp->set_error("No H264 encoder available for calibration");
+        return grpc::Status::OK;
+    }
+
+    AVCodecContext* ctx = nullptr;
+    if (!open_calib_context(ctx, codec, width, height, fps_int, enc_name)) {
+        resp->set_success(false);
+        resp->set_error("Failed to open encoder context for " + enc_name);
+        return grpc::Status::OK;
+    }
+
+    AVFrame* frame = av_frame_alloc();
+    frame->format = AV_PIX_FMT_YUV420P;
+    frame->width = ctx->width;
+    frame->height = ctx->height;
+    av_frame_get_buffer(frame, 0);
+    av_frame_make_writable(frame);
+    for (int p = 0; p < 3; p++) {
+        if (frame->data[p]) {
+            uint8_t val = (p == 0) ? 128 : 64;
+            memset(frame->data[p], val,
+                   static_cast<size_t>(frame->linesize[p]) * (ctx->height >> (p > 0 ? 1 : 0)));
+        }
+    }
+
+    int num_frames = (fps_int * duration_ms) / 1000;
+    if (num_frames < 2) num_frames = 2;
+
+    std::vector<int64_t> i_latencies;
+    std::vector<int64_t> p_latencies;
+    uint64_t max_frame_size = 0;
+
+    for (int i = 0; i < num_frames; i++) {
+        frame->pts = i;
+        if (i == 0) frame->flags |= AV_FRAME_FLAG_KEY;
+
+        auto t0 = std::chrono::steady_clock::now();
+        int send_ret = avcodec_send_frame(ctx, frame);
+        if (send_ret < 0) continue;
+        auto encoded = drain_encoder(ctx);
+        auto t1 = std::chrono::steady_clock::now();
+
+        int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+        if (!encoded.empty()) {
+            if (i == 0) {
+                i_latencies.push_back(ns);
+            } else {
+                p_latencies.push_back(ns);
+            }
+            max_frame_size = std::max(max_frame_size, static_cast<uint64_t>(encoded.size()));
+        }
+    }
+
+    av_frame_free(&frame);
+    avcodec_free_context(&ctx);
+
+    if (i_latencies.empty() && p_latencies.empty()) {
+        resp->set_success(false);
+        resp->set_error("Calibration produced no encoded frames");
+        return grpc::Status::OK;
+    }
+
+    int64_t avg_i = i_latencies.empty() ? 0
+        : std::accumulate(i_latencies.begin(), i_latencies.end(), 0LL)
+          / static_cast<int64_t>(i_latencies.size());
+    int64_t avg_p = p_latencies.empty() ? 0
+        : std::accumulate(p_latencies.begin(), p_latencies.end(), 0LL)
+          / static_cast<int64_t>(p_latencies.size());
+
+    int64_t worst = std::max(avg_i, avg_p);
+    double max_fps = (worst > 0) ? 1e9 / static_cast<double>(worst) : 0.0;
+
+    uint64_t slot_size = (max_frame_size > 0) ? max_frame_size + (max_frame_size / 2) : 0;
+
+    resp->set_success(true);
+    resp->set_i_frame_latency_ns(static_cast<uint64_t>(avg_i));
+    resp->set_p_frame_latency_ns(static_cast<uint64_t>(avg_p));
+    resp->set_max_sustainable_fps(max_fps);
+    resp->set_recommended_slot_size(slot_size);
+    resp->set_actual_encoder_name(enc_name);
+    resp->set_actual_width(width);
+    resp->set_actual_height(height);
+
+    spdlog::info("Calibrate: encoder={} I={}ns P={}ns max_fps={:.1f} slot={}B",
+                 enc_name, avg_i, avg_p, max_fps, slot_size);
     return grpc::Status::OK;
 }
 

@@ -60,7 +60,14 @@ bool StreamWriter::open(const std::string& path, int width, int height, int fps)
         return false;
     }
 
-    ret = avformat_write_header(ctx, nullptr);
+    ctx->max_interleave_delta = 0;
+
+    AVDictionary* opts = nullptr;
+    av_dict_set(&opts, "movflags", "+frag_keyframe+empty_moov+default_base_moof", 0);
+
+    ret = avformat_write_header(ctx, &opts);
+    av_dict_free(&opts);
+
     if (ret < 0) {
         spdlog::error("Failed to write header");
         avio_closep(&ctx->pb);

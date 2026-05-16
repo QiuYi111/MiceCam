@@ -46,11 +46,7 @@ bool probe_valid_h264(const std::string& path) {
     int ret = avformat_open_input(&ctx, path.c_str(), nullptr, nullptr);
     if (ret < 0) return false;
 
-    ret = avformat_find_stream_info(ctx, nullptr);
-    if (ret < 0) {
-        avformat_close_input(&ctx);
-        return false;
-    }
+    avformat_find_stream_info(ctx, nullptr);
 
     bool has_h264 = false;
     for (unsigned i = 0; i < ctx->nb_streams; i++) {
@@ -60,7 +56,7 @@ bool probe_valid_h264(const std::string& path) {
         }
     }
 
-    bool valid = has_h264 && (ctx->duration > 0 || ctx->nb_streams > 0);
+    bool valid = has_h264 && ctx->nb_streams > 0;
     avformat_close_input(&ctx);
     return valid;
 }

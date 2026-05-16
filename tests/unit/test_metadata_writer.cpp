@@ -64,7 +64,7 @@ TEST(MetadataWriter, WriteSessionFooterUpdatesFile) {
     EXPECT_EQ(j["session_checksum"], "abc123def");
 }
 
-TEST(MetadataWriter, WriteStatsCreatesValidJson) {
+TEST(MetadataWriter, WriteStatsCreatesJsonObjectKeyedByStreamId) {
     std::string path = std::string(TEST_OUTPUT) + "/test_stats.json";
 
     std::vector<domain::StreamStats> stats;
@@ -90,11 +90,13 @@ TEST(MetadataWriter, WriteStatsCreatesValidJson) {
 
     auto content = read_file(path);
     auto j = nlohmann::json::parse(content);
-    EXPECT_TRUE(j.is_array());
-    EXPECT_EQ(j.size(), 2);
-    EXPECT_EQ(j[0]["stream_id"], "cam0");
-    EXPECT_EQ(j[0]["encoder_used"], "h264_videotoolbox");
-    EXPECT_EQ(j[1]["encoder_fallback"], true);
+    EXPECT_TRUE(j.is_object());
+    EXPECT_TRUE(j.contains("cam0"));
+    EXPECT_TRUE(j.contains("cam1"));
+    EXPECT_EQ(j["cam0"]["stream_id"], "cam0");
+    EXPECT_EQ(j["cam0"]["encoder_used"], "h264_videotoolbox");
+    EXPECT_EQ(j["cam1"]["stream_id"], "cam1");
+    EXPECT_EQ(j["cam1"]["encoder_fallback"], true);
 }
 
 TEST(MetadataWriter, SessionHeaderJsonIsPrettyPrinted) {
@@ -110,4 +112,46 @@ TEST(MetadataWriter, SessionHeaderJsonIsPrettyPrinted) {
     EXPECT_TRUE(content.find('\n') != std::string::npos);
     auto j = nlohmann::json::parse(content);
     EXPECT_EQ(j["session_id"], "test-pretty");
+}
+
+TEST(MetadataWriter, SessionHeaderContainsWallTime) {
+    std::string path = std::string(TEST_OUTPUT) + "/test_wall_time.json";
+
+    domain::SessionMetadata meta;
+    meta.session_id = "test-walltime";
+    meta.encoder_name = "libx264";
+    meta.start_time_ns = 1747492200000000000ULL;
+
+    EXPECT_TRUE(infrastructure::MetadataWriter::write_session_header(meta, path));
+
+    auto content = read_file(path);
+    auto j = nlohmann::json::parse(content);
+    ASSERT_TRUE(j.contains("session_start_wall_time"));
+    EXPECT_TRUE(j["session_start_wall_time"].is_string());
+
+    std::string wt = j["session_start_wall_time"].get<std::string>();
+    EXPECT_EQ(wt.size(), 26);
+    EXPECT_EQ(wt[4], '-');
+    EXPECT_EQ(wt[7], '-');
+    EXPECT_EQ(wt[10], 'T');
+    EXPECT_EQ(wt[13], ':');
+    EXPECT_EQ(wt[16], ':');
+    EXPECT_EQ(wt[19], '.');
+}
+
+TEST(MetadataWriter, SessionHeaderWallTimeFallbackToSystemClock) {
+    std::string path = std::string(TEST_OUTPUT) + "/test_wall_fallback.json";
+
+    domain::SessionMetadata meta;
+    meta.session_id = "test-fallback";
+    meta.encoder_name = "libx264";
+    meta.start_time_ns = 0;
+
+    EXPECT_TRUE(infrastructure::MetadataWriter::write_session_header(meta, path));
+
+    auto content = read_file(path);
+    auto j = nlohmann::json::parse(content);
+    ASSERT_TRUE(j.contains("session_start_wall_time"));
+    EXPECT_TRUE(j["session_start_wall_time"].is_string());
+    EXPECT_GT(j["session_start_wall_time"].get<std::string>().size(), 0u);
 }

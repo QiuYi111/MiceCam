@@ -265,10 +265,10 @@ TEST(PluginPipelineIntegration, RawPluginFramesToMp4WithMetadata) {
         std::ifstream in(stats_path);
         nlohmann::json stats_json;
         in >> stats_json;
-        ASSERT_TRUE(stats_json.is_array());
-        ASSERT_EQ(stats_json.size(), 1u);
-        EXPECT_TRUE(stats_json[0].contains("transport"));
-        EXPECT_EQ(stats_json[0]["transport"]["frames_read"], kFrameCount);
+        ASSERT_TRUE(stats_json.is_object());
+        ASSERT_TRUE(stats_json.contains("mock_cam_0_0"));
+        EXPECT_TRUE(stats_json["mock_cam_0_0"].contains("transport"));
+        EXPECT_EQ(stats_json["mock_cam_0_0"]["transport"]["frames_read"], kFrameCount);
     }
 
     ring.destroy();

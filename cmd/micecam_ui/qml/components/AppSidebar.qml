@@ -87,7 +87,7 @@ Rectangle {
                 height: 40
                 radius: 8
                 color: {
-                    if (root.activeViewIndex === 5 && root._selectedCameraName === model.name) return Theme.navyTint
+                    if (root.activeViewIndex === 6 && root._selectedCameraName === model.name) return Theme.navyTint
                     return "transparent"
                 }
 
@@ -154,6 +154,7 @@ Rectangle {
                     { name: "Encoding", icon: "encoding" },
                     { name: "Alerts", icon: "alerts" },
                     { name: "Logging", icon: "logging" },
+                    { name: "Plugins", icon: "logging" },
                     { name: "About", icon: "about" }
                 ]
                 delegate: Rectangle {

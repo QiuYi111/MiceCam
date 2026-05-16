@@ -20,8 +20,6 @@
 
 namespace micecam::ui {
 
-enum class BackendMode { Production, MockOnly };
-
 class AppController : public QObject {
     Q_OBJECT
     Q_PROPERTY(QAbstractListModel* cameraModel READ cameraModel CONSTANT)
@@ -44,7 +42,7 @@ class AppController : public QObject {
     Q_PROPERTY(QStringList recentLogEntries READ recentLogEntries NOTIFY logEntriesChanged)
 
 public:
-    explicit AppController(BackendMode mode, QObject* parent = nullptr);
+    explicit AppController(QObject* parent = nullptr);
 
     QAbstractListModel* cameraModel() const;
     QAbstractListModel* sourceModel() const;
@@ -70,6 +68,11 @@ public:
     Q_INVOKABLE QVariantList preflightItems();
     Q_INVOKABLE QVariantMap cameraAt(int row);
 
+    Q_INVOKABLE QVariantList pluginList();
+    Q_INVOKABLE bool importPlugin(const QString& dirPath);
+    Q_INVOKABLE void togglePlugin(const QString& pluginPath, bool enabled);
+    Q_INVOKABLE QVariantMap getPluginDetail(const QString& pluginPath);
+
     void setOutputDirectory(const QString& dir);
 
     signals:
@@ -88,6 +91,7 @@ public:
     void logEntriesChanged();
     void deviceDisconnected(const QString& deviceName);
     void pluginCrashAlert(const QString& pluginId);
+    void pluginsChanged();
 
 public slots:
     void handlePluginCrash(const std::string& pluginId);
@@ -99,7 +103,6 @@ private:
         std::unique_ptr<domain::CameraStream> stream;
     };
 
-    BackendMode mode_;
     infrastructure::PluginRegistryService plugin_registry_;
     infrastructure::CameraManager manager_;
     pipeline::RecordingPipeline pipeline_;

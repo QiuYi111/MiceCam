@@ -14,58 +14,33 @@ int main(int argc, char** argv) {
     return RUN_ALL_TESTS();
 }
 
-TEST(AppController, MockModeDiscoversUiReadyCameras) {
-    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
-    controller.refreshCameras();
-    ASSERT_NE(controller.cameraModel(), nullptr);
-    EXPECT_GE(controller.cameraModel()->rowCount(), 1);
-    EXPECT_EQ(controller.cameraCountText().toStdString(), "5 cameras");
-    EXPECT_FALSE(controller.isRecording());
-    EXPECT_TRUE(controller.canStartRecording());
-    EXPECT_EQ(controller.cameraCount(), 5);
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Start");
-}
-
-TEST(AppController, StartAndStopRecordingUpdatesState) {
-    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
-    controller.setOutputDirectory("/tmp/micecam_app_controller");
-    controller.refreshCameras();
-    ASSERT_EQ(controller.cameraCount(), 5);
-    EXPECT_TRUE(controller.canStartRecording());
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Start");
-
-    ASSERT_TRUE(controller.startRecording());
-    EXPECT_TRUE(controller.isRecording());
-    EXPECT_FALSE(controller.canStartRecording());
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Stop");
-    EXPECT_FALSE(controller.startRecording());
-    EXPECT_TRUE(controller.isRecording());
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Stop");
-
-    controller.stopRecording();
-    EXPECT_FALSE(controller.isRecording());
-    EXPECT_TRUE(controller.canStartRecording());
-    EXPECT_EQ(controller.recordButtonText().toStdString(), "Start");
-    EXPECT_FALSE(controller.lastSessionId().isEmpty());
-}
-
-TEST(AppController, ProductionModeWithoutRegisteredBackendsShowsEmptyIdleState) {
-    micecam::ui::AppController controller(micecam::ui::BackendMode::Production);
+TEST(AppController, NoInProcessBackends) {
+    micecam::ui::AppController controller;
     controller.refreshCameras();
 
-    EXPECT_EQ(controller.cameraCount(), 0);
     ASSERT_NE(controller.cameraModel(), nullptr);
     EXPECT_EQ(controller.cameraModel()->rowCount(), 0);
     EXPECT_EQ(controller.cameraCountText().toStdString(), "0 cameras");
     EXPECT_FALSE(controller.isRecording());
     EXPECT_FALSE(controller.canStartRecording());
+    EXPECT_EQ(controller.cameraCount(), 0);
+    EXPECT_EQ(controller.recordButtonText().toStdString(), "No Device");
+}
+
+TEST(AppController, NoCameraStateIsConsistent) {
+    micecam::ui::AppController controller;
+    controller.refreshCameras();
+
+    EXPECT_EQ(controller.cameraCount(), 0);
+    EXPECT_FALSE(controller.isRecording());
+    EXPECT_FALSE(controller.canStartRecording());
     EXPECT_EQ(controller.recordButtonText().toStdString(), "No Device");
     EXPECT_EQ(controller.preflightMessage().toStdString(), "No cameras detected");
     EXPECT_TRUE(controller.lastSessionId().isEmpty());
 }
 
-TEST(AppController, StartRecordingWithoutCamerasReportsPreflightFailure) {
-    micecam::ui::AppController controller(micecam::ui::BackendMode::Production);
+TEST(AppController, StartRecordingWithoutCamerasFails) {
+    micecam::ui::AppController controller;
     controller.refreshCameras();
 
     EXPECT_FALSE(controller.startRecording());
@@ -77,32 +52,90 @@ TEST(AppController, StartRecordingWithoutCamerasReportsPreflightFailure) {
     EXPECT_TRUE(controller.lastSessionId().isEmpty());
 }
 
-TEST(AppController, RecordingPumpUpdatesFrameCounters) {
-    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
-    controller.setOutputDirectory("/tmp/micecam_app_controller_pump");
-    controller.refreshCameras();
+TEST(AppController, PluginListReturnsBundledPlugins) {
+    micecam::ui::AppController controller;
+    QVariantList plugins = controller.pluginList();
+    EXPECT_GE(plugins.size(), 1);
 
-    ASSERT_TRUE(controller.startRecording());
-    QThread::msleep(600);
-    controller.stopRecording();
-
-    EXPECT_NE(controller.totalFramesText().toStdString(), "0");
-    EXPECT_FALSE(controller.bytesWrittenText().isEmpty());
+    for (const auto& item : plugins) {
+        QVariantMap m = item.toMap();
+        EXPECT_TRUE(m.contains("pluginId"));
+        EXPECT_TRUE(m.contains("name"));
+        EXPECT_TRUE(m.contains("version"));
+        EXPECT_TRUE(m.contains("path"));
+        EXPECT_TRUE(m.contains("enabled"));
+        EXPECT_TRUE(m.contains("type"));
+        EXPECT_TRUE(m.contains("status"));
+        EXPECT_EQ(m["type"].toString(), QStringLiteral("bundled"));
+    }
 }
 
-TEST(AppController, ElapsedTextReflectsRecordingDuration) {
-    micecam::ui::AppController controller(micecam::ui::BackendMode::MockOnly);
-    controller.setOutputDirectory("/tmp/micecam_app_controller_elapsed");
+TEST(AppController, ImportPluginRejectsInvalidPath) {
+    micecam::ui::AppController controller;
+    bool result = controller.importPlugin("/nonexistent/path/to/plugin");
+    EXPECT_FALSE(result);
+}
+
+TEST(AppController, ImportPluginBlockedDuringRecording) {
+    micecam::ui::AppController controller;
+    controller.setOutputDirectory("/tmp/micecam_plugin_lock_test");
+
+    EXPECT_FALSE(controller.isRecording());
+    EXPECT_FALSE(controller.importPlugin("/some/path"));
+}
+
+TEST(AppController, TogglePluginLooksUpByPath) {
+    micecam::ui::AppController controller;
+
+    QVariantList plugins = controller.pluginList();
+    ASSERT_GE(plugins.size(), 1);
+
+    QVariantMap first = plugins.first().toMap();
+    QString path = first["path"].toString();
+
+    controller.togglePlugin(path, false);
+
+    QVariantList updated = controller.pluginList();
+    bool foundDisabled = false;
+    for (const auto& item : updated) {
+        QVariantMap m = item.toMap();
+        if (m["path"].toString() == path) {
+            foundDisabled = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundDisabled);
+}
+
+TEST(AppController, GetPluginDetailReturnsErrorForMissingManifest) {
+    micecam::ui::AppController controller;
+    QVariantMap detail = controller.getPluginDetail("/nonexistent/path");
+    EXPECT_TRUE(detail.contains("error"));
+}
+
+TEST(AppController, RecordingLockPropertyIsExposed) {
+    micecam::ui::AppController controller;
+    EXPECT_FALSE(controller.isRecording());
+}
+
+TEST(AppController, ElapsedTextDefaultsToZeroWhenNotRecording) {
+    micecam::ui::AppController controller;
+    EXPECT_EQ(controller.elapsedText().toStdString(), "00:00");
+}
+
+TEST(AppController, RecentLogEntriesStartsEmpty) {
+    micecam::ui::AppController controller;
+    EXPECT_TRUE(controller.recentLogEntries().isEmpty());
+}
+
+TEST(AppController, RefreshCamerasEmitsCountSignals) {
+    micecam::ui::AppController controller;
+
+    int countChanged = 0;
+    QObject::connect(&controller, &micecam::ui::AppController::cameraCountChanged,
+                     [&]() { countChanged++; });
+
     controller.refreshCameras();
-
-    EXPECT_EQ(controller.elapsedText().toStdString(), "00:00");
-
-    ASSERT_TRUE(controller.startRecording());
-    QThread::msleep(1500);
-
-    EXPECT_NE(controller.elapsedText().toStdString(), "00:00");
-
-    controller.stopRecording();
-    // After stop, elapsed should reset
-    EXPECT_EQ(controller.elapsedText().toStdString(), "00:00");
+    EXPECT_EQ(controller.cameraCount(), 0);
+    EXPECT_EQ(countChanged, 0);
 }

@@ -1,19 +1,22 @@
 #include "AppController.h"
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
+#include <nlohmann/json.hpp>
+
 #include "domain/Capabilities.h"
-#include "infrastructure/FFmpegCameraBackend.h"
-#include "infrastructure/MockCameraBackend.h"
-#include "infrastructure/OAKCameraBackend.h"
+#include "domain/PluginManifest.h"
 #include "pipeline/PreflightValidator.h"
 
 namespace micecam::ui {
 
-AppController::AppController(BackendMode mode, QObject* parent)
+namespace fs = std::filesystem;
+
+AppController::AppController(QObject* parent)
     : QObject(parent)
-    , mode_(mode)
     , plugin_registry_("../3rdParty/bundled_plugins", ".")
     , camera_model_(new AppCameraModel(this))
     , source_model_(new CameraSourceModel(this))
@@ -21,14 +24,6 @@ AppController::AppController(BackendMode mode, QObject* parent)
     , settings_(new AppSettings(this))
 {
     plugin_registry_.initialize();
-
-    if (mode_ == BackendMode::Production) {
-        manager_.register_backend(std::make_unique<infrastructure::FFmpegCameraBackend>());
-        manager_.register_backend(std::make_unique<infrastructure::OAKCameraBackend>());
-    } else {
-        manager_.register_backend(std::make_unique<infrastructure::MockCameraBackend>());
-    }
-
     manager_.set_plugin_registry(&plugin_registry_);
     setupCrashAlertHandler();
 }
@@ -267,6 +262,171 @@ QVariantList AppController::preflightItems() {
 
 QVariantMap AppController::cameraAt(int row) {
     return camera_model_->get(row);
+}
+
+QVariantList AppController::pluginList() {
+    QVariantList list;
+    auto sources = plugin_registry_.getSources();
+    for (const auto& src : sources) {
+        QVariantMap item;
+        item["pluginId"] = QString::fromStdString(src.source_id);
+        item["name"] = QString::fromStdString(src.source_name);
+        item["version"] = QString::fromStdString(src.plugin_version);
+        item["path"] = QString::fromStdString(src.plugin_path);
+        item["enabled"] = src.enabled;
+        item["type"] = src.source_type == domain::PluginSourceType::BUNDLED
+                            ? QStringLiteral("bundled")
+                            : QStringLiteral("linked");
+        item["deviceCount"] = static_cast<int>(src.device_ids.size());
+
+        switch (src.diagnostics_state) {
+            case domain::PluginDiagnosticsState::OK:
+                item["status"] = QStringLiteral("OK"); break;
+            case domain::PluginDiagnosticsState::ERROR:
+                item["status"] = QStringLiteral("Error"); break;
+            case domain::PluginDiagnosticsState::DISABLED:
+                item["status"] = QStringLiteral("Disabled"); break;
+            default:
+                item["status"] = QStringLiteral("Missing"); break;
+        }
+        list.append(item);
+    }
+    return list;
+}
+
+bool AppController::importPlugin(const QString& dirPath) {
+    if (recording_) return false;
+
+    bool ok = plugin_registry_.addLinkedDirectory(dirPath.toStdString());
+    if (ok) {
+        pushLogEntry(log_entries_,
+            QStringLiteral("[INFO] Plugin imported: %1 (restart required)")
+                .arg(dirPath));
+    } else {
+        pushLogEntry(log_entries_,
+            QStringLiteral("[WARN] Plugin import failed: %1").arg(dirPath));
+    }
+    emit pluginsChanged();
+    return ok;
+}
+
+void AppController::togglePlugin(const QString& pluginPath, bool enabled) {
+    if (recording_) return;
+
+    auto sources = plugin_registry_.getSources();
+    for (const auto& src : sources) {
+        if (src.plugin_path == pluginPath.toStdString()) {
+            if (enabled) {
+                plugin_registry_.enablePlugin(src.source_id);
+            } else {
+                plugin_registry_.disablePlugin(src.source_id);
+            }
+            pushLogEntry(log_entries_,
+                QStringLiteral("[INFO] Plugin %1 %2 (restart required)")
+                    .arg(QString::fromStdString(src.source_id),
+                         enabled ? QStringLiteral("enabled")
+                                 : QStringLiteral("disabled")));
+            emit pluginsChanged();
+            return;
+        }
+    }
+}
+
+QVariantMap AppController::getPluginDetail(const QString& pluginPath) {
+    QVariantMap result;
+
+    auto manifest_path = pluginPath.toStdString() + "/plugin.json";
+    if (!fs::exists(manifest_path)) {
+        result["error"] = QStringLiteral("Manifest not found");
+        return result;
+    }
+
+    std::ifstream file(manifest_path);
+    if (!file.is_open()) {
+        result["error"] = QStringLiteral("Cannot open manifest");
+        return result;
+    }
+
+    nlohmann::json j;
+    try {
+        file >> j;
+    } catch (const nlohmann::json::parse_error&) {
+        result["error"] = QStringLiteral("Invalid JSON in manifest");
+        return result;
+    }
+
+    domain::PluginManifest manifest;
+    try {
+        manifest = domain::PluginManifest::from_json(j);
+    } catch (const std::exception&) {
+        result["error"] = QStringLiteral("Failed to parse manifest");
+        return result;
+    }
+
+    result["pluginId"] = QString::fromStdString(manifest.id);
+    result["name"] = QString::fromStdString(manifest.name);
+    result["pluginVersion"] = QString::fromStdString(manifest.version);
+    result["apiVersion"] = manifest.plugin_api_version;
+    result["description"] = QString::fromStdString(manifest.description);
+    result["author"] = QString::fromStdString(manifest.author);
+
+    QStringList features;
+    for (const auto& f : manifest.required_features) {
+        features.append(QString::fromStdString(f));
+    }
+    result["requiredFeatures"] = features;
+
+    QStringList optFeatures;
+    for (const auto& f : manifest.optional_features) {
+        optFeatures.append(QString::fromStdString(f));
+    }
+    result["optionalFeatures"] = optFeatures;
+
+    result["processModel"] = QString::fromStdString(manifest.preferred_process_model);
+
+    QVariantMap platforms;
+    for (const auto& [os, entry] : manifest.platforms) {
+        platforms[QString::fromStdString(os)] =
+            QString::fromStdString(entry.entrypoint);
+    }
+    result["platforms"] = platforms;
+    result["path"] = pluginPath;
+
+    auto sources = plugin_registry_.getSources();
+    for (const auto& src : sources) {
+        if (src.plugin_path == pluginPath.toStdString()) {
+            result["enabled"] = src.enabled;
+            result["type"] = src.source_type == domain::PluginSourceType::BUNDLED
+                                ? QStringLiteral("bundled")
+                                : QStringLiteral("linked");
+
+            switch (src.diagnostics_state) {
+                case domain::PluginDiagnosticsState::OK:
+                    result["status"] = QStringLiteral("OK"); break;
+                case domain::PluginDiagnosticsState::ERROR:
+                    result["status"] = QStringLiteral("Error"); break;
+                case domain::PluginDiagnosticsState::DISABLED:
+                    result["status"] = QStringLiteral("Disabled"); break;
+                default:
+                    result["status"] = QStringLiteral("Missing"); break;
+            }
+            break;
+        }
+    }
+
+    auto diags = plugin_registry_.getDiagnostics();
+    QStringList diagList;
+    for (const auto& d : diags) {
+        if (d.plugin_id == manifest.id) {
+            diagList.append(QStringLiteral("[%1] %2: %3")
+                .arg(QString::fromStdString(d.plugin_id),
+                     QString::fromStdString(d.error_code),
+                     QString::fromStdString(d.message)));
+        }
+    }
+    result["diagnostics"] = diagList;
+
+    return result;
 }
 
 void AppController::captureLoop() {

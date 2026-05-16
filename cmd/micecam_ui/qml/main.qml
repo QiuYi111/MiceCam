@@ -23,6 +23,8 @@ ApplicationWindow {
     property var selectedFramerateOptions: []
     property var selectedFormatOptions: []
 
+    property string selectedPluginPath: ""
+
     function openCameraDetail(data) {
         selectedCameraName = data.name || ""
         selectedCameraFps = data.fps !== undefined ? data.fps : 0.0
@@ -32,7 +34,12 @@ ApplicationWindow {
         selectedResolutionOptions = data.resolutionOptions || []
         selectedFramerateOptions = data.framerateOptions || []
         selectedFormatOptions = data.formatOptions || []
-        currentViewIndex = 5
+        currentViewIndex = 6
+    }
+
+    function openPluginDetail(path) {
+        selectedPluginPath = path
+        currentViewIndex = 7
     }
 
     Rectangle {
@@ -152,6 +159,11 @@ ApplicationWindow {
             LoggingSettings {
                 onNavigateBack: currentViewIndex = 0
             }
+            PluginManagementPage {
+                onNavigateToDetail: function(path) {
+                    appRoot.openPluginDetail(path)
+                }
+            }
             AboutView {}
 
             CameraDetailView {
@@ -172,6 +184,11 @@ ApplicationWindow {
                 onFullscreenClicked: function(name, fps, drops, isRecording, status) {
                     fullscreenView.open({name: name, fps: fps, drops: drops, isRecording: isRecording, status: status})
                 }
+            }
+
+            PluginDetailPage {
+                pluginPath: appRoot.selectedPluginPath
+                onBackClicked: currentViewIndex = 4
             }
         }
 

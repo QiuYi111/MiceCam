@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "IStatsCollector.h"
+#include "domain/CalibrationResult.h"
 #include "domain/EncoderConfig.h"
 #include "domain/SessionMetadata.h"
 #include "domain/StreamConfig.h"
@@ -28,12 +29,20 @@ namespace micecam::pipeline {
 class TranscodeStage;
 class StatsCollector;
 
+enum class PayloadKind {
+    RAW = 0,
+    MJPEG = 1,
+    H264 = 2,
+    H265 = 3,
+};
+
 struct SessionConfig {
     std::string session_id;
     std::string output_dir = ".";
     std::vector<domain::StreamConfig> streams;
     domain::EncoderConfig encoder;
     int watchdog_timeout_s = 3;
+    std::unordered_map<std::string, domain::CalibrationResult> calibration_results;
 };
 
 struct FrameData {
@@ -44,6 +53,9 @@ struct FrameData {
     int height = 0;
     int64_t pts = 0;
     std::string source_format = "rgb24";
+    PayloadKind payload_kind = PayloadKind::RAW;
+    bool is_keyframe = false;
+    uint64_t dropped_frame_count = 0;
 };
 
 enum class PipelineState {
@@ -65,6 +77,8 @@ struct StreamPipeline {
     int fps = 30;
     uint64_t frame_seq = 0;
     bool initialized = false;
+    int fallback_gop_size = 60;
+    uint64_t overflow_count = 0;
 };
 
 class RecordingPipeline {
@@ -84,6 +98,8 @@ public:
     void set_alert_manager(infrastructure::AlertManager* am) { alert_mgr_ = am; }
     void set_plugin_source(const nlohmann::json& plugin_source);
     void set_stream_transport_stats(const std::string& stream_id, const nlohmann::json& transport);
+
+    uint64_t get_overflow_count(const std::string& stream_id) const;
 
 private:
     bool create_stream_pipeline(const domain::StreamConfig& sc,

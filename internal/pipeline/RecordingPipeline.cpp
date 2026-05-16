@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <sstream>
 
+#include <spdlog/spdlog.h>
+
 #include "TranscodeStage.h"
 #include "StatsCollector.h"
 #include "infrastructure/StreamWriter.h"
@@ -61,6 +63,11 @@ bool RecordingPipeline::create_stream_pipeline(const domain::StreamConfig& sc,
     sp->fps = sc.framerate > 0 ? sc.framerate : 30;
     sp->output_prefix = output_dir + "/" + sp->stream_id;
 
+    auto cal_it = config_.calibration_results.find(sp->stream_id);
+    if (cal_it != config_.calibration_results.end() && cal_it->second.success && cal_it->second.min_gop > 0) {
+        sp->fallback_gop_size = cal_it->second.min_gop;
+    }
+
     sp->transcoder = std::make_unique<TranscodeStage>();
     if (!sp->transcoder->initialize(enc_cfg)) {
         return false;
@@ -96,17 +103,31 @@ bool RecordingPipeline::push_frame(const FrameData& frame) {
     auto& sp = *it->second;
     if (!sp.initialized) return false;
 
+    if (frame.dropped_frame_count > 0) {
+        sp.overflow_count += frame.dropped_frame_count;
+        spdlog::warn("Stream {} ring buffer overflow: {} frames dropped", frame.stream_id, frame.dropped_frame_count);
+    }
+
     uint64_t frame_seq = sp.frame_seq++;
     uint64_t frame_interval_us = 1000000ULL / sp.fps;
 
-    auto packet = sp.transcoder->process(frame.data, frame.size, frame.width, frame.height, frame.pts, frame.source_format);
-    if (!packet.empty()) {
-        sp.stats->set_encoder(sp.transcoder->encoder_name(), false);
-        sp.stats->record_frame(frame_seq, frame_seq, 0, frame_interval_us);
+    if (frame.payload_kind == PayloadKind::H264 || frame.payload_kind == PayloadKind::H265) {
+        if (frame.data && frame.size > 0) {
+            sp.stats->set_encoder(frame.payload_kind == PayloadKind::H264 ? "h264" : "h265", false);
+            sp.stats->record_frame(frame_seq, frame_seq, 0, frame_interval_us);
+            sp.writer->write_packet(frame.data, frame.size, frame.pts, frame.pts, frame.is_keyframe);
+            sp.stats->add_bytes(frame.size);
+        }
+    } else {
+        auto packet = sp.transcoder->process(frame.data, frame.size, frame.width, frame.height, frame.pts, frame.source_format);
+        if (!packet.empty()) {
+            sp.stats->set_encoder(sp.transcoder->encoder_name(), false);
+            sp.stats->record_frame(frame_seq, frame_seq, 0, frame_interval_us);
 
-        bool keyframe = (frame_seq % static_cast<uint64_t>(config_.encoder.keyframe_interval) == 0);
-        sp.writer->write_packet(packet.data(), packet.size(), frame.pts, frame.pts, keyframe);
-        sp.stats->add_bytes(packet.size());
+            bool keyframe = (frame_seq % static_cast<uint64_t>(sp.fallback_gop_size) == 0);
+            sp.writer->write_packet(packet.data(), packet.size(), frame.pts, frame.pts, keyframe);
+            sp.stats->add_bytes(packet.size());
+        }
     }
 
     domain::FrameTimestamp fts;
@@ -154,6 +175,12 @@ void RecordingPipeline::set_plugin_source(const nlohmann::json& plugin_source) {
 void RecordingPipeline::set_stream_transport_stats(const std::string& stream_id, const nlohmann::json& transport) {
     std::lock_guard<std::mutex> lock(mutex_);
     stream_transport_stats_[stream_id] = transport;
+}
+
+uint64_t RecordingPipeline::get_overflow_count(const std::string& stream_id) const {
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end()) return 0;
+    return it->second->overflow_count;
 }
 
 std::pair<domain::SessionMetadata, std::vector<domain::StreamStats>>

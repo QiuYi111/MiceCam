@@ -23,7 +23,7 @@ next_action:
   summary: "Restore jingyi-lab connectivity or provide an alternate reachable Ubuntu/HIL target, then re-run the current gate task."
   blocked: true
   needs_user_decision: true
-current_phase: "blocked"
+current_phase: "003-phase-6-hardware-gate done - user checked success"
 last_updated: "2026-05-16 10:43:03 +0800"
 max_iterations: null
 max_consecutive_failures: 3

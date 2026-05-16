@@ -323,6 +323,22 @@ if(BUILD_UI)
     )
 endif()
 
+# Python tests (no hardware required, uses stdlib unittest)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME test_validate_session_artifacts
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tests/unit/test_validate_session_artifacts.py
+            -v
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(test_validate_session_artifacts PROPERTIES
+        TIMEOUT 60
+        LABELS "python;no-hardware"
+    )
+endif()
+
 # Hardware-in-the-Loop tests (requires real camera hardware)
 if(BUILD_HIL)
     add_micecam_test(test_real_camera_hil tests/hil/test_real_camera.cpp)

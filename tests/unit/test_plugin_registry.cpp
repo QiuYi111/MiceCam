@@ -229,3 +229,147 @@ TEST_F(PluginRegistryTest, enable_disabled_plugin) {
     EXPECT_EQ(service.getPlugins().size(), 1u);
     EXPECT_TRUE(service.isPendingRestart());
 }
+
+class PluginCrashRecoveryTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        test_root_ = fs::temp_directory_path() / "micecam_test_crash_recovery";
+        fs::create_directories(test_root_);
+        config_dir_ = (test_root_ / "config").string();
+        bundled_dir_ = (test_root_ / "bundled").string();
+        fs::create_directories(config_dir_);
+        fs::create_directories(bundled_dir_);
+
+        auto dir = fs::path(bundled_dir_) / "micecam.test_plugin";
+        fs::create_directories(dir);
+        std::ofstream f(dir / "plugin.json");
+        f << R"({
+            "id": "micecam.test_plugin",
+            "name": "Test Plugin",
+            "version": "1.0.0",
+            "plugin_api_version": 2,
+            "min_micecam_version": "2.0.0",
+            "platforms": {
+                "darwin": {"entrypoint": "bin/test", "arch": "universal"}
+            },
+            "supported_process_models": ["SINGLETON"],
+            "preferred_process_model": "SINGLETON"
+        })";
+        f.close();
+    }
+
+    void TearDown() override {
+        fs::remove_all(test_root_);
+    }
+
+    fs::path test_root_;
+    std::string config_dir_;
+    std::string bundled_dir_;
+};
+
+TEST_F(PluginCrashRecoveryTest, CrashDetectionTriggersHandlePluginCrash) {
+    PluginRegistryService service(bundled_dir_, config_dir_);
+    ASSERT_TRUE(service.initialize());
+
+    bool alert_called = false;
+    std::string alert_plugin_id;
+    service.set_crash_alert_callback([&](const std::string& pid) {
+        alert_called = true;
+        alert_plugin_id = pid;
+    });
+
+    service.register_stream("micecam.test_plugin", "stream_a");
+    service.detect_channel_failure("micecam.test_plugin");
+
+    EXPECT_TRUE(alert_called);
+    EXPECT_EQ(alert_plugin_id, "micecam.test_plugin");
+}
+
+TEST_F(PluginCrashRecoveryTest, ShmCleanupOnCrash) {
+    PluginRegistryService service(bundled_dir_, config_dir_);
+    ASSERT_TRUE(service.initialize());
+
+    std::vector<std::string> unlinked;
+    service.set_shm_unlink_fn([&](const std::string& name) -> int {
+        unlinked.push_back(name);
+        return 0;
+    });
+
+    service.register_shm("micecam.test_plugin", "/micecam_ring_stream_a");
+    service.register_shm("micecam.test_plugin", "/micecam_ring_stream_b");
+
+    auto result = service.handle_plugin_crash("micecam.test_plugin");
+
+    ASSERT_EQ(result.cleaned_shm_names.size(), 2u);
+    EXPECT_EQ(unlinked.size(), 2u);
+    EXPECT_NE(std::find(unlinked.begin(), unlinked.end(), "/micecam_ring_stream_a"),
+              unlinked.end());
+    EXPECT_NE(std::find(unlinked.begin(), unlinked.end(), "/micecam_ring_stream_b"),
+              unlinked.end());
+
+    EXPECT_TRUE(service.get_shm_names_for_plugin("micecam.test_plugin").empty());
+}
+
+TEST_F(PluginCrashRecoveryTest, PerPluginIsolationOnCrash) {
+    PluginRegistryService service(bundled_dir_, config_dir_);
+    ASSERT_TRUE(service.initialize());
+
+    service.register_stream("micecam.test_plugin", "stream_a");
+    service.register_stream("other_plugin", "stream_b");
+
+    service.register_shm("micecam.test_plugin", "/micecam_ring_stream_a");
+    service.register_shm("other_plugin", "/micecam_ring_stream_b");
+
+    std::vector<std::string> unlinked;
+    service.set_shm_unlink_fn([&](const std::string& name) -> int {
+        unlinked.push_back(name);
+        return 0;
+    });
+
+    auto result = service.handle_plugin_crash("micecam.test_plugin");
+
+    ASSERT_EQ(result.finalized_streams.size(), 1u);
+    EXPECT_EQ(result.finalized_streams[0], "stream_a");
+    EXPECT_EQ(unlinked.size(), 1u);
+    EXPECT_EQ(unlinked[0], "/micecam_ring_stream_a");
+
+    auto other_streams = service.get_streams_for_plugin("other_plugin");
+    ASSERT_EQ(other_streams.size(), 1u);
+    EXPECT_EQ(other_streams[0], "stream_b");
+
+    auto other_shm = service.get_shm_names_for_plugin("other_plugin");
+    ASSERT_EQ(other_shm.size(), 1u);
+    EXPECT_EQ(other_shm[0], "/micecam_ring_stream_b");
+}
+
+TEST_F(PluginCrashRecoveryTest, RestartSucceedsAfterRetry) {
+    PluginRegistryService service(bundled_dir_, config_dir_);
+    ASSERT_TRUE(service.initialize());
+
+    int restart_attempts = 0;
+    service.set_restart_fn([&](const std::string&) -> bool {
+        restart_attempts++;
+        return restart_attempts >= 2;
+    });
+
+    service.register_stream("micecam.test_plugin", "stream_a");
+
+    auto result = service.handle_plugin_crash("micecam.test_plugin");
+
+    EXPECT_TRUE(result.restart_succeeded);
+    EXPECT_GE(restart_attempts, 2);
+}
+
+TEST_F(PluginCrashRecoveryTest, RestartFailsAfterMaxRetries) {
+    PluginRegistryService service(bundled_dir_, config_dir_);
+    ASSERT_TRUE(service.initialize());
+
+    service.set_restart_fn([](const std::string&) -> bool { return false; });
+
+    service.register_stream("micecam.test_plugin", "stream_a");
+
+    auto result = service.handle_plugin_crash("micecam.test_plugin");
+
+    EXPECT_FALSE(result.restart_succeeded);
+    EXPECT_TRUE(service.get_streams_for_plugin("micecam.test_plugin").empty());
+}

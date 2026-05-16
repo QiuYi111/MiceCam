@@ -1,7 +1,9 @@
 #include "RecordingPipeline.h"
 
+#include <cinttypes>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 
 #include <spdlog/spdlog.h>
@@ -181,6 +183,80 @@ uint64_t RecordingPipeline::get_overflow_count(const std::string& stream_id) con
     auto it = streams_.find(stream_id);
     if (it == streams_.end()) return 0;
     return it->second->overflow_count;
+}
+
+bool RecordingPipeline::finalize_stream(const std::string& stream_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end() || !it->second->initialized) return false;
+
+    auto& sp = *it->second;
+
+    std::vector<uint8_t> flushed;
+    if (sp.transcoder && sp.transcoder->flush(flushed) && !flushed.empty()) {
+        const int64_t pts = static_cast<int64_t>(sp.frame_seq);
+        if (sp.writer->write_packet(flushed.data(), flushed.size(), pts, pts, true)) {
+            sp.stats->add_bytes(flushed.size());
+        }
+    }
+
+    sp.writer->close();
+    sp.srt->close();
+    sp.initialized = false;
+
+    spdlog::info("Finalized stream {} after plugin crash", stream_id);
+    return true;
+}
+
+bool RecordingPipeline::start_reconnect(const std::string& stream_id, int reconnect_index) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end()) return false;
+
+    auto& sp = *it->second;
+    sp.output_prefix = sp.output_prefix + "_reconnect_" + std::to_string(reconnect_index);
+
+    sp.writer = std::make_unique<infrastructure::StreamWriter>();
+    std::string mp4_path = sp.output_prefix + ".mp4";
+    if (!sp.writer->open(mp4_path, sp.width, sp.height, sp.fps)) {
+        spdlog::error("Failed to open reconnect MP4 for stream {}", stream_id);
+        return false;
+    }
+
+    sp.srt = std::make_unique<infrastructure::SRTWriter>();
+    std::string srt_path = sp.output_prefix + ".srt";
+    sp.srt->open(srt_path);
+
+    sp.initialized = true;
+
+    auto now = std::chrono::system_clock::now();
+    auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()).count();
+
+    std::string reconnect_meta = sp.output_prefix + "_meta.json";
+    nlohmann::json meta_j;
+    meta_j["stream_id"] = stream_id;
+    meta_j["reconnect_index"] = reconnect_index;
+
+    auto total_sec = static_cast<time_t>(now_ns / 1000000000ULL);
+    uint64_t remaining_ns = now_ns % 1000000000ULL;
+    uint64_t microseconds = remaining_ns / 1000ULL;
+    struct tm tm_buf;
+    localtime_r(&total_sec, &tm_buf);
+    char time_buf[64];
+    strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S", &tm_buf);
+    char iso_buf[96];
+    snprintf(iso_buf, sizeof(iso_buf), "%s.%06" PRIu64, time_buf, microseconds);
+    meta_j["crash_recovery_wall_time"] = std::string(iso_buf);
+
+    std::ofstream out(reconnect_meta);
+    if (out.is_open()) {
+        out << meta_j.dump(2);
+    }
+
+    spdlog::info("Started reconnect recording for stream {} -> _reconnect_{}.mp4",
+                 stream_id, reconnect_index);
+    return true;
 }
 
 std::pair<domain::SessionMetadata, std::vector<domain::StreamStats>>

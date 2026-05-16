@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <thread>
 
 #include "domain/CalibrationResult.h"
@@ -12,6 +14,7 @@
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/ostream_sink.h>
+#include <nlohmann/json.hpp>
 
 using namespace micecam;
 
@@ -328,4 +331,133 @@ TEST(RecordingPipeline, OverflowCountAccumulates) {
 TEST(RecordingPipeline, OverflowCountZeroForUnknownStream) {
     pipeline::RecordingPipeline pipeline;
     EXPECT_EQ(pipeline.get_overflow_count("nonexistent"), 0u);
+}
+
+TEST(RecordingPipeline, FinalizeStreamClosesWriterAndSrt) {
+    pipeline::SessionConfig config;
+    config.session_id = "test_finalize";
+    config.output_dir = "/tmp/micecam_test";
+
+    domain::StreamConfig sc;
+    sc.device_id = "cam_fin";
+    sc.stream_index = 0;
+    sc.width = 320;
+    sc.height = 240;
+    sc.framerate = 30;
+    config.streams.push_back(sc);
+
+    pipeline::RecordingPipeline pipeline;
+    ASSERT_TRUE(pipeline.start(config));
+
+    std::vector<uint8_t> raw_data(320 * 240 * 3, 128);
+    pipeline::FrameData frame;
+    frame.stream_id = "cam_fin_0";
+    frame.data = raw_data.data();
+    frame.size = raw_data.size();
+    frame.width = 320;
+    frame.height = 240;
+    frame.pts = 0;
+    frame.source_format = "rgb24";
+    frame.payload_kind = pipeline::PayloadKind::RAW;
+    EXPECT_TRUE(pipeline.push_frame(frame));
+
+    EXPECT_TRUE(pipeline.finalize_stream("cam_fin_0"));
+    pipeline.stop();
+}
+
+TEST(RecordingPipeline, FinalizeNonexistentStreamFails) {
+    pipeline::SessionConfig config;
+    config.session_id = "test_finalize_missing";
+    config.output_dir = "/tmp/micecam_test";
+
+    pipeline::RecordingPipeline pipeline;
+    ASSERT_TRUE(pipeline.start(config));
+    EXPECT_FALSE(pipeline.finalize_stream("nonexistent_stream"));
+    pipeline.stop();
+}
+
+TEST(RecordingPipeline, StartReconnectCreatesNewOutput) {
+    pipeline::SessionConfig config;
+    config.session_id = "test_reconnect";
+    config.output_dir = "/tmp/micecam_test";
+
+    domain::StreamConfig sc;
+    sc.device_id = "cam_rec";
+    sc.stream_index = 0;
+    sc.width = 320;
+    sc.height = 240;
+    sc.framerate = 30;
+    config.streams.push_back(sc);
+
+    pipeline::RecordingPipeline pipeline;
+    ASSERT_TRUE(pipeline.start(config));
+
+    std::vector<uint8_t> raw_data(320 * 240 * 3, 128);
+    pipeline::FrameData frame;
+    frame.stream_id = "cam_rec_0";
+    frame.data = raw_data.data();
+    frame.size = raw_data.size();
+    frame.width = 320;
+    frame.height = 240;
+    frame.pts = 0;
+    frame.source_format = "rgb24";
+    frame.payload_kind = pipeline::PayloadKind::RAW;
+    EXPECT_TRUE(pipeline.push_frame(frame));
+
+    EXPECT_TRUE(pipeline.finalize_stream("cam_rec_0"));
+    EXPECT_TRUE(pipeline.start_reconnect("cam_rec_0", 1));
+
+    frame.pts = 33333;
+    EXPECT_TRUE(pipeline.push_frame(frame));
+
+    pipeline.stop();
+
+    auto session_dir = "/tmp/micecam_test/test_reconnect";
+    ASSERT_TRUE(std::filesystem::exists(
+        std::filesystem::path(session_dir) / "cam_rec_0_reconnect_1.mp4"));
+}
+
+TEST(RecordingPipeline, CrashRecoveryWallTimeInMetadata) {
+    pipeline::SessionConfig config;
+    config.session_id = "test_crash_wall_time";
+    config.output_dir = "/tmp/micecam_test";
+
+    domain::StreamConfig sc;
+    sc.device_id = "cam_cwt";
+    sc.stream_index = 0;
+    sc.width = 320;
+    sc.height = 240;
+    sc.framerate = 30;
+    config.streams.push_back(sc);
+
+    pipeline::RecordingPipeline pipeline;
+    ASSERT_TRUE(pipeline.start(config));
+
+    std::vector<uint8_t> raw_data(320 * 240 * 3, 128);
+    pipeline::FrameData frame;
+    frame.stream_id = "cam_cwt_0";
+    frame.data = raw_data.data();
+    frame.size = raw_data.size();
+    frame.width = 320;
+    frame.height = 240;
+    frame.pts = 0;
+    frame.source_format = "rgb24";
+    frame.payload_kind = pipeline::PayloadKind::RAW;
+    EXPECT_TRUE(pipeline.push_frame(frame));
+
+    EXPECT_TRUE(pipeline.finalize_stream("cam_cwt_0"));
+    EXPECT_TRUE(pipeline.start_reconnect("cam_cwt_0", 1));
+    pipeline.stop();
+
+    auto meta_path = std::filesystem::path("/tmp/micecam_test/test_crash_wall_time") /
+        "cam_cwt_0_reconnect_1_meta.json";
+    ASSERT_TRUE(std::filesystem::exists(meta_path));
+
+    std::ifstream ifs(meta_path);
+    nlohmann::json meta_j;
+    ifs >> meta_j;
+
+    EXPECT_TRUE(meta_j.contains("crash_recovery_wall_time"));
+    EXPECT_FALSE(meta_j["crash_recovery_wall_time"].get<std::string>().empty());
+    EXPECT_EQ(meta_j["reconnect_index"], 1);
 }

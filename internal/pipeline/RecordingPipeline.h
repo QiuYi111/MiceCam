@@ -101,6 +101,9 @@ public:
 
     uint64_t get_overflow_count(const std::string& stream_id) const;
 
+    bool finalize_stream(const std::string& stream_id);
+    bool start_reconnect(const std::string& stream_id, int reconnect_index);
+
 private:
     bool create_stream_pipeline(const domain::StreamConfig& sc,
                                 const std::string& output_dir,

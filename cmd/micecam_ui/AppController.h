@@ -72,7 +72,7 @@ public:
 
     void setOutputDirectory(const QString& dir);
 
-signals:
+    signals:
     void isRecordingChanged();
     void recordButtonTextChanged();
     void canStartRecordingChanged();
@@ -86,6 +86,12 @@ signals:
     void preflightMessageChanged();
     void lastSessionIdChanged();
     void logEntriesChanged();
+    void deviceDisconnected(const QString& deviceName);
+    void pluginCrashAlert(const QString& pluginId);
+
+public slots:
+    void handlePluginCrash(const std::string& pluginId);
+    void handleDeviceDisconnect(const std::string& streamId, const std::string& deviceName);
 
 private:
     struct ActiveStream {
@@ -120,6 +126,7 @@ private:
     void captureLoop();
     void stopCaptureLoop();
     void refreshLiveStatus();
+    void setupCrashAlertHandler();
 };
 
 } // namespace micecam::ui

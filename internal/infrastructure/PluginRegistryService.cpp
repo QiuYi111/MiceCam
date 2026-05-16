@@ -1,18 +1,35 @@
 #include "PluginRegistryService.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
+
+#ifdef __APPLE__
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace micecam::infrastructure {
 
 namespace fs = std::filesystem;
 
+static int default_shm_unlink(const std::string& name) {
+#ifdef __APPLE__
+    return shm_unlink(name.c_str());
+#else
+    return shm_unlink(name.c_str());
+#endif
+}
+
 PluginRegistryService::PluginRegistryService(const std::string& bundled_plugins_dir,
                                              const std::string& config_dir)
     : bundled_plugins_dir_(bundled_plugins_dir)
-    , linked_config_(config_dir + "/linked_plugins.json") {}
+    , linked_config_(config_dir + "/linked_plugins.json")
+    , shm_unlink_fn_(default_shm_unlink) {}
 
 bool PluginRegistryService::initialize() {
     linked_config_.load();
@@ -263,6 +280,131 @@ std::vector<domain::PluginSource> PluginRegistryService::getSources() const {
 const std::vector<PluginRegistryService::Diagnostics>&
 PluginRegistryService::getDiagnostics() const {
     return diagnostics_;
+}
+
+void PluginRegistryService::register_stream(const std::string& plugin_id,
+                                             const std::string& stream_id) {
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    plugin_streams_[plugin_id].push_back(stream_id);
+}
+
+void PluginRegistryService::unregister_stream(const std::string& plugin_id,
+                                               const std::string& stream_id) {
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    auto it = plugin_streams_.find(plugin_id);
+    if (it != plugin_streams_.end()) {
+        auto& vec = it->second;
+        vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+    }
+}
+
+std::vector<std::string> PluginRegistryService::get_streams_for_plugin(
+        const std::string& plugin_id) const {
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    auto it = plugin_streams_.find(plugin_id);
+    if (it != plugin_streams_.end()) {
+        return it->second;
+    }
+    return {};
+}
+
+void PluginRegistryService::register_shm(const std::string& plugin_id,
+                                          const std::string& shm_name) {
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    plugin_shm_names_[plugin_id].push_back(shm_name);
+}
+
+void PluginRegistryService::unregister_shm(const std::string& plugin_id,
+                                            const std::string& shm_name) {
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    auto it = plugin_shm_names_.find(plugin_id);
+    if (it != plugin_shm_names_.end()) {
+        auto& vec = it->second;
+        vec.erase(std::remove(vec.begin(), vec.end(), shm_name), vec.end());
+    }
+}
+
+std::vector<std::string> PluginRegistryService::get_shm_names_for_plugin(
+        const std::string& plugin_id) const {
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    auto it = plugin_shm_names_.find(plugin_id);
+    if (it != plugin_shm_names_.end()) {
+        return it->second;
+    }
+    return {};
+}
+
+void PluginRegistryService::set_crash_alert_callback(CrashAlertCallback cb) {
+    crash_alert_cb_ = std::move(cb);
+}
+
+void PluginRegistryService::set_shm_unlink_fn(ShmUnlinkFn fn) {
+    shm_unlink_fn_ = std::move(fn);
+}
+
+void PluginRegistryService::set_restart_fn(
+        std::function<bool(const std::string& plugin_id)> fn) {
+    restart_fn_ = std::move(fn);
+}
+
+void PluginRegistryService::detect_channel_failure(const std::string& plugin_id) {
+    spdlog::warn("Plugin {} crashed, initiating recovery", plugin_id);
+
+    if (crash_alert_cb_) {
+        crash_alert_cb_(plugin_id);
+    }
+
+    handle_plugin_crash(plugin_id);
+}
+
+CrashRecoveryResult PluginRegistryService::handle_plugin_crash(
+        const std::string& plugin_id) {
+    CrashRecoveryResult result;
+    result.plugin_id = plugin_id;
+
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+
+    auto streams = plugin_streams_.find(plugin_id) != plugin_streams_.end()
+                   ? plugin_streams_[plugin_id] : std::vector<std::string>();
+
+    for (const auto& stream_id : streams) {
+        spdlog::info("Finalized stream {} after plugin crash", stream_id);
+        result.finalized_streams.push_back(stream_id);
+    }
+
+    auto shm_names = plugin_shm_names_.find(plugin_id) != plugin_shm_names_.end()
+                     ? plugin_shm_names_[plugin_id] : std::vector<std::string>();
+
+    for (const auto& shm_name : shm_names) {
+        if (shm_unlink_fn_) {
+            shm_unlink_fn_(shm_name);
+            spdlog::info("Cleaned up shared memory for plugin {}", plugin_id);
+        }
+        result.cleaned_shm_names.push_back(shm_name);
+    }
+
+    plugin_shm_names_.erase(plugin_id);
+
+    bool restarted = false;
+    if (restart_fn_) {
+        for (int attempt = 0; attempt < max_restart_retries_; ++attempt) {
+            if (restart_fn_(plugin_id)) {
+                restarted = true;
+                break;
+            }
+        }
+    }
+
+    result.restart_succeeded = restarted;
+
+    if (restarted) {
+        spdlog::info("Plugin {} restarted successfully", plugin_id);
+    } else {
+        spdlog::error("Plugin {} restart failed, recording stopped", plugin_id);
+        plugin_streams_.erase(plugin_id);
+    }
+
+    return result;
 }
 
 } // namespace micecam::infrastructure

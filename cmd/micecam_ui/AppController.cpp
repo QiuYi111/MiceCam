@@ -30,6 +30,7 @@ AppController::AppController(BackendMode mode, QObject* parent)
     }
 
     manager_.set_plugin_registry(&plugin_registry_);
+    setupCrashAlertHandler();
 }
 
 QAbstractListModel* AppController::cameraModel() const { return camera_model_; }
@@ -316,6 +317,58 @@ void AppController::refreshLiveStatus() {
     emit totalFramesTextChanged();
     emit bytesWrittenTextChanged();
     emit logEntriesChanged();
+}
+
+void AppController::setupCrashAlertHandler() {
+    plugin_registry_.set_crash_alert_callback([this](const std::string& plugin_id) {
+        QMetaObject::invokeMethod(this, [this, plugin_id] {
+            handlePluginCrash(plugin_id);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void AppController::handlePluginCrash(const std::string& pluginId) {
+    pushLogEntry(log_entries_,
+        QStringLiteral("[WARN] Plugin crashed: %1").arg(QString::fromStdString(pluginId)));
+    emit pluginCrashAlert(QString::fromStdString(pluginId));
+
+    auto streams = plugin_registry_.get_streams_for_plugin(pluginId);
+    for (const auto& stream_id : streams) {
+        pipeline_.finalize_stream(stream_id);
+    }
+
+    auto result = plugin_registry_.handle_plugin_crash(pluginId);
+    if (result.restart_succeeded) {
+        pushLogEntry(log_entries_,
+            QStringLiteral("[INFO] Plugin %1 restarted, starting reconnect recording")
+                .arg(QString::fromStdString(pluginId)));
+        int reconnect_idx = 1;
+        for (const auto& stream_id : result.finalized_streams) {
+            pipeline_.start_reconnect(stream_id, reconnect_idx);
+        }
+    }
+}
+
+void AppController::handleDeviceDisconnect(const std::string& streamId,
+                                            const std::string& deviceName) {
+    pushLogEntry(log_entries_,
+        QStringLiteral("[WARN] Device disconnected: %1 (stream: %2)")
+            .arg(QString::fromStdString(deviceName),
+                 QString::fromStdString(streamId)));
+    emit deviceDisconnected(QString::fromStdString(deviceName));
+
+    if (recording_) {
+        pipeline_.finalize_stream(streamId);
+
+        for (auto& active : active_streams_) {
+            std::string sid = active.config.device_id + "_" +
+                std::to_string(active.config.stream_index);
+            if (sid == streamId) {
+                active.stream.reset();
+                break;
+            }
+        }
+    }
 }
 
 } // namespace micecam::ui

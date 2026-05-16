@@ -457,4 +457,14 @@ bool FFmpegPluginServer::validateDeviceId(const std::string& device_id) const {
                        [&](const auto& d) { return d.device_id == device_id; });
 }
 
+grpc::Status FFmpegPluginServer::Calibrate(
+    grpc::ServerContext*,
+    const CalibrateRequest*,
+    CalibrateResponse* resp) {
+    resp->set_success(false);
+    resp->set_error("Not yet implemented");
+    resp->set_supported(true);
+    return grpc::Status::OK;
+}
+
 } // namespace micecam::plugin

@@ -2,7 +2,7 @@
   "id": "micecam.oak",
   "name": "MiceCam OAK-D Capture",
   "version": "0.1.0",
-  "plugin_api_version": 1,
+  "plugin_api_version": 2,
   "min_micecam_version": "2.0.0",
   "description": "Official OAK-D/OAK-D-Lite camera plugin for MiceCam. Requires DepthAI SDK and OAK hardware for device enumeration and streaming.",
   "author": "MiceCam",

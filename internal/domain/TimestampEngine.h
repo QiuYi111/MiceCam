@@ -12,6 +12,7 @@ public:
     void capture_wall_anchor();
     uint64_t to_session_offset(std::chrono::steady_clock::time_point frame_time);
     FrameTimestamp with_hardware_pts(uint64_t hw_pts);
+    FrameTimestamp populate(std::chrono::steady_clock::time_point frame_time);
 
 private:
     std::mutex mutex_;

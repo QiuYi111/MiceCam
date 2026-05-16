@@ -58,10 +58,14 @@ public:
                              const micecam::plugin::HealthCheckRequest* req,
                              micecam::plugin::HealthStatus* resp) override;
 
+    grpc::Status Calibrate(grpc::ServerContext* ctx,
+                           const micecam::plugin::CalibrateRequest* req,
+                           micecam::plugin::CalibrateResponse* resp) override;
+
 private:
     static constexpr const char* kPluginVersion = "0.1.0";
     static constexpr const char* kPluginName = "MiceCam OAK-D Capture";
-    static constexpr uint32_t kApiVersion = 1;
+    static constexpr uint32_t kApiVersion = 2;
     static constexpr const char* kMinMicecamVersion = "2.0.0";
 
     std::chrono::steady_clock::time_point start_time_;

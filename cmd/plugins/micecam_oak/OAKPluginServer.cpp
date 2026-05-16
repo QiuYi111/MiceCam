@@ -285,4 +285,14 @@ grpc::Status OAKPluginServer::HealthCheck(
     return grpc::Status::OK;
 }
 
+grpc::Status OAKPluginServer::Calibrate(
+    grpc::ServerContext*,
+    const CalibrateRequest*,
+    CalibrateResponse* resp) {
+    resp->set_success(false);
+    resp->set_error("Not yet implemented");
+    resp->set_supported(true);
+    return grpc::Status::OK;
+}
+
 } // namespace micecam::plugin

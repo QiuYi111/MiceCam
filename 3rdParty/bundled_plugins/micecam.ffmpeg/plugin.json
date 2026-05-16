@@ -2,7 +2,7 @@
   "id": "micecam.ffmpeg",
   "name": "MiceCam FFmpeg Capture",
   "version": "1.0.0",
-  "plugin_api_version": 1,
+  "plugin_api_version": 2,
   "min_micecam_version": "2.0.0",
   "description": "Official MiceCam camera backend using FFmpeg/libavdevice for AVFoundation and V4L2 video capture.",
   "author": "MiceCam Team",

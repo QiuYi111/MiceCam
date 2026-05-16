@@ -43,7 +43,7 @@ TEST(ManifestValidation, golden_manifest_has_required_fields) {
     EXPECT_EQ(m.id, "micecam.ffmpeg");
     EXPECT_EQ(m.name, "MiceCam FFmpeg Capture");
     EXPECT_EQ(m.version, "1.0.0");
-    EXPECT_EQ(m.plugin_api_version, 1u);
+    EXPECT_EQ(m.plugin_api_version, 2u);
     EXPECT_EQ(m.min_micecam_version, "2.0.0");
     EXPECT_FALSE(m.platforms.empty());
     EXPECT_TRUE(m.platforms.contains("darwin"));

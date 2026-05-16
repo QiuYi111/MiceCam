@@ -226,6 +226,7 @@ add_micecam_test(test_linked_plugin_config tests/unit/test_linked_plugin_config.
 add_micecam_test(test_plugin_ring_reader tests/unit/test_plugin_ring_reader.cpp)
 add_micecam_test(test_plugin_stream_consumer tests/unit/test_plugin_stream_consumer.cpp)
 add_micecam_test(test_resource_manager tests/unit/test_resource_manager.cpp)
+add_micecam_test(test_timestamp_engine tests/unit/test_timestamp_engine.cpp)
 
 if(BUILD_PLUGINS)
     # FFmpeg plugin gRPC integration test
@@ -301,6 +302,26 @@ if(BUILD_PLUGINS)
     )
 
     add_test(NAME test_ffmpeg_plugin_server COMMAND test_ffmpeg_plugin_server
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+    add_executable(test_proto_calibrate
+        tests/unit/test_proto_calibrate.cpp
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+    )
+    target_include_directories(test_proto_calibrate PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}
+    )
+    target_link_libraries(test_proto_calibrate PRIVATE
+        protobuf::libprotobuf
+        GTest::gtest
+        GTest::gtest_main
+    )
+    set_target_properties(test_proto_calibrate PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+    )
+    add_test(NAME test_proto_calibrate COMMAND test_proto_calibrate
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 endif()
 

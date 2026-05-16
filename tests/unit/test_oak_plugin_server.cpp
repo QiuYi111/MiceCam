@@ -56,7 +56,7 @@ protected:
 TEST_F(OAKPluginServerTest, HandshakeAccepted) {
     micecam::plugin::HandshakeRequest req;
     req.set_micecam_version("2.0.0");
-    req.set_plugin_api_version(1);
+    req.set_plugin_api_version(2);
 
     micecam::plugin::HandshakeResponse resp;
     grpc::ClientContext ctx;
@@ -65,7 +65,7 @@ TEST_F(OAKPluginServerTest, HandshakeAccepted) {
     auto status = stub_->Handshake(&ctx, req, &resp);
     ASSERT_TRUE(status.ok()) << status.error_message();
     EXPECT_TRUE(resp.accepted());
-    EXPECT_EQ(resp.negotiated_api_version(), 1u);
+    EXPECT_EQ(resp.negotiated_api_version(), 2u);
     EXPECT_EQ(resp.plugin_version(), "0.1.0");
     EXPECT_EQ(resp.plugin_name(), "MiceCam OAK-D Capture");
 }
@@ -88,7 +88,7 @@ TEST_F(OAKPluginServerTest, HandshakeVersionMismatch) {
 TEST_F(OAKPluginServerTest, HandshakeLowMicecamVersion) {
     micecam::plugin::HandshakeRequest req;
     req.set_micecam_version("1.0.0");
-    req.set_plugin_api_version(1);
+    req.set_plugin_api_version(2);
 
     micecam::plugin::HandshakeResponse resp;
     grpc::ClientContext ctx;
@@ -113,7 +113,7 @@ TEST_F(OAKPluginServerTest, GetPluginInfoReturnsCorrectInfo) {
     EXPECT_EQ(resp.id(), "micecam.oak");
     EXPECT_EQ(resp.name(), "MiceCam OAK-D Capture");
     EXPECT_EQ(resp.version(), "0.1.0");
-    EXPECT_EQ(resp.plugin_api_version(), 1u);
+    EXPECT_EQ(resp.plugin_api_version(), 2u);
     EXPECT_EQ(resp.min_micecam_version(), "2.0.0");
     EXPECT_EQ(resp.preferred_process_model(), micecam::plugin::ProcessModel::PER_DEVICE);
     EXPECT_GT(resp.supported_process_models_size(), 0);
@@ -358,6 +358,25 @@ TEST_F(OAKPluginServerTest, ShutdownSucceeds) {
     auto status = stub_->Shutdown(&ctx, req, &resp);
     ASSERT_TRUE(status.ok());
     EXPECT_TRUE(resp.success());
+}
+
+TEST_F(OAKPluginServerTest, CalibrateReturnsNotImplemented) {
+    micecam::plugin::CalibrateRequest req;
+    req.set_device_id("oak_0");
+    req.set_stream_index(0);
+    req.set_width(1920);
+    req.set_height(1080);
+    req.set_fps(30.0);
+
+    micecam::plugin::CalibrateResponse resp;
+    grpc::ClientContext ctx;
+    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+
+    auto status = stub_->Calibrate(&ctx, req, &resp);
+    ASSERT_TRUE(status.ok());
+    EXPECT_FALSE(resp.success());
+    EXPECT_EQ(resp.error(), "Not yet implemented");
+    EXPECT_TRUE(resp.supported());
 }
 
 } // namespace

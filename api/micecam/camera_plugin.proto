@@ -162,6 +162,7 @@ message StreamConfig {
     PayloadKind requested_payload = 6;
     string pixel_format = 7;
     map<string, string> config = 8;
+    int32 keyframe_interval = 10;
 }
 
 message StreamRingDescriptor {
@@ -278,6 +279,36 @@ message EnumerateDevicesResponse {
     repeated DeviceInfo devices = 1;
 }
 
+message CalibrateRequest {
+    string device_id = 1;
+    int32 stream_index = 2;
+    int32 width = 3;
+    int32 height = 4;
+    double fps = 5;
+    PayloadKind requested_payload = 6;
+    string pixel_format = 7;
+    bool prefer_hardware_encoder = 8;
+    int32 bitrate_kbps = 9;
+    int32 crf = 10;
+    int32 max_b_frames = 11;
+    int32 calibration_duration_ms = 12;
+    map<string, string> config = 13;
+}
+
+message CalibrateResponse {
+    bool success = 1;
+    string error = 2;
+    uint64 i_frame_latency_ns = 3;
+    uint64 p_frame_latency_ns = 4;
+    bool supported = 5;
+    string actual_encoder_name = 6;
+    int32 actual_width = 7;
+    int32 actual_height = 8;
+    double max_sustainable_fps = 9;
+    uint64 recommended_slot_size = 10;
+    repeated string warnings = 11;
+}
+
 // ---- Service ----
 
 service CameraPluginService {
@@ -292,4 +323,5 @@ service CameraPluginService {
     rpc StopStream(StopStreamRequest) returns (StopStreamResponse);
     rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
     rpc HealthCheck(HealthCheckRequest) returns (HealthStatus);
+    rpc Calibrate(CalibrateRequest) returns (CalibrateResponse);
 }

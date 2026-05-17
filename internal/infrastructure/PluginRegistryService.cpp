@@ -7,11 +7,9 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
-#ifdef __APPLE__
-#include <sys/mman.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
-#endif
 
 namespace micecam::infrastructure {
 
@@ -26,16 +24,91 @@ static int default_shm_unlink(const std::string& name) {
 }
 
 PluginRegistryService::PluginRegistryService(const std::string& bundled_plugins_dir,
-                                             const std::string& config_dir)
+                                             const std::string& config_dir,
+                                             uint64_t stall_timeout_ms)
     : bundled_plugins_dir_(bundled_plugins_dir)
     , linked_config_(config_dir + "/linked_plugins.json")
-    , shm_unlink_fn_(default_shm_unlink) {}
+    , shm_unlink_fn_(default_shm_unlink)
+    , stall_timeout_ms_(stall_timeout_ms) {}
 
 bool PluginRegistryService::initialize() {
     linked_config_.load();
 
     scanBundledDirectory();
     scanLinkedDirectories();
+
+    monitor_ = std::make_unique<StreamLivenessMonitor>(stall_timeout_ms_);
+
+    monitor_->set_stall_callback([this](const std::string& stream_id,
+                                         const std::string& plugin_id,
+                                         uint64_t stall_duration_ms,
+                                         int stall_count) {
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            auto it = plugin_streams_.find(plugin_id);
+            if (it == plugin_streams_.end()) return;
+            auto& vec = it->second;
+            if (std::find(vec.begin(), vec.end(), stream_id) == vec.end()) return;
+        }
+
+        if (!notify_stall_fn_) return;
+
+        auto result = notify_stall_fn_(stream_id, plugin_id, stall_duration_ms);
+
+        if (!result.acknowledged) {
+            spdlog::warn("Stall not acknowledged for stream {}, finalizing", stream_id);
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                auto it = plugin_streams_.find(plugin_id);
+                if (it != plugin_streams_.end()) {
+                    auto& vec = it->second;
+                    vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+                }
+            }
+            if (crash_alert_cb_) crash_alert_cb_(plugin_id);
+            return;
+        }
+
+        if (!result.recoverable) {
+            spdlog::warn("Stall unrecoverable for stream {}, finalizing", stream_id);
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                auto it = plugin_streams_.find(plugin_id);
+                if (it != plugin_streams_.end()) {
+                    auto& vec = it->second;
+                    vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+                }
+            }
+            if (crash_alert_cb_) crash_alert_cb_(plugin_id);
+            return;
+        }
+
+        if (stall_count >= max_stall_retries_) {
+            spdlog::warn("Stall escalation for stream {} after {} retries, finalizing",
+                         stream_id, stall_count);
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                auto it = plugin_streams_.find(plugin_id);
+                if (it != plugin_streams_.end()) {
+                    auto& vec = it->second;
+                    vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+                }
+            }
+            if (crash_alert_cb_) crash_alert_cb_(plugin_id);
+            return;
+        }
+
+        spdlog::info("Stall recoverable for stream {}, attempt {}/{}",
+                     stream_id, stall_count, max_stall_retries_);
+    });
+
+    monitor_->set_all_stalled_callback([this](const std::string& plugin_id) {
+        spdlog::warn("All streams stalled for plugin {}, triggering crash recovery", plugin_id);
+        if (crash_alert_cb_) crash_alert_cb_(plugin_id);
+        handle_plugin_crash(plugin_id);
+    });
+
+    monitor_->start();
 
     pending_restart_ = false;
     initialized_ = true;
@@ -284,17 +357,27 @@ PluginRegistryService::getDiagnostics() const {
 
 void PluginRegistryService::register_stream(const std::string& plugin_id,
                                              const std::string& stream_id) {
-    std::lock_guard<std::mutex> lock(registry_mutex_);
-    plugin_streams_[plugin_id].push_back(stream_id);
+    {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        plugin_streams_[plugin_id].push_back(stream_id);
+    }
+    if (monitor_) {
+        monitor_->register_stream(stream_id, plugin_id);
+    }
 }
 
 void PluginRegistryService::unregister_stream(const std::string& plugin_id,
                                                const std::string& stream_id) {
-    std::lock_guard<std::mutex> lock(registry_mutex_);
-    auto it = plugin_streams_.find(plugin_id);
-    if (it != plugin_streams_.end()) {
-        auto& vec = it->second;
-        vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+    {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        auto it = plugin_streams_.find(plugin_id);
+        if (it != plugin_streams_.end()) {
+            auto& vec = it->second;
+            vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+        }
+    }
+    if (monitor_) {
+        monitor_->unregister_stream(stream_id);
     }
 }
 
@@ -345,6 +428,14 @@ void PluginRegistryService::set_shm_unlink_fn(ShmUnlinkFn fn) {
 void PluginRegistryService::set_restart_fn(
         std::function<bool(const std::string& plugin_id)> fn) {
     restart_fn_ = std::move(fn);
+}
+
+void PluginRegistryService::set_notify_stall_fn(NotifyStallFn fn) {
+    notify_stall_fn_ = std::move(fn);
+}
+
+StreamLivenessMonitor* PluginRegistryService::get_liveness_monitor() const {
+    return monitor_.get();
 }
 
 void PluginRegistryService::detect_channel_failure(const std::string& plugin_id) {

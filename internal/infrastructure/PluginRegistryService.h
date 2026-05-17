@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -10,6 +11,7 @@
 #include "domain/PluginManifest.h"
 #include "domain/PluginSource.h"
 #include "infrastructure/LinkedPluginConfig.h"
+#include "infrastructure/StreamLivenessMonitor.h"
 
 namespace micecam::infrastructure {
 
@@ -18,6 +20,11 @@ struct CrashRecoveryResult {
     bool restart_succeeded = false;
     std::vector<std::string> finalized_streams;
     std::vector<std::string> cleaned_shm_names;
+};
+
+struct StallNotifyResult {
+    bool acknowledged = false;
+    bool recoverable = false;
 };
 
 class PluginRegistryService {
@@ -30,9 +37,13 @@ public:
 
     using CrashAlertCallback = std::function<void(const std::string& plugin_id)>;
     using ShmUnlinkFn = std::function<int(const std::string&)>;
+    using NotifyStallFn = std::function<StallNotifyResult(const std::string& stream_id,
+                                                          const std::string& plugin_id,
+                                                          uint64_t stall_duration_ms)>;
 
     PluginRegistryService(const std::string& bundled_plugins_dir,
-                         const std::string& config_dir);
+                         const std::string& config_dir,
+                         uint64_t stall_timeout_ms = 5000);
 
     bool initialize();
     bool addLinkedDirectory(const std::string& path);
@@ -55,6 +66,8 @@ public:
 
     void set_crash_alert_callback(CrashAlertCallback cb);
     void set_shm_unlink_fn(ShmUnlinkFn fn);
+    void set_notify_stall_fn(NotifyStallFn fn);
+    StreamLivenessMonitor* get_liveness_monitor() const;
 
     void detect_channel_failure(const std::string& plugin_id);
     CrashRecoveryResult handle_plugin_crash(const std::string& plugin_id);
@@ -76,8 +89,12 @@ private:
 
     CrashAlertCallback crash_alert_cb_;
     ShmUnlinkFn shm_unlink_fn_;
+    NotifyStallFn notify_stall_fn_;
     std::function<bool(const std::string&)> restart_fn_;
     int max_restart_retries_ = 3;
+    int max_stall_retries_ = 2;
+    uint64_t stall_timeout_ms_;
+    std::unique_ptr<StreamLivenessMonitor> monitor_;
 
     void scanBundledDirectory();
     void scanLinkedDirectories();

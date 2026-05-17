@@ -305,4 +305,15 @@ grpc::Status OAKPluginServer::Calibrate(
     return grpc::Status::OK;
 }
 
+grpc::Status OAKPluginServer::NotifyStreamStall(
+    grpc::ServerContext*,
+    const NotifyStreamStallRequest*,
+    NotifyStreamStallResponse* resp) {
+    resp->set_acknowledged(false);
+    resp->set_recoverable(false);
+    resp->set_action("not_supported");
+    resp->set_message("OAK-D recovery not supported");
+    return grpc::Status::OK;
+}
+
 } // namespace micecam::plugin

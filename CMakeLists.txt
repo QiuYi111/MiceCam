@@ -121,6 +121,7 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/PluginRingReader.cpp
     internal/infrastructure/PluginStreamConsumer.cpp
     internal/infrastructure/ResourceManager.cpp
+    internal/infrastructure/StreamLivenessMonitor.cpp
     internal/pipeline/TranscodeStage.cpp
     internal/pipeline/StatsCollector.cpp
     internal/pipeline/PreflightValidator.cpp
@@ -229,6 +230,7 @@ add_micecam_test(test_plugin_ring_reader tests/unit/test_plugin_ring_reader.cpp)
 add_micecam_test(test_plugin_stream_consumer tests/unit/test_plugin_stream_consumer.cpp)
 add_micecam_test(test_resource_manager tests/unit/test_resource_manager.cpp)
 add_micecam_test(test_timestamp_engine tests/unit/test_timestamp_engine.cpp)
+add_micecam_test(test_stream_liveness_monitor tests/unit/test_stream_liveness_monitor.cpp)
 
 if(BUILD_PLUGINS)
     # FFmpeg plugin gRPC integration test
@@ -325,6 +327,72 @@ if(BUILD_PLUGINS)
     )
     add_test(NAME test_proto_calibrate COMMAND test_proto_calibrate
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+    # Integration e2e tests (fork+exec real plugin binary)
+    set(INTEG_E2E_PROTO_GEN_DIR "${CMAKE_BINARY_DIR}/integ_e2e_proto_gen")
+    file(MAKE_DIRECTORY "${INTEG_E2E_PROTO_GEN_DIR}")
+
+    add_custom_command(
+        OUTPUT
+            ${INTEG_E2E_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+            ${INTEG_E2E_PROTO_GEN_DIR}/micecam/camera_plugin.pb.h
+            ${INTEG_E2E_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+            ${INTEG_E2E_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.h
+        COMMAND ${FFMPEG_TEST_PROTOC}
+            ARGS
+                --proto_path=${CMAKE_SOURCE_DIR}/api
+                --cpp_out=${INTEG_E2E_PROTO_GEN_DIR}
+                --grpc_out=${INTEG_E2E_PROTO_GEN_DIR}
+                --plugin=protoc-gen-grpc=${FFMPEG_TEST_GRPC_CPP_PLUGIN}
+                ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+        DEPENDS ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto
+        COMMENT "Generating gRPC stubs for integration e2e tests"
+    )
+
+    function(add_e2e_integ_test name source)
+        add_executable(${name}
+            ${source}
+            ${INTEG_E2E_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+            ${INTEG_E2E_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+        )
+        target_include_directories(${name} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/api
+            ${INTEG_E2E_PROTO_GEN_DIR}
+        )
+        target_link_libraries(${name} PRIVATE
+            gRPC::grpc++
+            gRPC::grpc
+            protobuf::libprotobuf
+            GTest::gtest
+            GTest::gtest_main
+            PkgConfig::spdlog
+        )
+        target_compile_options(${name} PRIVATE
+            $<$<CXX_COMPILER_ID:MSVC>:/W4>
+            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+        )
+        target_compile_definitions(${name} PRIVATE
+            _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        )
+        set_target_properties(${name} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+        )
+        add_test(NAME ${name} COMMAND ${name}
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        set_tests_properties(${name} PROPERTIES
+            LABELS "no-hardware"
+            TIMEOUT 60
+        )
+        add_dependencies(${name} micecam_ffmpeg_plugin)
+    endfunction()
+
+    # Fork+exec e2e tests use POSIX API (fork/exec/shm_unlink) — not available on Windows
+    if(NOT WIN32)
+        add_e2e_integ_test(test_plugin_e2e_no_hw tests/integration/test_plugin_e2e_no_hw.cpp)
+        add_e2e_integ_test(test_calibrate_e2e tests/integration/test_calibrate_e2e.cpp)
+        add_e2e_integ_test(test_dual_path_keyframe tests/integration/test_dual_path_keyframe.cpp)
+    endif()
 endif()
 
 if(BUILD_UI)

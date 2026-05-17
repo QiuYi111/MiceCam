@@ -62,6 +62,10 @@ public:
                            const micecam::plugin::CalibrateRequest* req,
                            micecam::plugin::CalibrateResponse* resp) override;
 
+    grpc::Status NotifyStreamStall(grpc::ServerContext* ctx,
+                                   const micecam::plugin::NotifyStreamStallRequest* req,
+                                   micecam::plugin::NotifyStreamStallResponse* resp) override;
+
 private:
     static constexpr const char* kPluginVersion = "0.1.0";
     static constexpr const char* kPluginName = "MiceCam OAK-D Capture";

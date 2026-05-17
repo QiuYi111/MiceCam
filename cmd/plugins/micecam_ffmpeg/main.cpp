@@ -1,7 +1,9 @@
+#include <atomic>
 #include <cstdlib>
 #include <csignal>
 #include <iostream>
 #include <string>
+#include <thread>
 
 #include <grpcpp/grpcpp.h>
 #include <spdlog/spdlog.h>
@@ -9,12 +11,10 @@
 #include "FFmpegPluginServer.h"
 
 static std::unique_ptr<grpc::Server> g_server;
+static std::atomic<bool> g_shutdown_requested{false};
 
-static void signal_handler(int sig) {
-    spdlog::info("Received signal {}, shutting down...", sig);
-    if (g_server) {
-        g_server->Shutdown();
-    }
+static void signal_handler(int) {
+    g_shutdown_requested.store(true);
 }
 
 static void print_usage(const char* prog) {
@@ -69,7 +69,17 @@ int main(int argc, char* argv[]) {
     }
 
     spdlog::info("gRPC server listening on {}", listen_addr);
+
+    std::thread shutdown_watcher([] {
+        while (!g_shutdown_requested.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        spdlog::info("Shutdown requested");
+        g_server->Shutdown();
+    });
+
     g_server->Wait();
+    shutdown_watcher.join();
 
     spdlog::info("Server shutdown complete");
     return 0;

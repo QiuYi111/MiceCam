@@ -15,6 +15,7 @@ class RecordingPipeline;
 namespace micecam::infrastructure {
 
 class PluginRingReader;
+class StreamLivenessMonitor;
 
 struct PluginStreamConfig {
     std::string plugin_id;
@@ -52,6 +53,7 @@ public:
 
     bool start();
     void stop();
+    void set_liveness_monitor(StreamLivenessMonitor* monitor);
     TransportStats getTransportStats() const;
     PluginSourceInfo getPluginSourceInfo() const;
 
@@ -62,6 +64,7 @@ private:
     pipeline::RecordingPipeline& pipeline_;
     PluginStreamConfig config_;
 
+    StreamLivenessMonitor* monitor_ = nullptr;
     std::unique_ptr<PluginRingReader> reader_;
     std::jthread consumer_thread_;
     std::atomic<bool> running_{false};

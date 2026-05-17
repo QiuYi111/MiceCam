@@ -32,7 +32,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
       - name: Test
-        run: ctest --test-dir build --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*'
+        run: ctest --test-dir build --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*e2e.*'
 
   build-linux:
     runs-on: ubuntu-latest

@@ -189,6 +189,15 @@ class TestValidateMetaJson(unittest.TestCase):
             "plugin_version": "1.0.0",
             "source_name": "FFmpeg Camera",
             "device_persistent_id": "cam-001",
+            "session_start_wall_time": "2025-01-15T10:30:00.123456",
+            "keyframe_interval": 30,
+            "i_frame_latency_ms": 5.2,
+            "p_frame_latency_ms": 1.1,
+            "crash_window_sec": 10.0,
+            "actual_encoder_name": "h264_videotoolbox",
+            "calibration_duration_ms": 250,
+            "parallel_test_passed": True,
+            "requested_streams": ["stream_0"],
         })
         r = validate_meta_json(path, strict=True)
         self.assertEqual(r.status, "WARN")
@@ -359,6 +368,205 @@ class TestValidateSession(unittest.TestCase):
             self.assertTrue(v.has_failures)
             srt_results = [r for r in v.results if "SRT" in r.name]
             self.assertTrue(any(r.status == "FAIL" for r in srt_results))
+
+
+class TestValidateMetaSpec004Strict(unittest.TestCase):
+    def _write_json(self, data: dict) -> str:
+        f = tempfile.NamedTemporaryFile(mode="w", suffix="_meta.json", delete=False, encoding="utf-8")
+        json.dump(data, f)
+        f.flush()
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def _base_meta(self) -> dict:
+        return {
+            "plugin_id": "com.micecam.ffmpeg",
+            "plugin_version": "1.0.0",
+            "source_name": "FFmpeg Camera",
+            "device_persistent_id": "cam-001",
+            "api_version": "1.0",
+            "resolved_output": "h264",
+            "capability_snapshot": {},
+            "resolved_config": {},
+            "session_start_wall_time": "2025-01-15T10:30:00.123456",
+            "keyframe_interval": 30,
+            "i_frame_latency_ms": 5.2,
+            "p_frame_latency_ms": 1.1,
+            "crash_window_sec": 10.0,
+            "actual_encoder_name": "h264_videotoolbox",
+            "calibration_duration_ms": 250,
+            "parallel_test_passed": True,
+            "requested_streams": ["stream_0"],
+        }
+
+    def test_valid_meta_all_spec004_fields_strict(self):
+        path = self._write_json(self._base_meta())
+        r = validate_meta_json(path, strict=True)
+        self.assertEqual(r.status, "PASS")
+        self.assertIn("Valid metadata", r.message)
+
+    def test_missing_spec004_field_strict(self):
+        for field in ("session_start_wall_time", "keyframe_interval", "i_frame_latency_ms",
+                       "p_frame_latency_ms", "crash_window_sec", "actual_encoder_name",
+                       "calibration_duration_ms", "parallel_test_passed", "requested_streams"):
+            data = self._base_meta()
+            del data[field]
+            path = self._write_json(data)
+            r = validate_meta_json(path, strict=True)
+            self.assertEqual(r.status, "FAIL", f"Expected FAIL for missing {field}")
+            self.assertIn(field, r.message)
+
+    def test_wrong_type_spec004_field_strict(self):
+        type_cases = [
+            ("keyframe_interval", "not_int"),
+            ("i_frame_latency_ms", "not_number"),
+            ("p_frame_latency_ms", "not_number"),
+            ("crash_window_sec", "not_number"),
+            ("calibration_duration_ms", "not_number"),
+            ("parallel_test_passed", "not_bool"),
+            ("requested_streams", "not_list"),
+        ]
+        for field, bad_val in type_cases:
+            data = self._base_meta()
+            data[field] = bad_val
+            path = self._write_json(data)
+            r = validate_meta_json(path, strict=True)
+            self.assertEqual(r.status, "FAIL", f"Expected FAIL for wrong type in {field}")
+            self.assertIn("wrong type", r.message)
+
+    def test_non_positive_number_spec004_strict(self):
+        zero_cases = [
+            ("keyframe_interval", 0),
+            ("i_frame_latency_ms", -1),
+            ("p_frame_latency_ms", 0),
+            ("crash_window_sec", -5),
+            ("calibration_duration_ms", 0),
+        ]
+        for field, bad_val in zero_cases:
+            data = self._base_meta()
+            data[field] = bad_val
+            path = self._write_json(data)
+            r = validate_meta_json(path, strict=True)
+            self.assertEqual(r.status, "FAIL", f"Expected FAIL for {field}={bad_val}")
+            self.assertIn("must be > 0", r.message)
+
+    def test_empty_string_spec004_strict(self):
+        for field in ("session_start_wall_time", "actual_encoder_name"):
+            data = self._base_meta()
+            data[field] = ""
+            path = self._write_json(data)
+            r = validate_meta_json(path, strict=True)
+            self.assertEqual(r.status, "FAIL", f"Expected FAIL for empty {field}")
+
+    def test_empty_requested_streams_strict(self):
+        data = self._base_meta()
+        data["requested_streams"] = []
+        path = self._write_json(data)
+        r = validate_meta_json(path, strict=True)
+        self.assertEqual(r.status, "FAIL")
+        self.assertIn("empty list", r.message)
+
+    def test_invalid_iso8601_wall_time_strict(self):
+        data = self._base_meta()
+        data["session_start_wall_time"] = "not-a-date"
+        path = self._write_json(data)
+        r = validate_meta_json(path, strict=True)
+        self.assertEqual(r.status, "FAIL")
+        self.assertIn("not ISO 8601", r.message)
+
+
+class TestValidateSRTWallTime(unittest.TestCase):
+    def _write_srt(self, content: str) -> str:
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=".srt", delete=False, encoding="utf-8")
+        f.write(content)
+        f.flush()
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_valid_srt_with_wall_time_strict(self):
+        srt = (
+            "1\n"
+            "00:00:00,000 --> 00:00:00,033\n"
+            "wall_time=2025-01-15T10:30:00.123456\n\n"
+            "2\n"
+            "00:00:00,033 --> 00:00:00,067\n"
+            "wall_time=2025-01-15T10:30:00.156456\n\n"
+        )
+        path = self._write_srt(srt)
+        r = validate_srt(path, strict=True)
+        self.assertEqual(r.status, "PASS")
+        self.assertIn("monotonic", r.message)
+
+    def test_valid_srt_without_wall_time_strict_warns(self):
+        srt = (
+            "1\n"
+            "00:00:00,000 --> 00:00:00,033\n"
+            "frame 0\n\n"
+            "2\n"
+            "00:00:00,033 --> 00:00:00,067\n"
+            "frame 1\n\n"
+        )
+        path = self._write_srt(srt)
+        r = validate_srt(path, strict=True)
+        self.assertEqual(r.status, "WARN")
+        self.assertIn("no wall_time", r.message)
+
+    def test_srt_with_invalid_wall_time_format(self):
+        srt = (
+            "1\n"
+            "00:00:00,000 --> 00:00:00,033\n"
+            "wall_time=bad-format\n\n"
+            "2\n"
+            "00:00:00,033 --> 00:00:00,067\n"
+            "wall_time=2025-01-15T10:30:00.123456\n\n"
+        )
+        path = self._write_srt(srt)
+        r = validate_srt(path, strict=True)
+        self.assertEqual(r.status, "WARN")
+        self.assertIn("invalid wall_time", r.message)
+
+    def test_non_strict_no_wall_time_still_passes(self):
+        srt = (
+            "1\n"
+            "00:00:00,000 --> 00:00:00,033\n"
+            "frame 0\n\n"
+        )
+        path = self._write_srt(srt)
+        r = validate_srt(path, strict=False)
+        self.assertEqual(r.status, "PASS")
+
+
+class TestValidateStatsStructure(unittest.TestCase):
+    def _write_json(self, data, suffix="_stats.json") -> str:
+        f = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8")
+        json.dump(data, f)
+        f.flush()
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_stats_json_is_array_fails(self):
+        path = self._write_json([1, 2, 3])
+        r = validate_stats_json(path)
+        self.assertEqual(r.status, "FAIL")
+        self.assertIn("must be a dict", r.message)
+
+    def test_stats_json_is_list_fails(self):
+        path = self._write_json([])
+        r = validate_stats_json(path)
+        self.assertEqual(r.status, "FAIL")
+        self.assertIn("must be a dict", r.message)
+
+    def test_valid_stats_dict_passes(self):
+        path = self._write_json({
+            "transport_frames_total": 1000,
+            "transport_drops_total": 0,
+            "transport_backpressure_events": 0,
+        })
+        r = validate_stats_json(path)
+        self.assertEqual(r.status, "PASS")
 
 
 class TestValidationResult(unittest.TestCase):

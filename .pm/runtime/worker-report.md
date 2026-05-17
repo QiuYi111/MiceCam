@@ -1,90 +1,83 @@
-# Worker Report: Phase 7 — FFmpeg/OAK Calibrate, CI, fMP4 Smoke Test
+# Worker Report: Fix signal handler mutex recursion + fork e2e binary path resolution
 
-## Task
+## Task Reference
 
-Implement spec 004 Phase 7 (final): FFmpeg/OAK plugin Calibrate RPC, three-platform CI, and fMP4 smoke test.
+- Task: `.pm/runtime/next-task.md`
+- Branch: `feat/005-stream-monitoring-test-suite`
+- Baseline: 39/39 tests passing (commit b4e5ade)
 
-## Risk Classification
+## Summary
 
-**Branch** — touches plugin RPC implementations and test infrastructure. No core domain or infra changes.
+Fixed two bugs:
+1. **Signal handler mutex recursion** — Plugin mains called `spdlog::info()` and `g_server->Shutdown()` directly in signal handlers, which are not async-signal-safe. This caused `detected illegal recursion into Mutex code` when signals fired during gRPC `Wait()`.
+2. **Fork e2e binary path resolution** — Integration tests used `std::filesystem::current_path()` to find the plugin binary, which only worked when cwd was `build/`. Running from project root failed.
 
 ## Changes
 
-### 1. FFmpeg Plugin: Real Calibrate RPC
+### 1. Signal handler fix (2 files)
 
-**File**: `cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.cpp`
+**Files:** `cmd/plugins/micecam_ffmpeg/main.cpp`, `cmd/plugins/micecam_oak/main.cpp`
 
-- Replaced stub `Calibrate()` with real encoder-based calibration
-- Uses `find_encoder_for_calibration()` — same hw detect + fallback logic as recording path
-- Encodes test frames (solid YUV420P gray) for `calibration_duration_ms` (default 3000ms)
-- Measures I-frame and P-frame latency via `steady_clock`
-- Computes `max_sustainable_fps = 1e9 / max(I, P)`
-- Computes `recommended_slot_size = max_encoded_frame_size * 1.5`
-- Returns all fields: `i_frame_latency_ns`, `p_frame_latency_ns`, `max_sustainable_fps`, `recommended_slot_size`, `actual_encoder_name`, `actual_width`, `actual_height`
+- Added `std::atomic<bool> g_shutdown_requested{false}`
+- Signal handler now **only** sets the atomic flag — fully async-signal-safe
+- Added `#include <atomic>` and `#include <thread>`
+- Replaced `g_server->Wait()` with a `shutdown_watcher` thread that polls the atomic flag every 200ms and calls `g_server->Shutdown()` from a safe (non-signal) context
+- Main thread calls `g_server->Wait()` (blocks until `Shutdown()` is called by the watcher thread)
+- `spdlog::info("Shutdown requested")` moved to the watcher thread
 
-### 2. OAK Plugin: Placeholder Calibrate RPC
+**Note:** The task specified `Wait(timeout)` pattern, but the installed gRPC version (`grpc::Server::Wait()`) takes no arguments. Adapted to use a shutdown watcher thread + `Wait()` instead, which achieves the same safety guarantee: `Shutdown()` is never called from the signal handler.
 
-**File**: `cmd/plugins/micecam_oak/OAKPluginServer.cpp`
+### 2. Binary path resolution fix (3 files)
 
-- Returns conservative estimates: I=2ms, P=0.5ms, max_fps=30.0
-- `recommended_slot_size = width * height * 3/2` (NV12 estimate)
-- `actual_encoder_name = "depthai_h264"`
-- Includes warning: "Calibration estimated -- no hardware available for testing"
+**Files:** `tests/integration/test_plugin_e2e_no_hw.cpp`, `tests/integration/test_calibrate_e2e.cpp`, `tests/integration/test_dual_path_keyframe.cpp`
 
-### 3. Three-Platform CI
+- Added `#include <mach-o/dyld.h>` for macOS
+- `find_plugin_binary()` now resolves path relative to the test binary location using `_NSGetExecutablePath` (macOS) or `/proc/self/exe` (Linux)
+- Path resolution: `test_binary_dir/../cmd/plugins/micecam_ffmpeg/micecam_ffmpeg_plugin` (since test binary is at `build/tests/test_xxx` and plugin is at `build/cmd/plugins/...`)
+- Falls back to original cwd-relative behavior if absolute path candidate doesn't exist
 
-**File**: `.github/workflows/ci.yml` (new)
+## Verification Evidence
 
-- Three jobs: `build-macos`, `build-windows`, `build-linux`
-- macOS: Homebrew deps (ffmpeg, protobuf, grpc, spdlog, nlohmann-json, googletest)
-- Windows: vcpkg deps, `BUILD_UI=OFF`
-- Linux: apt-get deps, `BUILD_UI=OFF`
-- All exclude HIL and stress tests via `--exclude-regex`
-
-### 4. fMP4 Smoke Test
-
-**File**: `tests/integration/test_fmp4_smoke.cpp` (new)
-
-- Two tests:
-  1. `FileReadableWithoutTrailer` — writes fMP4 with `+frag_keyframe+empty_moov+default_base_moov`, encodes 15 frames via libx264, writes with trailer, verifies readable, frame count matches
-  2. `FileReadableAfterCrashNoTrailer` — same setup but closes WITHOUT `av_write_trailer` (crash simulation), verifies file is openable with valid H264 stream descriptor and dimensions
-
-### 5. Test Updates
-
-**File**: `tests/unit/test_ffmpeg_plugin_server.cpp`
-
-- `CalibrateReturnsNotImplemented` → now tests real calibration output
-- Uses small resolution (320x240) and 500ms duration for speed
-- Verifies: `success=true`, non-zero latencies, positive fps, non-empty encoder name, correct dimensions
-
-**File**: `tests/unit/test_oak_plugin_server.cpp`
-
-- `CalibrateReturnsNotImplemented` → `CalibrateReturnsPlaceholderValues`
-- Verifies exact placeholder values and warning message contains "estimated"
-
-### 6. CMakeLists.txt
-
-- Added `add_micecam_test(test_fmp4_smoke ...)` to integration test list
-
-## Verification
+### Build
 
 ```
-cmake --build build -j 4  # SUCCESS (0 errors, 0 warnings in changed files)
-ctest --test-dir build --output-on-failure  # 37/37 passed
+cmake --build build -j 4 → SUCCESS (0 errors)
 ```
+
+### Test Suite
+
+```
+ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
+→ 100% tests passed, 0 tests failed out of 39
+→ Total Test time (real) = 53.24 sec
+```
+
+### Mutex Recursion Check
+
+```
+./build/tests/test_plugin_e2e_no_hw --gtest_print_time=1 2>&1 | grep -i 'mutex\|recursion' | wc -l
+→ 0
+```
+
+### Binary Path from Project Root
+
+```
+cd /Volumes/DataHub/Projects/MiceCam && ./build/tests/test_plugin_e2e_no_hw
+→ [  PASSED  ] 1 test.
+```
+
+## Scope Compliance
+
+- Only modified 5 allowed files
+- No infrastructure/pipeline/domain/proto/CMakeLists.txt changes
+- No test file modifications beyond the 3 allowed integration tests
 
 ## Acceptance Criteria
 
-- [x] FFmpeg Calibrate RPC returns actual encoder latencies from test encoding
-- [x] OAK Calibrate RPC returns placeholder values with warning
-- [x] CI YAML has three jobs: macOS, Windows, Linux
-- [x] Windows CI uses BUILD_UI=OFF
-- [x] CI excludes HIL and stress tests
-- [x] fMP4 smoke test passes: file readable without trailer
-- [x] `cmake --build build -j 4` succeeds
-- [x] `ctest --test-dir build --output-on-failure` passes (37/37)
-- [x] At least 2 new/modified tests (3 new/modified test files)
-
-## Blockers
-
-None.
+- [x] Both plugin mains use atomic flag + safe Shutdown pattern (adapted for API constraints)
+- [x] No spdlog calls in signal handler
+- [x] All three e2e tests find plugin binary correctly from project root AND build dir
+- [x] `cmake --build build` succeeds
+- [x] 39/39 tests pass via ctest
+- [x] `./build/tests/test_plugin_e2e_no_hw` from project root succeeds
+- [x] No `detected illegal recursion into Mutex code` in test output

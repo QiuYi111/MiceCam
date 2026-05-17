@@ -376,6 +376,62 @@ TEST_F(FFmpegPluginServerTest, CalibrateReturnsNotImplemented) {
     EXPECT_LT(resp.p_frame_latency_ns(), 1'000'000'000u);
 }
 
+TEST_F(FFmpegPluginServerTest, NotifyStreamStallUnknownStream) {
+    micecam::plugin::NotifyStreamStallRequest req;
+    req.set_stream_id("nonexistent_stream");
+    req.set_stall_duration_ms(5000);
+
+    micecam::plugin::NotifyStreamStallResponse resp;
+    grpc::ClientContext ctx;
+    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+
+    auto status = stub_->NotifyStreamStall(&ctx, req, &resp);
+    ASSERT_TRUE(status.ok()) << status.error_message();
+    EXPECT_FALSE(resp.acknowledged());
+}
+
+TEST_F(FFmpegPluginServerTest, NotifyStreamStallKnownStream) {
+    micecam::plugin::OpenStreamRequest open_req;
+    auto* config = open_req.mutable_config();
+    config->set_device_id("0");
+    config->set_stream_index(0);
+    config->set_width(1920);
+    config->set_height(1080);
+    config->set_framerate(30);
+    open_req.set_ring_slot_count(8);
+    open_req.set_ring_slot_size(65536);
+
+    micecam::plugin::OpenStreamResponse open_resp;
+    grpc::ClientContext open_ctx;
+    open_ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+
+    auto open_status = stub_->OpenStream(&open_ctx, open_req, &open_resp);
+    ASSERT_TRUE(open_status.ok() && open_resp.success());
+    std::string stream_id = open_resp.ring_descriptor().stream_id();
+
+    micecam::plugin::NotifyStreamStallRequest req;
+    req.set_stream_id(stream_id);
+    req.set_stall_duration_ms(5000);
+
+    micecam::plugin::NotifyStreamStallResponse resp;
+    grpc::ClientContext ctx;
+    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+
+    auto status = stub_->NotifyStreamStall(&ctx, req, &resp);
+    ASSERT_TRUE(status.ok()) << status.error_message();
+    EXPECT_TRUE(resp.acknowledged());
+    EXPECT_TRUE(resp.recoverable());
+    EXPECT_EQ(resp.action(), "retrying");
+    EXPECT_FALSE(resp.message().empty());
+
+    micecam::plugin::StopStreamRequest stop_req;
+    stop_req.set_stream_id(stream_id);
+    micecam::plugin::StopStreamResponse stop_resp;
+    grpc::ClientContext stop_ctx;
+    stop_ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+    stub_->StopStream(&stop_ctx, stop_req, &stop_resp);
+}
+
 // RingFrameProducer standalone test
 TEST(RingFrameProducerTest, CreateAndWrite) {
     micecam::plugin::RingFrameProducer ring;

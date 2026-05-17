@@ -387,4 +387,21 @@ TEST_F(OAKPluginServerTest, CalibrateReturnsPlaceholderValues) {
     EXPECT_NE(resp.warnings(0).find("estimated"), std::string::npos);
 }
 
+TEST_F(OAKPluginServerTest, NotifyStreamStallAlwaysUnacknowledged) {
+    micecam::plugin::NotifyStreamStallRequest req;
+    req.set_stream_id("any_stream");
+    req.set_stall_duration_ms(5000);
+
+    micecam::plugin::NotifyStreamStallResponse resp;
+    grpc::ClientContext ctx;
+    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(kTestTimeoutMs));
+
+    auto status = stub_->NotifyStreamStall(&ctx, req, &resp);
+    ASSERT_TRUE(status.ok()) << status.error_message();
+    EXPECT_FALSE(resp.acknowledged());
+    EXPECT_FALSE(resp.recoverable());
+    EXPECT_EQ(resp.action(), "not_supported");
+    EXPECT_FALSE(resp.message().empty());
+}
+
 } // namespace

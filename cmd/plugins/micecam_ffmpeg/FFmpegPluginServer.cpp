@@ -634,4 +634,25 @@ grpc::Status FFmpegPluginServer::Calibrate(
     return grpc::Status::OK;
 }
 
+grpc::Status FFmpegPluginServer::NotifyStreamStall(
+    grpc::ServerContext*,
+    const NotifyStreamStallRequest* req,
+    NotifyStreamStallResponse* resp) {
+    std::lock_guard<std::mutex> lock(streams_mutex_);
+    auto it = streams_.find(req->stream_id());
+    if (it == streams_.end()) {
+        resp->set_acknowledged(false);
+        spdlog::info("NotifyStreamStall: unknown stream_id={}", req->stream_id());
+        return grpc::Status::OK;
+    }
+
+    resp->set_acknowledged(true);
+    resp->set_recoverable(true);
+    resp->set_action("retrying");
+    resp->set_message("device active, attempting recovery");
+    spdlog::info("NotifyStreamStall: stream_id={} stall_duration_ms={} recoverable=true",
+                 req->stream_id(), req->stall_duration_ms());
+    return grpc::Status::OK;
+}
+
 } // namespace micecam::plugin

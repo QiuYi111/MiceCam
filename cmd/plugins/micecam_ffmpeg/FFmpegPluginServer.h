@@ -105,6 +105,11 @@ private:
 
     void ensureDevicesCached() const;
     bool validateDeviceId(const std::string& device_id) const;
+    bool hasH264Encoder() const;
+    bool isDeviceAccessible(const std::string& device_id) const;
+
+    mutable bool h264_encoder_checked_ = false;
+    mutable bool h264_encoder_available_ = false;
 };
 
 } // namespace micecam::plugin

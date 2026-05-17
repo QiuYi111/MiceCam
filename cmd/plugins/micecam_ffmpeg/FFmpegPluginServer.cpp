@@ -4,6 +4,7 @@
 #include <numeric>
 #include <set>
 #include <sstream>
+#include <unistd.h>
 
 #include <spdlog/spdlog.h>
 
@@ -104,9 +105,9 @@ grpc::Status FFmpegPluginServer::EnumerateDevices(
         si->set_unavailable_reason(dev.unavailable_reason);
         si->add_supported_payloads(PayloadKind::RAW);
         si->add_supported_payloads(PayloadKind::MJPEG);
-#ifdef __APPLE__
-        si->add_supported_payloads(PayloadKind::H264);
-#endif
+        if (hasH264Encoder()) {
+            si->add_supported_payloads(PayloadKind::H264);
+        }
         si->add_supported_pixel_formats("yuv420p");
         si->add_supported_pixel_formats("nv12");
         si->add_supported_pixel_formats("mjpeg");
@@ -263,6 +264,17 @@ grpc::Status FFmpegPluginServer::OpenStream(
         err->set_user_message("Device not found: " + config.device_id());
         resp->set_success(false);
         return grpc::Status::OK;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(streams_mutex_);
+        for (const auto& [id, stream] : streams_) {
+            if (stream->device_id == config.device_id() &&
+                stream->payload_kind == config.requested_payload()) {
+                return grpc::Status(grpc::StatusCode::ALREADY_EXISTS,
+                    "device already has active stream: " + config.device_id());
+            }
+        }
     }
 
     uint32_t slot_count = req->ring_slot_count();
@@ -422,7 +434,7 @@ CapabilityInfo FFmpegPluginServer::buildCapabilityInfo(const std::string& device
     ci.set_stream_index(0);
     ci.set_supports_raw(true);
     ci.set_supports_mjpeg(true);
-    ci.set_supports_h264(false);
+    ci.set_supports_h264(hasH264Encoder());
     ci.set_supports_h265(false);
     ci.set_max_width(1920);
     ci.set_max_height(1080);
@@ -462,6 +474,30 @@ bool FFmpegPluginServer::validateDeviceId(const std::string& device_id) const {
     ensureDevicesCached();
     return std::any_of(cached_devices_.begin(), cached_devices_.end(),
                        [&](const auto& d) { return d.device_id == device_id; });
+}
+
+bool FFmpegPluginServer::hasH264Encoder() const {
+    if (h264_encoder_checked_) return h264_encoder_available_;
+    static const char* encoder_names[] = {
+        "h264_videotoolbox", "h264_nvenc", "h264_qsv",
+        "h264_vaapi", "libx264"
+    };
+    h264_encoder_available_ = false;
+    for (auto name : encoder_names) {
+        if (avcodec_find_encoder_by_name(name)) {
+            h264_encoder_available_ = true;
+            break;
+        }
+    }
+    h264_encoder_checked_ = true;
+    return h264_encoder_available_;
+}
+
+bool FFmpegPluginServer::isDeviceAccessible(const std::string& device_id) const {
+    if (access(device_id.c_str(), F_OK) == 0) return true;
+    ensureDevicesCached();
+    return std::any_of(cached_devices_.begin(), cached_devices_.end(),
+                       [&](const auto& d) { return d.device_id == device_id && d.available; });
 }
 
 namespace {
@@ -535,9 +571,14 @@ grpc::Status FFmpegPluginServer::Calibrate(
     CalibrateResponse* resp) {
     resp->set_supported(true);
 
-    int width = req->width() > 0 ? req->width() : 1920;
-    int height = req->height() > 0 ? req->height() : 1080;
-    double fps = req->fps() > 0 ? req->fps() : 30.0;
+    if (req->width() <= 0 || req->height() <= 0 || req->fps() <= 0) {
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+            "width, height, and fps must be positive");
+    }
+
+    int width = req->width();
+    int height = req->height();
+    double fps = req->fps();
     int fps_int = static_cast<int>(fps);
     int duration_ms = req->calibration_duration_ms() > 0 ? req->calibration_duration_ms() : 3000;
     bool prefer_hw = req->prefer_hardware_encoder();
@@ -647,11 +688,20 @@ grpc::Status FFmpegPluginServer::NotifyStreamStall(
     }
 
     resp->set_acknowledged(true);
-    resp->set_recoverable(true);
-    resp->set_action("retrying");
-    resp->set_message("device active, attempting recovery");
-    spdlog::info("NotifyStreamStall: stream_id={} stall_duration_ms={} recoverable=true",
-                 req->stream_id(), req->stall_duration_ms());
+
+    if (!isDeviceAccessible(it->second->device_id)) {
+        resp->set_recoverable(false);
+        resp->set_action("device_lost");
+        resp->set_message("device is no longer accessible");
+        spdlog::info("NotifyStreamStall: stream_id={} device_id={} device_lost",
+                     req->stream_id(), it->second->device_id);
+    } else {
+        resp->set_recoverable(true);
+        resp->set_action("retrying");
+        resp->set_message("device active, attempting recovery");
+        spdlog::info("NotifyStreamStall: stream_id={} stall_duration_ms={} recoverable=true",
+                     req->stream_id(), req->stall_duration_ms());
+    }
     return grpc::Status::OK;
 }
 

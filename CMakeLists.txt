@@ -238,6 +238,9 @@ add_micecam_test(test_plugin_ring_reader tests/unit/test_plugin_ring_reader.cpp)
 add_micecam_test(test_plugin_stream_consumer tests/unit/test_plugin_stream_consumer.cpp)
 add_micecam_test(test_resource_manager tests/unit/test_resource_manager.cpp)
 add_micecam_test(test_timestamp_engine tests/unit/test_timestamp_engine.cpp)
+if(NOT WIN32)
+    add_micecam_test(test_shared_memory_backend tests/unit/test_shared_memory_backend.cpp)
+endif()
 add_micecam_test(test_stream_liveness_monitor tests/unit/test_stream_liveness_monitor.cpp)
 
 if(BUILD_PLUGINS)
@@ -316,6 +319,50 @@ if(BUILD_PLUGINS)
     )
 
     add_test(NAME test_ffmpeg_plugin_server COMMAND test_ffmpeg_plugin_server
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+    add_executable(test_negative_plugin_rpcs
+        tests/unit/test_negative_plugin_rpcs.cpp
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+        cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.cpp
+        cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
+        cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
+        cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
+        internal/infrastructure/PosixSharedMemory.cpp
+        internal/infrastructure/SharedMemoryBackend.cpp
+    )
+    target_include_directories(test_negative_plugin_rpcs PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmd/plugins/micecam_ffmpeg
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}
+    )
+    if(APPLE)
+        target_include_directories(test_negative_plugin_rpcs PRIVATE /opt/homebrew/include)
+    endif()
+    target_link_libraries(test_negative_plugin_rpcs PRIVATE
+        gRPC::grpc++
+        gRPC::grpc
+        protobuf::libprotobuf
+        GTest::gtest
+        GTest::gtest_main
+        PkgConfig::FFMPEG
+        PkgConfig::spdlog
+        PkgConfig::nlohmann_json
+    )
+    target_compile_options(test_negative_plugin_rpcs PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+    target_compile_definitions(test_negative_plugin_rpcs PRIVATE
+        _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+    )
+    set_target_properties(test_negative_plugin_rpcs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+    )
+    add_test(NAME test_negative_plugin_rpcs COMMAND test_negative_plugin_rpcs
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
     add_executable(test_proto_calibrate

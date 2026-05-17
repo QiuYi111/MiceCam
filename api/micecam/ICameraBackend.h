@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
-#include "internal/domain/DeviceInfo.h"
-#include "internal/domain/StreamConfig.h"
-#include "internal/domain/Capabilities.h"
+#include "domain/DeviceInfo.h"
+#include "domain/StreamConfig.h"
+#include "domain/Capabilities.h"
 
 namespace micecam::domain {
 class CameraStream;

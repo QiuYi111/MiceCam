@@ -8,7 +8,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fcntl.h>
+#ifdef __APPLE__
 #include <mach-o/dyld.h>
+#endif
 #include <signal.h>
 #include <string>
 #include <sys/mman.h>

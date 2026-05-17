@@ -6,7 +6,9 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#ifdef __APPLE__
 #include <mach-o/dyld.h>
+#endif
 #include <signal.h>
 #include <string>
 #include <sys/mman.h>

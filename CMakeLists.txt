@@ -387,9 +387,12 @@ if(BUILD_PLUGINS)
         add_dependencies(${name} micecam_ffmpeg_plugin)
     endfunction()
 
-    add_e2e_integ_test(test_plugin_e2e_no_hw tests/integration/test_plugin_e2e_no_hw.cpp)
-    add_e2e_integ_test(test_calibrate_e2e tests/integration/test_calibrate_e2e.cpp)
-    add_e2e_integ_test(test_dual_path_keyframe tests/integration/test_dual_path_keyframe.cpp)
+    # Fork+exec e2e tests use POSIX API (fork/exec/shm_unlink) — not available on Windows
+    if(NOT WIN32)
+        add_e2e_integ_test(test_plugin_e2e_no_hw tests/integration/test_plugin_e2e_no_hw.cpp)
+        add_e2e_integ_test(test_calibrate_e2e tests/integration/test_calibrate_e2e.cpp)
+        add_e2e_integ_test(test_dual_path_keyframe tests/integration/test_dual_path_keyframe.cpp)
+    endif()
 endif()
 
 if(BUILD_UI)

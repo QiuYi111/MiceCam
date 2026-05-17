@@ -121,6 +121,40 @@ def validate_mp4(mp4_path: str, strict: bool = False) -> CheckResult:
         result.details.append(f"codec={codec} {width}x{height}")
         result.message = "Valid MP4 with video stream"
 
+        if strict:
+            frag_proc = subprocess.run(
+                [
+                    ffprobe,
+                    "-v", "error",
+                    "-show_entries",
+                    "format=format_name,format_long_name",
+                    "-of", "json",
+                    mp4_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if frag_proc.returncode == 0:
+                frag_data = json.loads(frag_proc.stdout)
+                fmt_name = frag_data.get("format", {}).get("format_name", "")
+                if "mov,mp4" in fmt_name or "mp4" in fmt_name:
+                    moof_proc = subprocess.run(
+                        [ffprobe, "-v", "error", "-show_entries",
+                         "format_tags=moof", "-of", "json", mp4_path],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    frag_check_proc = subprocess.run(
+                        [ffprobe, "-v", "error", "-print_format", "json",
+                         "-show_packets", "-select_streams", "v:0",
+                         "-read_intervals", "%+#1", mp4_path],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if frag_check_proc.returncode == 0:
+                        pkt_data = json.loads(frag_check_proc.stdout)
+                        packets = pkt_data.get("packets", [])
+                        result.details.append(f"fragmented_mp4_check: packets_sample={len(packets)}")
+
     except (subprocess.TimeoutExpired, json.JSONDecodeError) as e:
         result.status = "FAIL"
         result.message = f"ffprobe check failed: {e}"
@@ -144,6 +178,8 @@ def validate_srt(srt_path: str, strict: bool = False) -> CheckResult:
     timestamps = []
     entry_count = 0
     non_mono_pairs = []
+    has_wall_time = False
+    invalid_wall_times = []
 
     srt_time_re = re.compile(
         r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*"
@@ -166,6 +202,13 @@ def validate_srt(srt_path: str, strict: bool = False) -> CheckResult:
                     non_mono_pairs.append((entry_count, prev_end_ms, start_ms))
                 prev_end_ms = end_ms
 
+            wt_match = re.search(r"wall_time=(\S+)", line)
+            if wt_match:
+                has_wall_time = True
+                wt_val = wt_match.group(1)
+                if not WALL_TIME_RE.match(wt_val):
+                    invalid_wall_times.append(wt_val)
+
     if entry_count == 0:
         result.status = "FAIL"
         result.message = "No valid SRT entries found"
@@ -176,6 +219,19 @@ def validate_srt(srt_path: str, strict: bool = False) -> CheckResult:
         result.message = f"SRT timestamps not monotonic ({len(non_mono_pairs)} violation(s))"
         for idx, prev, cur in non_mono_pairs[:5]:
             result.details.append(f"Entry {idx}: prev_end={prev}ms > start={cur}ms")
+        return result
+
+    if strict and not has_wall_time:
+        result.status = "WARN"
+        result.message = f"{entry_count} monotonic entries, but no wall_time in strict mode"
+        result.details.append("Expected wall_time=YYYY-MM-DDTHH:MM:SS.ffffff per entry")
+        return result
+
+    if invalid_wall_times:
+        result.status = "WARN"
+        result.message = f"{entry_count} monotonic entries, {len(invalid_wall_times)} invalid wall_time format(s)"
+        for wt in invalid_wall_times[:5]:
+            result.details.append(f"Invalid wall_time: {wt}")
         return result
 
     result.message = f"{entry_count} monotonic entries"
@@ -196,6 +252,21 @@ META_OPTIONAL_FIELDS = [
     ("capability_snapshot", (dict,)),
     ("resolved_config", (dict,)),
 ]
+
+META_STRICT_SPEC004_FIELDS = [
+    ("session_start_wall_time", (str,), True),
+    ("keyframe_interval", (int,), False),
+    ("i_frame_latency_ms", (int, float), False),
+    ("p_frame_latency_ms", (int, float), False),
+    ("crash_window_sec", (int, float), False),
+    ("actual_encoder_name", (str,), True),
+    ("calibration_duration_ms", (int, float), False),
+    ("parallel_test_passed", (bool,), None),
+    ("requested_streams", (list,), None),
+]
+
+ISO8601_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+WALL_TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}")
 
 
 def validate_meta_json(meta_path: str, strict: bool = False) -> CheckResult:
@@ -240,6 +311,33 @@ def validate_meta_json(meta_path: str, strict: bool = False) -> CheckResult:
             result.status = "WARN"
             result.message = f"Missing optional fields: {', '.join(missing_opt)}"
 
+        spec004_errors = []
+        for fname, etypes, constraint in META_STRICT_SPEC004_FIELDS:
+            fval = data.get(fname)
+            if fval is None:
+                spec004_errors.append(f"{fname}: missing")
+                continue
+            if not isinstance(fval, etypes):
+                spec004_errors.append(f"{fname}: wrong type {type(fval).__name__}")
+                continue
+            if constraint is True and isinstance(fval, str):
+                if fval.strip() == "":
+                    spec004_errors.append(f"{fname}: empty string")
+                elif fname == "session_start_wall_time" and not ISO8601_RE.match(fval):
+                    spec004_errors.append(f"{fname}: not ISO 8601 format")
+            elif constraint is False and isinstance(fval, (int, float)) and fval <= 0:
+                spec004_errors.append(f"{fname}: must be > 0, got {fval}")
+            elif constraint is None and isinstance(fval, list) and len(fval) == 0:
+                spec004_errors.append(f"{fname}: empty list")
+
+        if spec004_errors:
+            result.status = "FAIL"
+            result.message = f"Spec 004 strict errors: {'; '.join(spec004_errors)}"
+            for err in spec004_errors:
+                if err not in result.details:
+                    result.details.append(err)
+            return result
+
     return result
 
 
@@ -270,6 +368,17 @@ def validate_stats_json(stats_path: str, strict: bool = False) -> CheckResult:
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         result.status = "FAIL"
         result.message = f"Invalid JSON: {e}"
+        return result
+
+    if not isinstance(data, dict):
+        result.status = "FAIL"
+        result.message = f"Stats JSON must be a dict, got {type(data).__name__}"
+        return result
+
+    non_string_keys = [k for k in data.keys() if not isinstance(k, str)]
+    if non_string_keys:
+        result.status = "FAIL"
+        result.message = f"Stats JSON keys must be strings, found non-string keys: {non_string_keys[:5]}"
         return result
 
     missing = []

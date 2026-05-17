@@ -11,6 +11,7 @@ struct StreamConfig {
     int height = 0;
     int framerate = 0;
     std::string pixel_format;
+    int keyframe_interval = 0;
 };
 
 } // namespace micecam::domain

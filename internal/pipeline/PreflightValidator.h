@@ -75,7 +75,8 @@ public:
     StressTestResult run_phase2_stress_test(
         const std::vector<domain::StreamConfig>& configs,
         IStreamTestController* controller,
-        int duration_ms = 3000);
+        int duration_ms = 3000,
+        const std::map<std::string, domain::CalibrationResult>* cal_results = nullptr);
 
     static int compute_min_gop(uint64_t i_frame_latency_ns,
                                uint64_t p_frame_latency_ns,

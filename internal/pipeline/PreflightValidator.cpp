@@ -225,14 +225,23 @@ std::map<std::string, domain::CalibrationResult> PreflightValidator::run_phase1_
 StressTestResult PreflightValidator::run_phase2_stress_test(
     const std::vector<domain::StreamConfig>& configs,
     IStreamTestController* controller,
-    int duration_ms) {
+    int duration_ms,
+    const std::map<std::string, domain::CalibrationResult>* cal_results) {
 
     StressTestResult result;
     result.passed = true;
 
     std::vector<std::string> stream_ids;
-    for (const auto& config : configs) {
+    for (auto config : configs) {
         std::string stream_id = config.device_id + ":" + std::to_string(config.stream_index);
+
+        if (cal_results) {
+            auto it = cal_results->find(stream_id);
+            if (it != cal_results->end() && it->second.success && it->second.min_gop > 0) {
+                config.keyframe_interval = it->second.min_gop;
+            }
+        }
+
         if (!controller->openStream(config)) {
             result.passed = false;
             result.warnings.push_back("Failed to open stream: " + stream_id);
@@ -286,8 +295,12 @@ PreflightResult PreflightValidator::validate(
     }
 
     if (stream_controller) {
+        const std::map<std::string, domain::CalibrationResult>* cal_ptr = nullptr;
+        if (calibration_client && !result.calibration_results.empty()) {
+            cal_ptr = &result.calibration_results;
+        }
         auto stress_result = run_phase2_stress_test(configs, stream_controller,
-                                                     stress_test_duration_ms);
+                                                     stress_test_duration_ms, cal_ptr);
         for (const auto& w : stress_result.warnings) {
             result.warnings.push_back(w);
         }

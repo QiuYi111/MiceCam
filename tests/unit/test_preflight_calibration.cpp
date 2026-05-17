@@ -43,6 +43,7 @@ public:
     bool openStream(const domain::StreamConfig& config) override {
         auto sid = config.device_id + ":" + std::to_string(config.stream_index);
         opened_.push_back(sid);
+        last_configs_[sid] = config;
         return !fail_open_.count(sid);
     }
 
@@ -63,10 +64,12 @@ public:
 
     const std::vector<std::string>& opened() const { return opened_; }
     const std::vector<std::string>& closed() const { return closed_; }
+    const domain::StreamConfig& lastConfig(const std::string& sid) const { return last_configs_.at(sid); }
 
 private:
     std::vector<std::string> opened_;
     std::vector<std::string> closed_;
+    std::map<std::string, domain::StreamConfig> last_configs_;
     std::map<std::string, uint64_t> drop_counts_;
     std::set<std::string> fail_open_;
 };
@@ -296,4 +299,81 @@ TEST(PreflightCalibration, FullValidateWithPhase2Warnings) {
     EXPECT_FALSE(result.calibration_results.empty());
     ASSERT_FALSE(result.warnings.empty());
     EXPECT_NE(result.warnings[0].find("dropped"), std::string::npos);
+}
+
+TEST(PreflightCalibration, KeyframeIntervalPropagatedToOpenStream) {
+    MockCalibrationClient cal_client;
+    domain::CalibrationResult mock;
+    mock.success = true;
+    mock.i_frame_latency_ns = 100'000'000;
+    mock.p_frame_latency_ns = 5'000'000;
+    cal_client.setMockResult(mock);
+
+    MockStreamTestController stream_ctrl;
+
+    pipeline::PreflightValidator validator;
+    auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
+    auto result = validator.validate(configs, "/tmp", 60,
+                                      &cal_client, &stream_ctrl, 50);
+
+    EXPECT_TRUE(result.passed);
+    const auto& cal = result.calibration_results.at("cam0:0");
+    ASSERT_TRUE(cal.success);
+    EXPECT_GT(cal.min_gop, 0);
+
+    ASSERT_EQ(stream_ctrl.opened().size(), 1u);
+    const auto& cfg = stream_ctrl.lastConfig("cam0:0");
+    EXPECT_EQ(cfg.keyframe_interval, cal.min_gop);
+}
+
+TEST(PreflightCalibration, KeyframeIntervalDefaultWithoutCalibration) {
+    MockStreamTestController stream_ctrl;
+
+    pipeline::PreflightValidator validator;
+    auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
+    auto result = validator.validate(configs, "/tmp", 60,
+                                      nullptr, &stream_ctrl, 50);
+
+    EXPECT_TRUE(result.passed);
+    ASSERT_EQ(stream_ctrl.opened().size(), 1u);
+    const auto& cfg = stream_ctrl.lastConfig("cam0:0");
+    EXPECT_EQ(cfg.keyframe_interval, 0);
+}
+
+TEST(PreflightCalibration, KeyframeIntervalFromDirectPhase2Call) {
+    domain::CalibrationResult cal;
+    cal.success = true;
+    cal.min_gop = 15;
+    std::map<std::string, domain::CalibrationResult> cal_results;
+    cal_results["cam0:0"] = cal;
+
+    MockStreamTestController stream_ctrl;
+
+    pipeline::PreflightValidator validator;
+    auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
+    auto result = validator.run_phase2_stress_test(configs, &stream_ctrl, 50, &cal_results);
+
+    EXPECT_TRUE(result.passed);
+    ASSERT_EQ(stream_ctrl.opened().size(), 1u);
+    const auto& cfg = stream_ctrl.lastConfig("cam0:0");
+    EXPECT_EQ(cfg.keyframe_interval, 15);
+}
+
+TEST(PreflightCalibration, KeyframeIntervalZeroWhenCalibrationFailed) {
+    domain::CalibrationResult cal;
+    cal.success = false;
+    cal.min_gop = -1;
+    std::map<std::string, domain::CalibrationResult> cal_results;
+    cal_results["cam0:0"] = cal;
+
+    MockStreamTestController stream_ctrl;
+
+    pipeline::PreflightValidator validator;
+    auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
+    auto result = validator.run_phase2_stress_test(configs, &stream_ctrl, 50, &cal_results);
+
+    EXPECT_TRUE(result.passed);
+    ASSERT_EQ(stream_ctrl.opened().size(), 1u);
+    const auto& cfg = stream_ctrl.lastConfig("cam0:0");
+    EXPECT_EQ(cfg.keyframe_interval, 0);
 }

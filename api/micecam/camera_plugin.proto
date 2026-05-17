@@ -309,6 +309,20 @@ message CalibrateResponse {
     repeated string warnings = 11;
 }
 
+// ---- Stream Stall Messages ----
+
+message NotifyStreamStallRequest {
+    string stream_id = 1;
+    int32 stall_duration_ms = 2;
+}
+
+message NotifyStreamStallResponse {
+    bool acknowledged = 1;
+    bool recoverable = 2;
+    string action = 3;
+    string message = 4;
+}
+
 // ---- Service ----
 
 service CameraPluginService {
@@ -324,4 +338,5 @@ service CameraPluginService {
     rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
     rpc HealthCheck(HealthCheckRequest) returns (HealthStatus);
     rpc Calibrate(CalibrateRequest) returns (CalibrateResponse);
+    rpc NotifyStreamStall(NotifyStreamStallRequest) returns (NotifyStreamStallResponse);
 }

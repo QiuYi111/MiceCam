@@ -1,6 +1,8 @@
 #pragma once
 
-#include "internal/domain/AlertRecord.h"
+namespace micecam::domain {
+struct AlertRecord;
+}
 
 namespace micecam::api {
 

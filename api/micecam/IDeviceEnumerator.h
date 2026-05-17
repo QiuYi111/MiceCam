@@ -2,7 +2,9 @@
 
 #include <vector>
 
-#include "internal/domain/DeviceInfo.h"
+namespace micecam::domain {
+struct DeviceInfo;
+}
 
 namespace micecam::api {
 

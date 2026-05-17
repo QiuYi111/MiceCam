@@ -5,16 +5,21 @@
 #include <chrono>
 
 #include "infrastructure/PluginRingReader.h"
+#include "infrastructure/StreamLivenessMonitor.h"
 #include "pipeline/RecordingPipeline.h"
 
 namespace micecam::infrastructure {
 
-PluginStreamConsumer::PluginStreamConsumer(pipeline::RecordingPipeline& pipeline,
-                                           const PluginStreamConfig& config)
+    PluginStreamConsumer::PluginStreamConsumer(pipeline::RecordingPipeline& pipeline,
+                                            const PluginStreamConfig& config)
     : pipeline_(pipeline), config_(config) {}
 
 PluginStreamConsumer::~PluginStreamConsumer() {
     stop();
+}
+
+void PluginStreamConsumer::set_liveness_monitor(StreamLivenessMonitor* monitor) {
+    monitor_ = monitor;
 }
 
 bool PluginStreamConsumer::start() {
@@ -25,6 +30,10 @@ bool PluginStreamConsumer::start() {
         spdlog::error("PluginStreamConsumer: failed to open ring {}", config_.shm_name);
         reader_.reset();
         return false;
+    }
+
+    if (monitor_) {
+        monitor_->register_stream(config_.stream_id, config_.plugin_id);
     }
 
     running_.store(true);
@@ -49,6 +58,10 @@ void PluginStreamConsumer::stop() {
         reader_.reset();
     }
 
+    if (monitor_) {
+        monitor_->unregister_stream(config_.stream_id);
+    }
+
     spdlog::info("PluginStreamConsumer stopped: plugin={} stream={}",
                  config_.plugin_id, config_.stream_id);
 }
@@ -58,6 +71,10 @@ void PluginStreamConsumer::consumerLoop() {
         ReadSlotData slot;
         if (!reader_->readNextFrame(slot, 100)) {
             continue;
+        }
+
+        if (monitor_) {
+            monitor_->update_activity(config_.stream_id);
         }
 
         auto reader_stats = reader_->stats();

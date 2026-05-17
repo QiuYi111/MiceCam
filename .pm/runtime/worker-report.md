@@ -1,71 +1,83 @@
-# Worker Report: Phase 2 — StreamLivenessMonitor
+# Worker Report: Fix signal handler mutex recursion + fork e2e binary path resolution
 
-## Task Summary
+## Task Reference
 
-Implemented `StreamLivenessMonitor` class with background thread, per-stream timestamps, per-plugin aggregation, injectable clock, and 6 unit tests.
+- Task: `.pm/runtime/next-task.md`
+- Branch: `feat/005-stream-monitoring-test-suite`
+- Baseline: 39/39 tests passing (commit b4e5ade)
 
-## Files Changed
+## Summary
 
-| File | Action | Lines |
-|------|--------|-------|
-| `internal/infrastructure/StreamLivenessMonitor.h` | NEW | ~58 |
-| `internal/infrastructure/StreamLivenessMonitor.cpp` | NEW | ~94 |
-| `tests/unit/test_stream_liveness_monitor.cpp` | NEW | ~168 |
-| `CMakeLists.txt` | MODIFIED | +2 (source + test) |
+Fixed two bugs:
+1. **Signal handler mutex recursion** — Plugin mains called `spdlog::info()` and `g_server->Shutdown()` directly in signal handlers, which are not async-signal-safe. This caused `detected illegal recursion into Mutex code` when signals fired during gRPC `Wait()`.
+2. **Fork e2e binary path resolution** — Integration tests used `std::filesystem::current_path()` to find the plugin binary, which only worked when cwd was `build/`. Running from project root failed.
 
-## Implementation Details
+## Changes
 
-### StreamLivenessMonitor (header + impl)
+### 1. Signal handler fix (2 files)
 
-- **Injectable clock**: `ClockFn` defaults to `std::chrono::steady_clock::now` when nullptr, enabling deterministic testing.
-- **Background thread**: Uses `std::jthread` with stop token; `monitor_loop()` sleeps 1s between check cycles.
-- **Per-stream tracking**: `last_active_` maps stream_id → timestamp; `stream_to_plugin_` maps stream_id → plugin_id.
-- **Stall detection**: Each cycle compares `clock_() - last_active_[sid]` against `stall_timeout_ms_`; fires `StallCallback` per stalled stream.
-- **Per-plugin aggregation**: Groups streams by plugin_id; if ALL streams of a plugin are stalled, fires `AllStalledCallback` once per stall event (tracked via `plugins_all_stalled_fired_` set, cleared on `update_activity`).
-- **Thread safety**: All map access guarded by `mutex_`.
+**Files:** `cmd/plugins/micecam_ffmpeg/main.cpp`, `cmd/plugins/micecam_oak/main.cpp`
 
-### Unit Tests (6 cases)
+- Added `std::atomic<bool> g_shutdown_requested{false}`
+- Signal handler now **only** sets the atomic flag — fully async-signal-safe
+- Added `#include <atomic>` and `#include <thread>`
+- Replaced `g_server->Wait()` with a `shutdown_watcher` thread that polls the atomic flag every 200ms and calls `g_server->Shutdown()` from a safe (non-signal) context
+- Main thread calls `g_server->Wait()` (blocks until `Shutdown()` is called by the watcher thread)
+- `spdlog::info("Shutdown requested")` moved to the watcher thread
 
-1. **StallCallbackFiresAfterTimeout** — register 1 stream, advance clock past timeout → stall callback fires.
-2. **NoStallCallbackBeforeTimeout** — register 1 stream, advance clock but stay within timeout → no callbacks.
-3. **PartialPluginStallNoAllStalled** — 3 streams (2 plugin_a, 1 plugin_b), stall only cam1 → no all-stalled callback.
-4. **AllStreamsStalledFiresAllStalledCallback** — all streams stalled → all-stalled fires for both plugins.
-5. **UnregisterRemovesStream** — unregister before timeout → no callbacks.
-6. **UpdateActivityResetsTimer** — update_activity resets the stall timer.
+**Note:** The task specified `Wait(timeout)` pattern, but the installed gRPC version (`grpc::Server::Wait()`) takes no arguments. Adapted to use a shutdown watcher thread + `Wait()` instead, which achieves the same safety guarantee: `Shutdown()` is never called from the signal handler.
+
+### 2. Binary path resolution fix (3 files)
+
+**Files:** `tests/integration/test_plugin_e2e_no_hw.cpp`, `tests/integration/test_calibrate_e2e.cpp`, `tests/integration/test_dual_path_keyframe.cpp`
+
+- Added `#include <mach-o/dyld.h>` for macOS
+- `find_plugin_binary()` now resolves path relative to the test binary location using `_NSGetExecutablePath` (macOS) or `/proc/self/exe` (Linux)
+- Path resolution: `test_binary_dir/../cmd/plugins/micecam_ffmpeg/micecam_ffmpeg_plugin` (since test binary is at `build/tests/test_xxx` and plugin is at `build/cmd/plugins/...`)
+- Falls back to original cwd-relative behavior if absolute path candidate doesn't exist
 
 ## Verification Evidence
 
 ### Build
 
 ```
-cmake --build build -j 4 → [100%] Built target test_stream_liveness_monitor (success)
+cmake --build build -j 4 → SUCCESS (0 errors)
 ```
 
-### New Tests
+### Test Suite
 
 ```
-[==========] Running 6 tests from 1 test suite.
-[  PASSED  ] 6 tests. (12064 ms total)
+ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
+→ 100% tests passed, 0 tests failed out of 39
+→ Total Test time (real) = 53.24 sec
 ```
 
-### Full Suite
+### Mutex Recursion Check
 
 ```
-100% tests passed, 0 tests failed out of 33 (Total Test time: 27.05 sec)
+./build/tests/test_plugin_e2e_no_hw --gtest_print_time=1 2>&1 | grep -i 'mutex\|recursion' | wc -l
+→ 0
 ```
 
-- Existing tests: 31 passed (no regressions)
-- New tests: 6 passed (test_stream_liveness_monitor)
-- Python test: 1 passed (test_validate_session_artifacts)
+### Binary Path from Project Root
 
-## Risk Classification
+```
+cd /Volumes/DataHub/Projects/MiceCam && ./build/tests/test_plugin_e2e_no_hw
+→ [  PASSED  ] 1 test.
+```
 
-**leaf** — new class, no existing production code modified except CMakeLists.txt (additive only).
+## Scope Compliance
+
+- Only modified 5 allowed files
+- No infrastructure/pipeline/domain/proto/CMakeLists.txt changes
+- No test file modifications beyond the 3 allowed integration tests
 
 ## Acceptance Criteria
 
-- [x] `StreamLivenessMonitor.h/.cpp` implemented with injectable clock
-- [x] `test_stream_liveness_monitor.cpp` with 6 test cases
+- [x] Both plugin mains use atomic flag + safe Shutdown pattern (adapted for API constraints)
+- [x] No spdlog calls in signal handler
+- [x] All three e2e tests find plugin binary correctly from project root AND build dir
 - [x] `cmake --build build` succeeds
-- [x] All 33 tests pass (31 existing + 2 others, no regressions)
-- [x] All 6 new unit tests pass individually
+- [x] 39/39 tests pass via ctest
+- [x] `./build/tests/test_plugin_e2e_no_hw` from project root succeeds
+- [x] No `detected illegal recursion into Mutex code` in test output

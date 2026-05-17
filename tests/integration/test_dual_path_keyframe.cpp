@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fcntl.h>
+#include <mach-o/dyld.h>
 #include <signal.h>
 #include <string>
 #include <sys/mman.h>
@@ -24,6 +25,23 @@ namespace {
 std::string find_plugin_binary() {
     const char* env = std::getenv("MICECAM_FFMPEG_PLUGIN");
     if (env && env[0] != '\0') return env;
+
+#if defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string self_path(size, '\0');
+    _NSGetExecutablePath(self_path.data(), &size);
+    auto bin_dir = std::filesystem::path(self_path).parent_path();
+#elif defined(__linux__)
+    auto bin_dir = std::filesystem::read_symlink("/proc/self/exe").parent_path();
+#else
+    auto bin_dir = std::filesystem::current_path();
+#endif
+
+    auto build_dir = bin_dir.parent_path();
+    auto candidate = build_dir / "cmd" / "plugins" / "micecam_ffmpeg" / "micecam_ffmpeg_plugin";
+    if (std::filesystem::exists(candidate)) return candidate.string();
+
     return (std::filesystem::current_path()
             / "cmd/plugins/micecam_ffmpeg/micecam_ffmpeg_plugin")
         .string();

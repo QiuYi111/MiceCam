@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "infrastructure/PluginRegistryService.h"
@@ -517,4 +519,98 @@ TEST_F(StreamMonitorIntegrationTest, NotifyStallFailureTriggersCrashRecovery) {
     std::this_thread::sleep_for(2500ms);
 
     EXPECT_TRUE(crash_alert_fired);
+}
+
+TEST_F(StreamMonitorIntegrationTest, StallEscalationFinalizesAfterMaxRetries) {
+    PluginRegistryService service(bundled_dir_, config_dir_, 1000);
+    ASSERT_TRUE(service.initialize());
+
+    service.register_stream("micecam.mon_plugin", "stream_esc");
+    service.register_stream("micecam.mon_plugin", "stream_esc_keepalive");
+
+    std::atomic<bool> keepalive_running{true};
+    std::thread keepalive([&]() {
+        while (keepalive_running.load()) {
+            service.get_liveness_monitor()->update_activity("stream_esc_keepalive");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    });
+
+    std::atomic<int> notify_count{0};
+    service.set_notify_stall_fn([&](const std::string&, const std::string&,
+                                     uint64_t) -> StallNotifyResult {
+        notify_count++;
+        return {true, true};
+    });
+
+    bool alert_fired = false;
+    service.set_crash_alert_callback([&](const std::string&) {
+        alert_fired = true;
+    });
+
+    std::this_thread::sleep_for(4500ms);
+
+    keepalive_running.store(false);
+    keepalive.join();
+
+    EXPECT_GE(notify_count.load(), 2);
+    EXPECT_TRUE(alert_fired);
+    auto streams = service.get_streams_for_plugin("micecam.mon_plugin");
+    ASSERT_EQ(streams.size(), 1u);
+    EXPECT_EQ(streams[0], "stream_esc_keepalive");
+}
+
+TEST_F(StreamMonitorIntegrationTest, StallCountResetsOnActivity) {
+    PluginRegistryService service(bundled_dir_, config_dir_, 1000);
+    ASSERT_TRUE(service.initialize());
+
+    service.register_stream("micecam.mon_plugin", "stream_reset");
+    service.register_stream("micecam.mon_plugin", "stream_reset_keepalive");
+
+    std::atomic<bool> keepalive_running{true};
+    std::thread keepalive([&]() {
+        while (keepalive_running.load()) {
+            service.get_liveness_monitor()->update_activity("stream_reset_keepalive");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    });
+
+    std::mutex cv_mutex;
+    std::condition_variable cv;
+    std::atomic<int> notify_count{0};
+    service.set_notify_stall_fn([&](const std::string&, const std::string&,
+                                     uint64_t) -> StallNotifyResult {
+        int c = ++notify_count;
+        if (c == 1) cv.notify_one();
+        return {true, true};
+    });
+
+    bool alert_fired = false;
+    service.set_crash_alert_callback([&](const std::string&) {
+        alert_fired = true;
+    });
+
+    {
+        std::unique_lock<std::mutex> lk(cv_mutex);
+        cv.wait(lk, [&]{ return notify_count.load() >= 1; });
+    }
+
+    std::atomic<bool> stream_alive{true};
+    std::thread stream_thread([&]() {
+        while (stream_alive.load()) {
+            service.get_liveness_monitor()->update_activity("stream_reset");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    });
+
+    std::this_thread::sleep_for(3000ms);
+
+    stream_alive.store(false);
+    stream_thread.join();
+    keepalive_running.store(false);
+    keepalive.join();
+
+    EXPECT_FALSE(alert_fired);
+    auto streams = service.get_streams_for_plugin("micecam.mon_plugin");
+    EXPECT_EQ(streams.size(), 2u);
 }

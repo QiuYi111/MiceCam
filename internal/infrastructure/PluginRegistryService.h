@@ -92,6 +92,7 @@ private:
     NotifyStallFn notify_stall_fn_;
     std::function<bool(const std::string&)> restart_fn_;
     int max_restart_retries_ = 3;
+    int max_stall_retries_ = 2;
     uint64_t stall_timeout_ms_;
     std::unique_ptr<StreamLivenessMonitor> monitor_;
 

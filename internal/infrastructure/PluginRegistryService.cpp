@@ -43,7 +43,8 @@ bool PluginRegistryService::initialize() {
 
     monitor_->set_stall_callback([this](const std::string& stream_id,
                                          const std::string& plugin_id,
-                                         uint64_t stall_duration_ms) {
+                                         uint64_t stall_duration_ms,
+                                         int stall_count) {
         {
             std::lock_guard<std::mutex> lock(registry_mutex_);
             auto it = plugin_streams_.find(plugin_id);
@@ -84,7 +85,23 @@ bool PluginRegistryService::initialize() {
             return;
         }
 
-        spdlog::info("Stall acknowledged and recoverable for stream {}", stream_id);
+        if (stall_count >= max_stall_retries_) {
+            spdlog::warn("Stall escalation for stream {} after {} retries, finalizing",
+                         stream_id, stall_count);
+            {
+                std::lock_guard<std::mutex> lock(registry_mutex_);
+                auto it = plugin_streams_.find(plugin_id);
+                if (it != plugin_streams_.end()) {
+                    auto& vec = it->second;
+                    vec.erase(std::remove(vec.begin(), vec.end(), stream_id), vec.end());
+                }
+            }
+            if (crash_alert_cb_) crash_alert_cb_(plugin_id);
+            return;
+        }
+
+        spdlog::info("Stall recoverable for stream {}, attempt {}/{}",
+                     stream_id, stall_count, max_stall_retries_);
     });
 
     monitor_->set_all_stalled_callback([this](const std::string& plugin_id) {

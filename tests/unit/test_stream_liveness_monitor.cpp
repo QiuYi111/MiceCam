@@ -16,6 +16,7 @@ struct StallEvent {
     std::string stream_id;
     std::string plugin_id;
     uint64_t stall_duration_ms;
+    int stall_count;
 };
 
 struct AllStalledEvent {
@@ -34,9 +35,9 @@ protected:
             stall_timeout_ms_,
             [this]() { return clock_state_.now; }
         );
-        monitor_->set_stall_callback([this](const std::string& sid, const std::string& pid, uint64_t ms) {
+        monitor_->set_stall_callback([this](const std::string& sid, const std::string& pid, uint64_t ms, int count) {
             std::lock_guard<std::mutex> lock(events_mutex_);
-            stall_events_.push_back({sid, pid, ms});
+            stall_events_.push_back({sid, pid, ms, count});
         });
         monitor_->set_all_stalled_callback([this](const std::string& pid) {
             std::lock_guard<std::mutex> lock(events_mutex_);
@@ -165,6 +166,72 @@ TEST_F(StreamLivenessMonitorTest, UpdateActivityResetsTimer) {
 
     std::lock_guard<std::mutex> lock(events_mutex_);
     EXPECT_TRUE(stall_events_.empty());
+}
+
+TEST_F(StreamLivenessMonitorTest, StallCountIncrementsPerCycle) {
+    monitor_->register_stream("cam1", "plugin_a");
+    monitor_->start();
+
+    advance_clock(std::chrono::milliseconds(stall_timeout_ms_ + 100));
+    wait_for_monitor_cycle();
+    advance_clock(std::chrono::milliseconds(2000));
+    wait_for_monitor_cycle();
+
+    monitor_->stop();
+
+    std::lock_guard<std::mutex> lock(events_mutex_);
+    ASSERT_GE(stall_events_.size(), 2u);
+    EXPECT_EQ(stall_events_[0].stall_count, 1);
+    EXPECT_EQ(stall_events_[1].stall_count, 2);
+}
+
+TEST_F(StreamLivenessMonitorTest, StallCountResetsOnActivity) {
+    monitor_->register_stream("cam1", "plugin_a");
+    monitor_->start();
+
+    advance_clock(std::chrono::milliseconds(stall_timeout_ms_ + 100));
+    wait_for_monitor_cycle();
+
+    {
+        std::lock_guard<std::mutex> lock(events_mutex_);
+        ASSERT_FALSE(stall_events_.empty());
+        EXPECT_EQ(stall_events_.back().stall_count, 1);
+    }
+
+    monitor_->update_activity("cam1");
+    advance_clock(std::chrono::milliseconds(stall_timeout_ms_ + 100));
+    wait_for_monitor_cycle();
+
+    monitor_->stop();
+
+    std::lock_guard<std::mutex> lock(events_mutex_);
+    auto last = stall_events_.back();
+    EXPECT_EQ(last.stall_count, 1);
+}
+
+TEST_F(StreamLivenessMonitorTest, StallCountResetsWhenStreamRecoversInMonitorLoop) {
+    monitor_->register_stream("cam1", "plugin_a");
+    monitor_->start();
+
+    advance_clock(std::chrono::milliseconds(stall_timeout_ms_ + 100));
+    wait_for_monitor_cycle();
+
+    {
+        std::lock_guard<std::mutex> lock(events_mutex_);
+        ASSERT_FALSE(stall_events_.empty());
+        EXPECT_EQ(stall_events_.back().stall_count, 1);
+    }
+
+    monitor_->update_activity("cam1");
+    advance_clock(std::chrono::milliseconds(2000));
+    wait_for_monitor_cycle();
+
+    monitor_->stop();
+
+    std::lock_guard<std::mutex> lock(events_mutex_);
+    EXPECT_GE(stall_events_.size(), 1u);
+    auto last = stall_events_.back();
+    EXPECT_EQ(last.stall_count, 1);
 }
 
 } // namespace

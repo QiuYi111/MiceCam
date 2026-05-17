@@ -37,12 +37,14 @@ void StreamLivenessMonitor::unregister_stream(const std::string& stream_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     last_active_.erase(stream_id);
     stream_to_plugin_.erase(stream_id);
+    stall_counts_.erase(stream_id);
 }
 
 void StreamLivenessMonitor::update_activity(const std::string& stream_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (last_active_.count(stream_id)) {
         last_active_[stream_id] = clock_();
+        stall_counts_.erase(stream_id);
         auto it = stream_to_plugin_.find(stream_id);
         if (it != stream_to_plugin_.end()) {
             plugins_all_stalled_fired_.erase(it->second);
@@ -76,9 +78,12 @@ void StreamLivenessMonitor::monitor_loop() {
             auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second).count();
             if (static_cast<uint64_t>(elapsed_ms) > stall_timeout_ms_) {
                 stalled_streams.insert(sid);
+                int count = ++stall_counts_[sid];
                 if (stall_cb_) {
-                    stall_cb_(sid, plugin_id, static_cast<uint64_t>(elapsed_ms));
+                    stall_cb_(sid, plugin_id, static_cast<uint64_t>(elapsed_ms), count);
                 }
+            } else {
+                stall_counts_.erase(sid);
             }
         }
 

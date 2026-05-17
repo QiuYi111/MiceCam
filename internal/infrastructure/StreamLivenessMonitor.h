@@ -12,7 +12,7 @@
 namespace micecam::infrastructure {
 
 using ClockFn = std::function<std::chrono::steady_clock::time_point()>;
-using StallCallback = std::function<void(const std::string& stream_id, const std::string& plugin_id, uint64_t stall_duration_ms)>;
+using StallCallback = std::function<void(const std::string& stream_id, const std::string& plugin_id, uint64_t stall_duration_ms, int stall_count)>;
 using AllStalledCallback = std::function<void(const std::string& plugin_id)>;
 
 class StreamLivenessMonitor {
@@ -46,6 +46,7 @@ private:
     std::mutex mutex_;
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_active_;
     std::unordered_map<std::string, std::string> stream_to_plugin_;
+    std::unordered_map<std::string, int> stall_counts_;
     std::unordered_set<std::string> plugins_all_stalled_fired_;
 
     StallCallback stall_cb_;

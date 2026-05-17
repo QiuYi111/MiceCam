@@ -38,6 +38,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString diskRemainingText READ diskRemainingText NOTIFY diskRemainingTextChanged)
     Q_PROPERTY(QString preflightMessage READ preflightMessage NOTIFY preflightMessageChanged)
     Q_PROPERTY(QString lastSessionId READ lastSessionId NOTIFY lastSessionIdChanged)
+    Q_PROPERTY(QString currentEncoderName READ currentEncoderName NOTIFY encoderNameChanged)
+    Q_PROPERTY(QString currentBitrate READ currentBitrate NOTIFY bitrateChanged)
 
     Q_PROPERTY(QStringList recentLogEntries READ recentLogEntries NOTIFY logEntriesChanged)
 
@@ -60,6 +62,8 @@ public:
     QString diskRemainingText() const;
     QString preflightMessage() const;
     QString lastSessionId() const;
+    QString currentEncoderName() const;
+    QString currentBitrate() const;
     QStringList recentLogEntries() const;
 
     Q_INVOKABLE void refreshCameras();
@@ -88,6 +92,8 @@ public:
     void diskRemainingTextChanged();
     void preflightMessageChanged();
     void lastSessionIdChanged();
+    void encoderNameChanged();
+    void bitrateChanged();
     void logEntriesChanged();
     void deviceDisconnected(const QString& deviceName);
     void pluginCrashAlert(const QString& pluginId);
@@ -119,6 +125,8 @@ private:
     uint64_t bytes_written_ = 0;
     QString disk_remaining_;
     QString preflight_message_;
+    QString current_encoder_name_ = QStringLiteral("—");
+    QString current_bitrate_ = QStringLiteral("—");
     std::chrono::steady_clock::time_point session_start_;
 
     std::atomic<bool> capture_running_{false};

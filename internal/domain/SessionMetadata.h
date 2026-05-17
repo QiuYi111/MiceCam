@@ -20,6 +20,7 @@ struct SessionMetadata {
     std::string output_dir;
     uint64_t start_time_ns = 0;
     uint64_t end_time_ns = 0;
+    nlohmann::json plugin_source;
 
     nlohmann::json to_json() const;
     static SessionMetadata from_json(const nlohmann::json& j);

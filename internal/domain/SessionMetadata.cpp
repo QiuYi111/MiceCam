@@ -24,6 +24,9 @@ nlohmann::json SessionMetadata::to_json() const {
         configs.push_back(c);
     }
     j["stream_configs"] = configs;
+    if (!plugin_source.is_null()) {
+        j["plugin_source"] = plugin_source;
+    }
     return j;
 }
 
@@ -48,6 +51,9 @@ SessionMetadata SessionMetadata::from_json(const nlohmann::json& j) {
             sc.pixel_format = c.value("pixel_format", "");
             m.stream_configs.push_back(sc);
         }
+    }
+    if (j.contains("plugin_source") && j["plugin_source"].is_object()) {
+        m.plugin_source = j["plugin_source"];
     }
     return m;
 }

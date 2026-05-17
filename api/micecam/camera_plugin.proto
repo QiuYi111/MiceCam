@@ -1,0 +1,342 @@
+syntax = "proto3";
+
+package micecam.plugin;
+
+// ---- Enums ----
+
+enum PayloadKind {
+    RAW = 0;
+    MJPEG = 1;
+    H264 = 2;
+    H265 = 3;
+}
+
+enum ConfigFieldType {
+    STRING = 0;
+    INT = 1;
+    FLOAT = 2;
+    BOOL = 3;
+    ENUM = 4;
+    PATH = 5;
+}
+
+enum ApplyMode {
+    PRE_OPEN = 0;
+    PRE_RECORD = 1;
+    RUNTIME_SAFE = 2;
+    REQUIRES_RESTART = 3;
+}
+
+enum ProcessModel {
+    SINGLETON = 0;
+    PER_DEVICE = 1;
+    PER_STREAM = 2;
+}
+
+enum ErrorSeverity {
+    INFO = 0;
+    WARN = 1;
+    ERROR = 2;
+    FATAL = 3;
+}
+
+enum RecoveryAction {
+    RECOVERY_NONE = 0;
+    RETRY = 1;
+    RESTART_PLUGIN = 2;
+    RESTART_STREAM = 3;
+    NOTIFY_USER = 4;
+    FALLBACK = 5;
+}
+
+enum RingOwnership {
+    HOST_OWNS = 0;
+    PLUGIN_OWNS = 1;
+}
+
+enum RingPolicy {
+    NO_DROP = 0;
+    LATEST_FRAME = 1;
+}
+
+// ---- Common Messages ----
+
+message ErrorInfo {
+    string error_code = 1;
+    ErrorSeverity severity = 2;
+    bool is_recoverable = 3;
+    string user_message = 4;
+    string technical_detail = 5;
+    string suggested_action = 6;
+    string affected_target = 7;
+    int32 retry_delay_ms = 8;
+    RecoveryAction recovery_action = 9;
+}
+
+// ---- Config Messages ----
+
+message ConfigField {
+    string key = 1;
+    string display_name = 2;
+    string description = 3;
+    ConfigFieldType type = 4;
+    string default_value = 5;
+    string min_value = 6;
+    string max_value = 7;
+    repeated string enum_values = 8;
+    bool required = 9;
+    ApplyMode apply_mode = 10;
+    string depends_on = 11;
+    string depends_value = 12;
+}
+
+message ConfigSchema {
+    repeated ConfigField fields = 1;
+}
+
+// ---- Device & Stream Discovery Messages ----
+
+message StreamInfo {
+    int32 stream_index = 1;
+    string label = 2;
+    int32 max_width = 3;
+    int32 max_height = 4;
+    double max_framerate = 5;
+    repeated PayloadKind supported_payloads = 6;
+    repeated string supported_pixel_formats = 7;
+    bool available = 8;
+    string unavailable_reason = 9;
+    string exclusive_resource_id = 10;
+}
+
+message DeviceInfo {
+    string device_id = 1;
+    string display_name = 2;
+    string persistent_id = 3;
+    string vendor = 4;
+    string serial = 5;
+    bool has_persistent_id = 6;
+    repeated StreamInfo streams = 7;
+}
+
+// ---- Capability Messages ----
+
+message CapabilityInfo {
+    string device_id = 1;
+    int32 stream_index = 2;
+    bool supports_raw = 3;
+    bool supports_mjpeg = 4;
+    bool supports_h264 = 5;
+    bool supports_h265 = 6;
+    int32 max_width = 7;
+    int32 max_height = 8;
+    double max_framerate = 9;
+    repeated string acquisition_controls = 10;
+    repeated string scientific_controls = 11;
+    string plugin_metadata = 12;
+    string exclusive_resource_id = 13;
+}
+
+// ---- Plugin Info Messages ----
+
+message PluginInfo {
+    string id = 1;
+    string name = 2;
+    string version = 3;
+    uint32 plugin_api_version = 4;
+    string min_micecam_version = 5;
+    repeated string required_features = 6;
+    repeated string optional_features = 7;
+    repeated ProcessModel supported_process_models = 8;
+    ProcessModel preferred_process_model = 9;
+}
+
+// ---- Stream Control Messages ----
+
+message StreamConfig {
+    string device_id = 1;
+    int32 stream_index = 2;
+    int32 width = 3;
+    int32 height = 4;
+    int32 framerate = 5;
+    PayloadKind requested_payload = 6;
+    string pixel_format = 7;
+    map<string, string> config = 8;
+    int32 keyframe_interval = 10;
+}
+
+message StreamRingDescriptor {
+    string ring_id = 1;
+    string stream_id = 2;
+    uint32 slot_count = 3;
+    uint32 slot_size = 4;
+    string platform_handle_type = 5;
+    bytes platform_handle_value = 6;
+    RingOwnership ownership = 7;
+    RingPolicy policy = 8;
+    uint64 producer_sequence_offset = 9;
+    uint64 consumer_sequence_offset = 10;
+    uint64 header_size = 11;
+    uint64 payload_offset = 12;
+}
+
+message PayloadHeader {
+    PayloadKind kind = 1;
+    uint64 pts_ns = 2;
+    uint64 sequence = 3;
+    bool keyframe = 4;
+    uint32 size = 5;
+    int32 width = 6;
+    int32 height = 7;
+    uint32 checksum = 8;
+}
+
+// ---- RPC Messages ----
+
+message HandshakeRequest {
+    string micecam_version = 1;
+    uint32 plugin_api_version = 2;
+}
+
+message HandshakeResponse {
+    bool accepted = 1;
+    uint32 negotiated_api_version = 2;
+    string plugin_version = 3;
+    string plugin_name = 4;
+    repeated string warnings = 5;
+}
+
+message GetPluginInfoRequest {}
+
+message GetCapabilitiesRequest {
+    string device_id = 1;
+    int32 stream_index = 2;
+}
+
+message GetConfigSchemaRequest {
+    string device_id = 1;
+    int32 stream_index = 2;
+}
+
+message ValidateConfigRequest {
+    string device_id = 1;
+    int32 stream_index = 2;
+    map<string, string> config = 3;
+}
+
+message ValidateConfigResponse {
+    bool valid = 1;
+    repeated string errors = 2;
+}
+
+message OpenStreamRequest {
+    StreamConfig config = 1;
+    uint32 ring_slot_count = 2;
+    uint32 ring_slot_size = 3;
+}
+
+message OpenStreamResponse {
+    bool success = 1;
+    StreamRingDescriptor ring_descriptor = 2;
+    ErrorInfo error = 3;
+}
+
+message StartStreamRequest {
+    string stream_id = 1;
+}
+
+message StartStreamResponse {
+    bool success = 1;
+    ErrorInfo error = 2;
+}
+
+message StopStreamRequest {
+    string stream_id = 1;
+}
+
+message StopStreamResponse {
+    bool success = 1;
+    ErrorInfo error = 2;
+}
+
+message ShutdownRequest {}
+
+message ShutdownResponse {
+    bool success = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthStatus {
+    bool healthy = 1;
+    string status_message = 2;
+    ErrorInfo last_error = 3;
+}
+
+message EnumerateDevicesRequest {}
+
+message EnumerateDevicesResponse {
+    repeated DeviceInfo devices = 1;
+}
+
+message CalibrateRequest {
+    string device_id = 1;
+    int32 stream_index = 2;
+    int32 width = 3;
+    int32 height = 4;
+    double fps = 5;
+    PayloadKind requested_payload = 6;
+    string pixel_format = 7;
+    bool prefer_hardware_encoder = 8;
+    int32 bitrate_kbps = 9;
+    int32 crf = 10;
+    int32 max_b_frames = 11;
+    int32 calibration_duration_ms = 12;
+    map<string, string> config = 13;
+}
+
+message CalibrateResponse {
+    bool success = 1;
+    string error = 2;
+    uint64 i_frame_latency_ns = 3;
+    uint64 p_frame_latency_ns = 4;
+    bool supported = 5;
+    string actual_encoder_name = 6;
+    int32 actual_width = 7;
+    int32 actual_height = 8;
+    double max_sustainable_fps = 9;
+    uint64 recommended_slot_size = 10;
+    repeated string warnings = 11;
+}
+
+// ---- Stream Stall Messages ----
+
+message NotifyStreamStallRequest {
+    string stream_id = 1;
+    int32 stall_duration_ms = 2;
+}
+
+message NotifyStreamStallResponse {
+    bool acknowledged = 1;
+    bool recoverable = 2;
+    string action = 3;
+    string message = 4;
+}
+
+// ---- Service ----
+
+service CameraPluginService {
+    rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+    rpc GetPluginInfo(GetPluginInfoRequest) returns (PluginInfo);
+    rpc EnumerateDevices(EnumerateDevicesRequest) returns (EnumerateDevicesResponse);
+    rpc GetCapabilities(GetCapabilitiesRequest) returns (CapabilityInfo);
+    rpc GetConfigSchema(GetConfigSchemaRequest) returns (ConfigSchema);
+    rpc ValidateConfig(ValidateConfigRequest) returns (ValidateConfigResponse);
+    rpc OpenStream(OpenStreamRequest) returns (OpenStreamResponse);
+    rpc StartStream(StartStreamRequest) returns (StartStreamResponse);
+    rpc StopStream(StopStreamRequest) returns (StopStreamResponse);
+    rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+    rpc HealthCheck(HealthCheckRequest) returns (HealthStatus);
+    rpc Calibrate(CalibrateRequest) returns (CalibrateResponse);
+    rpc NotifyStreamStall(NotifyStreamStallRequest) returns (NotifyStreamStallResponse);
+}

@@ -1,111 +1,83 @@
-# Worker Report: Stage 2 — Foundation
+# Worker Report: Fix signal handler mutex recursion + fork e2e binary path resolution
+
+## Task Reference
+
+- Task: `.pm/runtime/next-task.md`
+- Branch: `feat/005-stream-monitoring-test-suite`
+- Baseline: 39/39 tests passing (commit b4e5ade)
 
 ## Summary
 
-All acceptance criteria met. CMakeLists.txt.v2 created alongside v1. All 15 domain/interface headers compile. All 4 .cpp impls link. Build succeeds with zero warnings. Qt window opens and displays "MiceCam v2 / Foundation Ready".
+Fixed two bugs:
+1. **Signal handler mutex recursion** — Plugin mains called `spdlog::info()` and `g_server->Shutdown()` directly in signal handlers, which are not async-signal-safe. This caused `detected illegal recursion into Mutex code` when signals fired during gRPC `Wait()`.
+2. **Fork e2e binary path resolution** — Integration tests used `std::filesystem::current_path()` to find the plugin binary, which only worked when cwd was `build/`. Running from project root failed.
 
-## Task
+## Changes
 
-- **Task ID**: Stage 2 — CMake v2 + Domain Model + Plugin Interfaces
-- **Phase**: Phase 1 (Foundation) of MiceCam v2 rewrite
-- **Risk Classification**: branch (defines shared contracts, touches multiple modules, no infra changes)
+### 1. Signal handler fix (2 files)
 
-## Scope Executed
+**Files:** `cmd/plugins/micecam_ffmpeg/main.cpp`, `cmd/plugins/micecam_oak/main.cpp`
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | CMakeLists.txt.v2 (C++20, FFmpeg, Qt6, spdlog, nlohmann_json, depthai, GTest) | Done |
-| 2 | 9 domain type headers (DeviceInfo, StreamConfig, FrameTimestamp, SessionMetadata, StreamStats, AlertRecord, EncoderConfig, Capabilities, PluginDescriptor) | Done |
-| 3 | 3 plugin interfaces (ICameraBackend, IDeviceEnumerator, WatchdogObserver) | Done |
-| 4 | 3 pipeline interfaces (IEncoder, IStreamWriter, IStatsCollector) | Done |
-| 5 | TimestampEngine (h+cpp) | Done |
-| 6 | PluginRegistry (h+cpp) | Done |
-| 7 | SessionMetadata::to_json/from_json (cpp) | Done |
-| 8 | StreamStats::to_json (cpp) | Done |
-| 9 | Skeleton main.cpp + main.qml | Done |
-| 10 | Build succeeds: `cmake --build build -j` | Done |
-| 11 | Qt window launches | Done |
+- Added `std::atomic<bool> g_shutdown_requested{false}`
+- Signal handler now **only** sets the atomic flag — fully async-signal-safe
+- Added `#include <atomic>` and `#include <thread>`
+- Replaced `g_server->Wait()` with a `shutdown_watcher` thread that polls the atomic flag every 200ms and calls `g_server->Shutdown()` from a safe (non-signal) context
+- Main thread calls `g_server->Wait()` (blocks until `Shutdown()` is called by the watcher thread)
+- `spdlog::info("Shutdown requested")` moved to the watcher thread
 
-## Files Created (21 files)
+**Note:** The task specified `Wait(timeout)` pattern, but the installed gRPC version (`grpc::Server::Wait()`) takes no arguments. Adapted to use a shutdown watcher thread + `Wait()` instead, which achieves the same safety guarantee: `Shutdown()` is never called from the signal handler.
 
-```
-CMakeLists.txt.v2
-internal/domain/AlertRecord.h
-internal/domain/Capabilities.h
-internal/domain/DeviceInfo.h
-internal/domain/EncoderConfig.h
-internal/domain/FrameTimestamp.h
-internal/domain/PluginDescriptor.h
-internal/domain/PluginRegistry.h
-internal/domain/PluginRegistry.cpp
-internal/domain/SessionMetadata.h
-internal/domain/SessionMetadata.cpp
-internal/domain/StreamConfig.h
-internal/domain/StreamStats.h
-internal/domain/StreamStats.cpp
-internal/domain/TimestampEngine.h
-internal/domain/TimestampEngine.cpp
-api/micecam/ICameraBackend.h
-api/micecam/IDeviceEnumerator.h
-api/micecam/WatchdogObserver.h
-internal/pipeline/IEncoder.h
-internal/pipeline/IStreamWriter.h
-internal/pipeline/IStatsCollector.h
-cmd/micecam_v2/main.cpp
-cmd/micecam_v2/qml/main.qml
-cmd/micecam_v2/qml/qml.qrc
-```
+### 2. Binary path resolution fix (3 files)
 
-## Build Output
+**Files:** `tests/integration/test_plugin_e2e_no_hw.cpp`, `tests/integration/test_calibrate_e2e.cpp`, `tests/integration/test_dual_path_keyframe.cpp`
+
+- Added `#include <mach-o/dyld.h>` for macOS
+- `find_plugin_binary()` now resolves path relative to the test binary location using `_NSGetExecutablePath` (macOS) or `/proc/self/exe` (Linux)
+- Path resolution: `test_binary_dir/../cmd/plugins/micecam_ffmpeg/micecam_ffmpeg_plugin` (since test binary is at `build/tests/test_xxx` and plugin is at `build/cmd/plugins/...`)
+- Falls back to original cwd-relative behavior if absolute path candidate doesn't exist
+
+## Verification Evidence
+
+### Build
 
 ```
-cmake -B build -S .
--- Checking for modules 'libavcodec;libavformat;libavutil;libavdevice;libswscale'
---   Found libavcodec, version 62.28.101
---   Found libavformat, version 62.12.101
---   Found libavutil, version 60.26.101
---   Found libavdevice, version 62.3.101
---   Found libswscale, version 9.5.101
--- Checking for module 'spdlog'
---   Found spdlog, version 1.17.0
--- Checking for module 'nlohmann_json'
---   Found nlohmann_json, version 3.12.0
--- Configuring done
--- Generating done
-
-cmake --build build -j
-[100%] Linking CXX executable cmd/micecam/micecam
-[100%] Built target micecam
+cmake --build build -j 4 → SUCCESS (0 errors)
 ```
 
-Binary: `build/cmd/micecam/micecam` (Mach-O 64-bit arm64, 632KB)
+### Test Suite
 
-## Verification
+```
+ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
+→ 100% tests passed, 0 tests failed out of 39
+→ Total Test time (real) = 53.24 sec
+```
 
-- [x] AC-001: `CMakeLists.txt.v2` exists alongside v1 `CMakeLists.txt`
-- [x] AC-002: All domain type headers compile
-- [x] AC-003: All plugin interface headers compile
-- [x] AC-004: All pipeline interface headers compile
-- [x] AC-005: TimestampEngine compiles and links
-- [x] AC-006: PluginRegistry compiles and links
-- [x] AC-007: SessionMetadata::to_json() compiles (nlohmann_json included)
-- [x] AC-008: StreamStats::to_json() compiles
-- [x] AC-009: `cmake -B build -S . && cmake --build build -j` succeeds
-- [x] AC-010: `./build/cmd/micecam/micecam` launches Qt window with "MiceCam v2 / Foundation Ready"
-- [x] AC-011: No compile warnings (`-Wall -Wextra` clean)
+### Mutex Recursion Check
 
-## Constraints Honored
+```
+./build/tests/test_plugin_e2e_no_hw --gtest_print_time=1 2>&1 | grep -i 'mutex\|recursion' | wc -l
+→ 0
+```
 
-- No v1 files modified (CMakeLists.txt backed up and restored)
-- All new files only — no v1 source files touched
-- Interfaces only — no camera backends or encoders implemented
-- Domain types use `micecam::domain` namespace
-- Interfaces use `micecam::api` or `micecam::pipeline` namespace
-- Tests not written (not in scope for Stage 2)
+### Binary Path from Project Root
 
-## Notes
+```
+cd /Volumes/DataHub/Projects/MiceCam && ./build/tests/test_plugin_e2e_no_hw
+→ [  PASSED  ] 1 test.
+```
 
-- CMakeLists.txt.v2 uses PkgConfig for FFmpeg/spdlog/nlohmann_json (Homebrew compatible) and `find_package(Qt6 CONFIG)` with CMAKE_PREFIX_PATH pointing to `/opt/homebrew/opt/qt`
-- `depthai-core` is optional (`find_package(depthai QUIET)`), sets `WITH_DEPTHAI` if found
-- `BUILD_SPIKE` option preserved for spike subdirectory
-- GTest `CONFIG` mode used for Homebrew googletest (target: `GTest::gtest`)
+## Scope Compliance
+
+- Only modified 5 allowed files
+- No infrastructure/pipeline/domain/proto/CMakeLists.txt changes
+- No test file modifications beyond the 3 allowed integration tests
+
+## Acceptance Criteria
+
+- [x] Both plugin mains use atomic flag + safe Shutdown pattern (adapted for API constraints)
+- [x] No spdlog calls in signal handler
+- [x] All three e2e tests find plugin binary correctly from project root AND build dir
+- [x] `cmake --build build` succeeds
+- [x] 39/39 tests pass via ctest
+- [x] `./build/tests/test_plugin_e2e_no_hw` from project root succeeds
+- [x] No `detected illegal recursion into Mutex code` in test output

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include <nlohmann/json_fwd.hpp>
+#include <nlohmann/json.hpp>
 
 namespace micecam::domain {
 
@@ -20,6 +20,7 @@ struct StreamStats {
     uint64_t bytes_written = 0;
     std::string encoder_used;
     bool encoder_fallback = false;
+    nlohmann::json transport;
 
     nlohmann::json to_json() const;
 };

@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-#include "internal/domain/StreamStats.h"
-#include "internal/domain/AlertRecord.h"
+#include "domain/StreamStats.h"
+#include "domain/AlertRecord.h"
 
 namespace micecam::pipeline {
 

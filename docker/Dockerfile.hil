@@ -1,0 +1,41 @@
+# MiceCam v2 Hardware-in-the-Loop Docker Environment
+# Supports: USB camera testing + NVIDIA NVENC hardware encoding
+
+FROM nvidia/cuda:12.6-devel-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake pkg-config \
+    libavcodec-dev libavformat-dev libavutil-dev \
+    libavdevice-dev libswscale-dev libavfilter-dev \
+    libspdlog-dev nlohmann-json3-dev libgtest-dev \
+    qt6-base-dev qt6-declarative-dev qt6-quickcontrols2-dev \
+    libgl1-mesa-dev libvulkan-dev \
+    libusb-1.0-0-dev udev \
+    git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build GTest from source (Ubuntu package is source-only)
+RUN cd /usr/src/gtest && cmake -B build && cmake --build build && \
+    cmake --install build --prefix /usr/local
+
+WORKDIR /workspace/MiceCam
+
+# Copy CMakeLists first (layer caching)
+COPY CMakeLists.txt vcpkg.json ./
+COPY internal/domain/ internal/domain/
+COPY internal/pipeline/ internal/pipeline/
+COPY api/micecam/ api/micecam/
+COPY internal/infrastructure/ internal/infrastructure/
+COPY cmd/micecam_v2/ cmd/micecam_v2/
+COPY tests/ tests/
+
+# Build and test
+CMD ["bash", "-c", "\
+    cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_SPIKE=OFF && \
+    cmake --build build -j$(nproc) && \
+    cd build && ctest --output-on-failure -j$(nproc) && \
+    echo '=== HARDWARE-IN-THE-LOOP ===' && \
+    echo 'Binary: build/cmd/micecam/micecam' && \
+    echo 'Ready for USB camera test'"]

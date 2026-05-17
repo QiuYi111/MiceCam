@@ -7,11 +7,9 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
-#ifdef __APPLE__
-#include <sys/mman.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
-#endif
 
 namespace micecam::infrastructure {
 

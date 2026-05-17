@@ -5,11 +5,6 @@
 #include <chrono>
 #include <thread>
 
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 #include <spdlog/spdlog.h>
 
 namespace micecam::plugin {
@@ -26,42 +21,25 @@ bool RingFrameProducer::create(const std::string& ring_id, uint32_t slot_count, 
     shm_name_ = "/micecam_ring_" + ring_id;
     shm_size_ = kHeaderSize + static_cast<uint64_t>(slot_count) * slot_size;
 
-    shm_fd_ = shm_open(shm_name_.c_str(), O_CREAT | O_RDWR | O_EXCL, 0600);
+    shm_fd_ = backend_->open(shm_name_, shm_size_);
     if (shm_fd_ < 0) {
-        // If already exists, retry with O_EXCL removed
-        shm_fd_ = shm_open(shm_name_.c_str(), O_RDWR, 0600);
-        if (shm_fd_ < 0) {
-            spdlog::error("shm_open failed for {}: {}", shm_name_, strerror(errno));
-            return false;
-        }
-    }
-
-    if (ftruncate(shm_fd_, static_cast<off_t>(shm_size_)) != 0) {
-        spdlog::error("ftruncate failed for {}: {}", shm_name_, strerror(errno));
-        ::close(shm_fd_);
-        shm_fd_ = -1;
-        shm_unlink(shm_name_.c_str());
         return false;
     }
 
-    mapped_mem_ = mmap(nullptr, shm_size_, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd_, 0);
-    if (mapped_mem_ == MAP_FAILED) {
-        spdlog::error("mmap failed for {}: {}", shm_name_, strerror(errno));
-        ::close(shm_fd_);
+    mapped_mem_ = backend_->map(shm_fd_, shm_size_);
+    if (!mapped_mem_) {
+        backend_->close(shm_fd_);
         shm_fd_ = -1;
-        shm_unlink(shm_name_.c_str());
-        mapped_mem_ = nullptr;
+        backend_->unlink(shm_name_);
         return false;
     }
 
-    // Initialize header
     header_ = static_cast<RingHeader*>(mapped_mem_);
     header_->producer_seq.store(0, std::memory_order_release);
     header_->consumer_seq.store(0, std::memory_order_release);
     header_->slot_count = slot_count;
     header_->slot_size = slot_size;
 
-    // Initialize slots to zero
     uint8_t* slots = static_cast<uint8_t*>(mapped_mem_) + kHeaderSize;
     std::memset(slots, 0, static_cast<size_t>(slot_count) * slot_size);
 
@@ -79,7 +57,6 @@ bool RingFrameProducer::writeFrame(const FrameData& frame, int timeout_ms) {
         uint64_t producer = header_->producer_seq.load(std::memory_order_acquire);
         uint64_t consumer = header_->consumer_seq.load(std::memory_order_acquire);
 
-        // Check if ring is full (producer is slot_count ahead of consumer)
         if (producer - consumer >= slot_count_) {
             if (std::chrono::steady_clock::now() >= deadline) {
                 spdlog::warn("RingFrameProducer: ring full, backpressure timeout");
@@ -95,7 +72,6 @@ bool RingFrameProducer::writeFrame(const FrameData& frame, int timeout_ms) {
 
         writePayloadHeader(slot, frame, producer);
 
-        // Copy payload after header
         uint32_t payload_max = slot_size_ - static_cast<uint32_t>(domain::PayloadHeader::header_size());
         uint32_t copy_size = (frame.size < payload_max) ? frame.size : payload_max;
         if (frame.data && copy_size > 0) {
@@ -117,7 +93,6 @@ void RingFrameProducer::writePayloadHeader(uint8_t* slot, const FrameData& frame
     ph.width = frame.width;
     ph.height = frame.height;
 
-    // Simple checksum: XOR of first 32 bytes of payload
     uint32_t checksum = 0;
     if (frame.data && frame.size > 0) {
         const uint32_t* data32 = reinterpret_cast<const uint32_t*>(frame.data);
@@ -128,15 +103,14 @@ void RingFrameProducer::writePayloadHeader(uint8_t* slot, const FrameData& frame
     }
     ph.checksum = checksum;
 
-    // Write header into slot using memcpy to handle alignment
-    std::memcpy(slot, &ph.kind, 4);           // kind (4 bytes for enum)
-    std::memcpy(slot + 8, &ph.pts_ns, 8);     // pts_ns
-    std::memcpy(slot + 16, &ph.sequence, 8);  // sequence
-    std::memcpy(slot + 24, &ph.keyframe, 1);  // keyframe
-    std::memcpy(slot + 28, &ph.size, 4);      // size
-    std::memcpy(slot + 32, &ph.width, 4);     // width
-    std::memcpy(slot + 36, &ph.height, 4);    // height
-    std::memcpy(slot + 40, &ph.checksum, 4);  // checksum
+    std::memcpy(slot, &ph.kind, 4);
+    std::memcpy(slot + 8, &ph.pts_ns, 8);
+    std::memcpy(slot + 16, &ph.sequence, 8);
+    std::memcpy(slot + 24, &ph.keyframe, 1);
+    std::memcpy(slot + 28, &ph.size, 4);
+    std::memcpy(slot + 32, &ph.width, 4);
+    std::memcpy(slot + 36, &ph.height, 4);
+    std::memcpy(slot + 40, &ph.checksum, 4);
 }
 
 domain::StreamRingDescriptor RingFrameProducer::descriptor(const std::string& stream_id) const {
@@ -145,8 +119,8 @@ domain::StreamRingDescriptor RingFrameProducer::descriptor(const std::string& st
     desc.stream_id = stream_id;
     desc.slot_count = slot_count_;
     desc.slot_size = slot_size_;
-    desc.platform_handle_type = "posix_shm";
-    desc.platform_handle_value = 0; // shm_name is the reference, not fd
+    desc.platform_handle_type = micecam::infrastructure::kShmTransportType;
+    desc.platform_handle_value = 0;
     desc.ownership = domain::RingOwnership::PLUGIN_OWNS;
     desc.policy = domain::RingPolicy::NO_DROP;
     desc.producer_sequence_offset = 0;
@@ -157,16 +131,16 @@ domain::StreamRingDescriptor RingFrameProducer::descriptor(const std::string& st
 
 void RingFrameProducer::release() {
     if (mapped_mem_) {
-        munmap(mapped_mem_, shm_size_);
+        backend_->unmap(mapped_mem_, shm_size_);
         mapped_mem_ = nullptr;
         header_ = nullptr;
     }
     if (shm_fd_ >= 0) {
-        ::close(shm_fd_);
+        backend_->close(shm_fd_);
         shm_fd_ = -1;
     }
     if (!shm_name_.empty()) {
-        shm_unlink(shm_name_.c_str());
+        backend_->unlink(shm_name_);
         shm_name_.clear();
     }
     slot_count_ = 0;

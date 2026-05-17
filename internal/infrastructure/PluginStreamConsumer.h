@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "domain/StreamRingDescriptor.h"
+#include "infrastructure/SharedMemoryBackend.h"
 
 namespace micecam::pipeline {
 class RecordingPipeline;
@@ -37,7 +38,7 @@ struct TransportStats {
 struct PluginSourceInfo {
     std::string plugin_id;
     std::string device_id;
-    std::string transport = "posix_shm";
+    std::string transport = kShmTransportType;
     uint32_t ring_slot_count = 0;
     uint32_t ring_slot_size = 0;
 };

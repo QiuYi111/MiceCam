@@ -1,83 +1,104 @@
-# Worker Report: Fix signal handler mutex recursion + fork e2e binary path resolution
+# Worker Report
 
-## Task Reference
+## Task summary
 
-- Task: `.pm/runtime/next-task.md`
-- Branch: `feat/005-stream-monitoring-test-suite`
-- Baseline: 39/39 tests passing (commit b4e5ade)
+Phase 1 of Spec 006: Created platform-agnostic `SharedMemoryBackend` interface, eliminated duplicate `PayloadKind`, zero-initialized `available_bytes_`, and replaced all direct POSIX SHM calls with the backend abstraction.
 
-## Summary
+## What was done
 
-Fixed two bugs:
-1. **Signal handler mutex recursion** — Plugin mains called `spdlog::info()` and `g_server->Shutdown()` directly in signal handlers, which are not async-signal-safe. This caused `detected illegal recursion into Mutex code` when signals fired during gRPC `Wait()`.
-2. **Fork e2e binary path resolution** — Integration tests used `std::filesystem::current_path()` to find the plugin binary, which only worked when cwd was `build/`. Running from project root failed.
+- Created `SharedMemoryBackend` abstract interface with `open`, `map`, `unmap`, `unlink`, `close` virtual methods
+- Created `PosixSharedMemory` implementation wrapping `shm_open`, `ftruncate`, `mmap`, `munmap`, `shm_unlink`, `::close`
+- Created `Win32SharedMemory` implementation using `CreateFileMapping`, `MapViewOfFile`, `UnmapViewOfFile`, `CloseHandle`
+- Created factory function `create_shared_memory_backend()` with compile-time platform selection
+- Added `kShmTransportType` platform constant (`"posix_shm"` on POSIX, `"win32_mapping"` on Win32)
+- Refactored `PluginRingReader.cpp` to use `backend_->open/map/unmap/close` instead of direct POSIX calls
+- Refactored `RingFrameProducer.cpp` to use `backend_->open/map/unmap/close/unlink` instead of direct POSIX calls
+- Removed duplicate `PayloadKind` enum from `RecordingPipeline.h`, replaced with `using` alias to `domain::PayloadKind`
+- Zero-initialized `available_bytes_` in `PreflightValidator.h`
+- Replaced all `"posix_shm"` string literals with `kShmTransportType` constant
+- Updated all 3 CMakeLists.txt targets that compile the new source files
 
-## Changes
+## Changed files
 
-### 1. Signal handler fix (2 files)
+- **Created**: `internal/infrastructure/SharedMemoryBackend.h`
+- **Created**: `internal/infrastructure/SharedMemoryBackend.cpp`
+- **Created**: `internal/infrastructure/PosixSharedMemory.h`
+- **Created**: `internal/infrastructure/PosixSharedMemory.cpp`
+- **Created**: `internal/infrastructure/Win32SharedMemory.h`
+- **Created**: `internal/infrastructure/Win32SharedMemory.cpp`
+- **Modified**: `internal/pipeline/RecordingPipeline.h` — removed duplicate PayloadKind, added `using` alias
+- **Modified**: `internal/pipeline/PreflightValidator.h` — `available_bytes_ = 0`
+- **Modified**: `internal/infrastructure/PluginRingReader.h` — added backend member + include
+- **Modified**: `internal/infrastructure/PluginRingReader.cpp` — replaced all POSIX SHM calls with backend methods
+- **Modified**: `cmd/plugins/micecam_ffmpeg/RingFrameProducer.h` — added backend member + include
+- **Modified**: `cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp` — replaced all POSIX SHM calls, `"posix_shm"` literal
+- **Modified**: `internal/infrastructure/PluginStreamConsumer.h` — `kShmTransportType` + include
+- **Modified**: `internal/infrastructure/PluginStreamConsumer.cpp` — `kShmTransportType`
+- **Modified**: `CMakeLists.txt` — added PosixSharedMemory.cpp, SharedMemoryBackend.cpp, Win32SharedMemory.cpp (WIN32 guard)
+- **Modified**: `cmd/plugins/micecam_ffmpeg/CMakeLists.txt` — added PosixSharedMemory.cpp, SharedMemoryBackend.cpp, Win32SharedMemory.cpp (WIN32 guard)
 
-**Files:** `cmd/plugins/micecam_ffmpeg/main.cpp`, `cmd/plugins/micecam_oak/main.cpp`
+## Commands run
 
-- Added `std::atomic<bool> g_shutdown_requested{false}`
-- Signal handler now **only** sets the atomic flag — fully async-signal-safe
-- Added `#include <atomic>` and `#include <thread>`
-- Replaced `g_server->Wait()` with a `shutdown_watcher` thread that polls the atomic flag every 200ms and calls `g_server->Shutdown()` from a safe (non-signal) context
-- Main thread calls `g_server->Wait()` (blocks until `Shutdown()` is called by the watcher thread)
-- `spdlog::info("Shutdown requested")` moved to the watcher thread
+| Command | Result |
+|---------|--------|
+| `cmake --build build -j 4` | SUCCESS — 0 errors |
+| `ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*\|.*stress.*'` | 39/39 PASSED |
+| `grep -rn "enum class PayloadKind" internal/` | 1 result (domain/StreamRingDescriptor.h only) |
+| `grep -n "available_bytes_ = 0" internal/pipeline/PreflightValidator.h` | 1 result |
+| `grep -rn '"posix_shm"' PluginStreamConsumer.h .cpp RingFrameProducer.cpp` | 0 results |
+| `grep -rn "shm_open\|shm_unlink" PluginRingReader.cpp RingFrameProducer.cpp` | 0 results |
+| `ls SharedMemoryBackend.h PosixSharedMemory.h/.cpp Win32SharedMemory.h/.cpp` | All exist |
 
-**Note:** The task specified `Wait(timeout)` pattern, but the installed gRPC version (`grpc::Server::Wait()`) takes no arguments. Adapted to use a shutdown watcher thread + `Wait()` instead, which achieves the same safety guarantee: `Shutdown()` is never called from the signal handler.
+## Test results
 
-### 2. Binary path resolution fix (3 files)
+All 39 existing tests pass. No new tests added (Phase 5 scope). No regressions.
 
-**Files:** `tests/integration/test_plugin_e2e_no_hw.cpp`, `tests/integration/test_calibrate_e2e.cpp`, `tests/integration/test_dual_path_keyframe.cpp`
+## Harness results
 
-- Added `#include <mach-o/dyld.h>` for macOS
-- `find_plugin_binary()` now resolves path relative to the test binary location using `_NSGetExecutablePath` (macOS) or `/proc/self/exe` (Linux)
-- Path resolution: `test_binary_dir/../cmd/plugins/micecam_ffmpeg/micecam_ffmpeg_plugin` (since test binary is at `build/tests/test_xxx` and plugin is at `build/cmd/plugins/...`)
-- Falls back to original cwd-relative behavior if absolute path candidate doesn't exist
+- **Risk classification**: leaf (as specified in task)
+- **harness-tdd**: NOT required per task (tests added in Phase 5)
+- **harness-eval**: NOT required per task
 
-## Verification Evidence
+## Acceptance criteria checklist
 
-### Build
+- [x] `grep -r "enum class PayloadKind" internal/` returns exactly 1 result (in `domain/StreamRingDescriptor.h` only)
+- [x] `grep "available_bytes_ = 0" internal/pipeline/PreflightValidator.h` returns 1 result
+- [x] `grep "posix_shm"` in PluginStreamConsumer.h/.cpp and RingFrameProducer.cpp returns 0 results
+- [x] `SharedMemoryBackend.h`, `PosixSharedMemory.h/.cpp`, `Win32SharedMemory.h/.cpp` exist in `internal/infrastructure/`
+- [x] `cmake --build build -j 4` succeeds on macOS
+- [x] `ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'` — 39/39 tests pass
+- [x] No direct `shm_open`/`mmap`/`munmap`/`shm_unlink` calls remain in PluginRingReader.cpp or RingFrameProducer.cpp
+
+## Problems encountered
+
+None.
+
+## Deviations from task
+
+- `FFmpegPluginServer.cpp` was listed in allowed scope but contained no direct `shm_unlink` calls — all cleanup already delegated to `RingFrameProducer::release()`. No changes needed.
+- Added `SharedMemoryBackend.cpp` (factory function) which was not explicitly listed in allowed files but is necessary for the factory function and follows the pattern of the other new files.
+
+## Remaining work
+
+None for Phase 1.
+
+## Suggested next step
+
+Phase 2 of Spec 006 (if defined) or Phase 5 for test coverage of the new backend abstraction.
+
+## Evidence
 
 ```
-cmake --build build -j 4 → SUCCESS (0 errors)
+$ cmake --build build -j 4
+[100%] Built target test_oak_plugin_server
+(0 errors, 0 failures)
+
+$ ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
+100% tests passed, 0 tests failed out of 39
+
+$ grep -rn "enum class PayloadKind" internal/
+internal/domain/StreamRingDescriptor.h:8:enum class PayloadKind { RAW = 0, MJPEG = 1, H264 = 2, H265 = 3 };
+
+$ grep -rn "shm_open\|shm_unlink" internal/infrastructure/PluginRingReader.cpp cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
+(no output — exit code 1, no matches)
 ```
-
-### Test Suite
-
-```
-ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
-→ 100% tests passed, 0 tests failed out of 39
-→ Total Test time (real) = 53.24 sec
-```
-
-### Mutex Recursion Check
-
-```
-./build/tests/test_plugin_e2e_no_hw --gtest_print_time=1 2>&1 | grep -i 'mutex\|recursion' | wc -l
-→ 0
-```
-
-### Binary Path from Project Root
-
-```
-cd /Volumes/DataHub/Projects/MiceCam && ./build/tests/test_plugin_e2e_no_hw
-→ [  PASSED  ] 1 test.
-```
-
-## Scope Compliance
-
-- Only modified 5 allowed files
-- No infrastructure/pipeline/domain/proto/CMakeLists.txt changes
-- No test file modifications beyond the 3 allowed integration tests
-
-## Acceptance Criteria
-
-- [x] Both plugin mains use atomic flag + safe Shutdown pattern (adapted for API constraints)
-- [x] No spdlog calls in signal handler
-- [x] All three e2e tests find plugin binary correctly from project root AND build dir
-- [x] `cmake --build build` succeeds
-- [x] 39/39 tests pass via ctest
-- [x] `./build/tests/test_plugin_e2e_no_hw` from project root succeeds
-- [x] No `detected illegal recursion into Mutex code` in test output

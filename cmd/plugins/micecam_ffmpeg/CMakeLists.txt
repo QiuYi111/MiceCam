@@ -37,6 +37,8 @@ set(PLUGIN_SOURCES
     AVFoundationEnumerator.cpp
     RingFrameProducer.cpp
     PlatformUtil.cpp
+    ${CMAKE_SOURCE_DIR}/internal/infrastructure/PosixSharedMemory.cpp
+    ${CMAKE_SOURCE_DIR}/internal/infrastructure/SharedMemoryBackend.cpp
 )
 
 set(PLUGIN_PROTO_SOURCES
@@ -57,6 +59,12 @@ target_include_directories(micecam_ffmpeg_plugin PRIVATE
     ${CMAKE_SOURCE_DIR}/api
     ${CMAKE_SOURCE_DIR}/internal
 )
+
+if(WIN32)
+    target_sources(micecam_ffmpeg_plugin PRIVATE
+        ${CMAKE_SOURCE_DIR}/internal/infrastructure/Win32SharedMemory.cpp
+    )
+endif()
 
 # macOS: Add Homebrew include paths
 if(APPLE)

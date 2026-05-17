@@ -13,6 +13,7 @@
 #include "domain/EncoderConfig.h"
 #include "domain/SessionMetadata.h"
 #include "domain/StreamConfig.h"
+#include "domain/StreamRingDescriptor.h"
 #include "domain/StreamStats.h"
 #include "domain/FrameTimestamp.h"
 
@@ -29,12 +30,7 @@ namespace micecam::pipeline {
 class TranscodeStage;
 class StatsCollector;
 
-enum class PayloadKind {
-    RAW = 0,
-    MJPEG = 1,
-    H264 = 2,
-    H265 = 3,
-};
+using PayloadKind = domain::PayloadKind;
 
 struct SessionConfig {
     std::string session_id;

@@ -120,6 +120,8 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/FFmpegCameraBackend.cpp
     internal/infrastructure/PluginRingReader.cpp
     internal/infrastructure/PluginStreamConsumer.cpp
+    internal/infrastructure/PosixSharedMemory.cpp
+    internal/infrastructure/SharedMemoryBackend.cpp
     internal/infrastructure/ResourceManager.cpp
     internal/infrastructure/StreamLivenessMonitor.cpp
     internal/pipeline/TranscodeStage.cpp
@@ -140,10 +142,16 @@ target_link_libraries(micecam_encoding PUBLIC
     PkgConfig::nlohmann_json
 )
 
-target_compile_options(micecam_encoding PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
-)
+    target_compile_options(micecam_encoding PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+
+    if(WIN32)
+        target_sources(micecam_encoding PRIVATE
+            internal/infrastructure/Win32SharedMemory.cpp
+        )
+    endif()
 
 # MiceCam v2 executable (requires Qt6, skipped in CI headless mode)
 if(BUILD_UI)
@@ -267,6 +275,8 @@ if(BUILD_PLUGINS)
         cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
         cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
         cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
+        internal/infrastructure/PosixSharedMemory.cpp
+        internal/infrastructure/SharedMemoryBackend.cpp
     )
 
     target_include_directories(test_ffmpeg_plugin_server PRIVATE

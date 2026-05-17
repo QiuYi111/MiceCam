@@ -137,7 +137,7 @@ PluginSourceInfo PluginStreamConsumer::getPluginSourceInfo() const {
     PluginSourceInfo info;
     info.plugin_id = config_.plugin_id;
     info.device_id = config_.device_id;
-    info.transport = "posix_shm";
+    info.transport = kShmTransportType;
     info.ring_slot_count = config_.slot_count;
     info.ring_slot_size = config_.slot_size;
     return info;

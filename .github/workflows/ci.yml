@@ -35,7 +35,7 @@ jobs:
             qt6-base-dev qt6-declarative-dev \
             qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window \
             libspdlog-dev nlohmann-json3-dev libgtest-dev pkg-config \
-            libprotobuf-dev protobuf-compiler libgrpc++-dev libgrpc-dev
+            libprotobuf-dev protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libgrpc-dev
           cd /usr/src/gtest && sudo cmake -B build && sudo cmake --build build && sudo cmake --install build --prefix /usr/local
 
       # ====== macOS ======

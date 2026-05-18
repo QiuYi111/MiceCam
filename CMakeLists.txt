@@ -251,7 +251,15 @@ if(BUILD_PLUGINS)
     file(MAKE_DIRECTORY "${FFMPEG_PLUGIN_PROTO_GEN_DIR}")
 
     find_program(FFMPEG_TEST_PROTOC protoc REQUIRED)
-    find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+    find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN
+        NAMES grpc_cpp_plugin
+        HINTS
+            /usr/local/bin
+            /opt/homebrew/bin
+            ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+            ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        REQUIRED
+    )
 
     add_custom_command(
         OUTPUT
@@ -563,7 +571,15 @@ if(BUILD_PLUGINS)
     file(MAKE_DIRECTORY "${OAK_PLUGIN_PROTO_GEN_DIR}")
 
     find_program(OAK_TEST_PROTOC protoc REQUIRED)
-    find_program(OAK_TEST_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+    find_program(OAK_TEST_GRPC_CPP_PLUGIN
+        NAMES grpc_cpp_plugin
+        HINTS
+            /usr/local/bin
+            /opt/homebrew/bin
+            ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+            ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        REQUIRED
+    )
 
     add_custom_command(
         OUTPUT

@@ -1,7 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
 find_program(PROTOC protoc REQUIRED)
-find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+find_program(GRPC_CPP_PLUGIN
+    NAMES grpc_cpp_plugin
+    HINTS
+        /usr/local/bin
+        /opt/homebrew/bin
+        ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+    REQUIRED
+)
 
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto)
 set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)

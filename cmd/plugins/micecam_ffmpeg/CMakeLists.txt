@@ -4,7 +4,15 @@ cmake_minimum_required(VERSION 3.20)
 # Find gRPC and Protobuf (found in parent scope by root CMakeLists.txt)
 # find_package already invoked in parent scope with CONFIG REQUIRED
 find_program(PROTOC protoc REQUIRED)
-find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+find_program(GRPC_CPP_PLUGIN
+    NAMES grpc_cpp_plugin
+    HINTS
+        /usr/local/bin
+        /opt/homebrew/bin
+        ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+    REQUIRED
+)
 
 # Proto codegen
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto)

@@ -2,55 +2,112 @@ name: CI
 
 on:
   push:
-    branches: [main, plugin-system]
+    branches: [main, plugin-system, feat/*"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies (macOS)
-        run: brew install ffmpeg protobuf grpc spdlog nlohmann-json googletest
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build -j 4
-      - name: Test
-        run: ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            build_ui: ON
+          - os: macos-14
+            build_ui: ON
+          - os: windows-2022
+            build_ui: OFF
 
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies (vcpkg)
-        run: vcpkg install ffmpeg protobuf grpc spdlog nlohmann-json gtest
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_UI=OFF -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
-        shell: cmd
-      - name: Build
-        run: cmake --build build --config Release
-      - name: Test
-        run: ctest --test-dir build --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*e2e.*'
+    runs-on: ${{ matrix.os }}
 
-  build-linux:
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
+
+      # ====== Linux ======
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
-            libprotobuf-dev protobuf-compiler \
-            libgrpc++-dev \
-            libspdlog-dev \
-            nlohmann-json3-dev \
-            libgtest-dev
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_UI=OFF
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libavcodec-dev libavformat-dev libavutil-dev libavdevice-dev libswscale-dev \
+            qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window \
+            libspdlog-dev nlohmann-json3-dev libgtest-dev pkg-config \
+            libprotobuf-dev protobuf-compiler libgrpc++-dev libgrpc-dev
+          cd /usr/src/gtest && sudo cmake -B build && sudo cmake --build build && sudo cmake --install build --prefix /usr/local
+
+      # ====== macOS ======
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ffmpeg protobuf grpc qt@6 spdlog nlohmann-json googletest pkg-config
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
+
+      # ====== Windows ======
+      - name: Setup vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vcpkgRoot = "${{ github.workspace }}/vcpkg"
+          if (-not (Test-Path $vcpkgRoot)) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgRoot
+            & "$vcpkgRoot/bootstrap-vcpkg.bat" -disableMetrics
+          }
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+
+      - name: Cache vcpkg binaries
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+
+      - name: Install vcpkg deps (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows
+
+      # ====== Configure ======
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DBUILD_SPIKE=OFF `
+            -DBUILD_UI=${{ matrix.build_ui }}
+        shell: pwsh
+
+      - name: Configure (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SPIKE=OFF \
+            -DBUILD_UI=${{ matrix.build_ui }}
+
+      # ====== Build & Test ======
       - name: Build
-        run: cmake --build build -j 4
+        run: cmake --build build --config Release -j
+
       - name: Test
-        run: ctest --test-dir build --output-on-failure --exclude-regex '.*hil.*|.*stress.*'
+        run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*'
+
+      # ====== Artifacts ======
+      - name: Upload binary (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: micecam-macos-arm64
+          path: build/cmd/micecam_ui/micecam_ui
+
+      - name: Upload binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: micecam-linux-x64
+          path: build/cmd/micecam_ui/micecam_ui

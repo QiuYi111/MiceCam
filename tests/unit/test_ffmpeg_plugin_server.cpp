@@ -14,14 +14,13 @@ constexpr int kTestTimeoutMs = 3000;
 class FFmpegPluginServerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        server_thread_ = std::make_unique<std::jthread>([this](std::stop_token /*st*/) {
+        server_thread_ = std::make_unique<std::thread>([this] {
             grpc::ServerBuilder builder;
             std::string addr = "localhost:0";
             builder.AddListeningPort(addr, grpc::InsecureServerCredentials(), &port_);
             builder.RegisterService(&service_);
             server_ = builder.BuildAndStart();
             if (server_) {
-                // Wait until stopped
                 server_->Wait();
             }
         });
@@ -42,12 +41,15 @@ protected:
         if (server_) {
             server_->Shutdown();
         }
+        if (server_thread_ && server_thread_->joinable()) {
+            server_thread_->join();
+        }
         server_thread_.reset();
     }
 
     micecam::plugin::FFmpegPluginServer service_;
     std::unique_ptr<grpc::Server> server_;
-    std::unique_ptr<std::jthread> server_thread_;
+    std::unique_ptr<std::thread> server_thread_;
     int port_ = 0;
     std::shared_ptr<grpc::Channel> channel_;
     std::unique_ptr<micecam::plugin::CameraPluginService::Stub> stub_;

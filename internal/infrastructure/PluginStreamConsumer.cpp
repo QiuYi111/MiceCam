@@ -37,7 +37,8 @@ bool PluginStreamConsumer::start() {
     }
 
     running_.store(true);
-    consumer_thread_ = std::jthread([this](std::stop_token) { consumerLoop(); });
+    consumer_stop_ = false;
+    consumer_thread_ = std::thread([this] { consumerLoop(); });
 
     spdlog::info("PluginStreamConsumer started: plugin={} stream={}",
                  config_.plugin_id, config_.stream_id);
@@ -47,9 +48,9 @@ bool PluginStreamConsumer::start() {
 void PluginStreamConsumer::stop() {
     if (!running_.load()) return;
 
+    consumer_stop_ = true;
     running_.store(false);
     if (consumer_thread_.joinable()) {
-        consumer_thread_.request_stop();
         consumer_thread_.join();
     }
 

@@ -67,7 +67,8 @@ private:
 
     StreamLivenessMonitor* monitor_ = nullptr;
     std::unique_ptr<PluginRingReader> reader_;
-    std::jthread consumer_thread_;
+    std::atomic<bool> consumer_stop_{false};
+    std::thread consumer_thread_;
     std::atomic<bool> running_{false};
 
     mutable std::mutex stats_mutex_;

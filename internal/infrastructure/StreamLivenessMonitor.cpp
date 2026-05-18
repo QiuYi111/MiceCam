@@ -16,13 +16,14 @@ StreamLivenessMonitor::~StreamLivenessMonitor() {
 void StreamLivenessMonitor::start() {
     bool expected = false;
     if (!running_.compare_exchange_strong(expected, true)) return;
-    monitor_thread_ = std::jthread([this](std::stop_token) { monitor_loop(); });
+    stop_requested_ = false;
+    monitor_thread_ = std::thread([this] { monitor_loop(); });
 }
 
 void StreamLivenessMonitor::stop() {
+    stop_requested_ = true;
     running_.store(false);
     if (monitor_thread_.joinable()) {
-        monitor_thread_.request_stop();
         monitor_thread_.join();
     }
 }

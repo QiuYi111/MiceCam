@@ -254,6 +254,7 @@ if(BUILD_PLUGINS)
     find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN
         NAMES grpc_cpp_plugin
         HINTS
+            /usr/bin
             /usr/local/bin
             /opt/homebrew/bin
             ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
@@ -574,6 +575,7 @@ if(BUILD_PLUGINS)
     find_program(OAK_TEST_GRPC_CPP_PLUGIN
         NAMES grpc_cpp_plugin
         HINTS
+            /usr/bin
             /usr/local/bin
             /opt/homebrew/bin
             ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc

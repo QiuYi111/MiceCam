@@ -3,7 +3,9 @@
 namespace micecam::ui {
 
 AppSettings::AppSettings(QObject* parent)
-    : QObject(parent) {}
+    : QObject(parent) {
+    config_.load("micecam_config.json");
+}
 
 int AppSettings::watchdogTimeout() const { return config_.watchdog_timeout_s(); }
 void AppSettings::setWatchdogTimeout(int value) {

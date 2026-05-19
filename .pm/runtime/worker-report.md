@@ -1,73 +1,65 @@
 # Worker Report
 
 ## Task summary
-
-Re-audited spec 004 coverage against `dev` at `ac24012` and converted it from a large implementation spec into a production readiness checklist / closure gate. Documentation-only task.
+Fix AppSettings constructor to load `micecam_config.json` on construction (FR-031) and add persistence tests.
 
 ## What was done
-
-- Read audit evidence: `docs/reports/reviews/dev-readiness-audit-05-19.md` (370 lines, full spec matrix for 003-006)
-- Read original spec 004 (322 lines, 28 FRs, 16 success criteria, 15 user stories, 7 phases)
-- Read original plan 004 (315 lines, 7 implementation phases, ~25 files)
-- Spot-checked key code paths to re-verify audit evidence:
-  - `cmd/micecam_ui/AppController.cpp` — 0 Backend references (confirmed plugin-only mode)
-  - `internal/pipeline/PreflightValidator.cpp` — `run_phase1_calibration()`, `compute_min_gop()`, `run_phase2_stress_test()` all present
-  - `internal/pipeline/RecordingPipeline.cpp` — dual-path with Transcoder fallback
-  - `internal/infrastructure/StreamWriter.cpp:66` — `+frag_keyframe+empty_moov+default_base_moof` present
-  - `internal/infrastructure/PluginRegistryService.cpp` — `handle_plugin_crash()` with finalize→shm cleanup→restart
-  - `cmd/plugins/micecam_ffmpeg/` — `kApiVersion = 2`, `Calibrate` RPC implemented
-  - HIL test files: NOT FOUND (no `test_hil_e2e.cpp` or `test_hil_crash_recovery.cpp` on `dev`)
-  - Flaky test: `StallCountResetsOnActivity` in `tests/unit/test_stream_liveness_monitor.cpp:190`
-- Rewrote `specs/004-production-ready-plugin-app/spec.md` as **Production Readiness Checklist / Closure Gate**
-  - 27/28 FRs marked Done with evidence pointers
-  - 1 FR (merge to main) marked Open
-  - Deferred: HIL tests, PM state update, UI sign-off
-  - Next steps ordered as small sequence
-- Rewrote `specs/004-production-ready-plugin-app/plan.md` as **Closure Plan**
-  - 5 closure tasks (C-1 through C-5)
-  - Explicitly states: no `feat/004-production-ready` branch needed
-  - Removed all original 7-phase implementation detail
-- Updated `project_index` to reference spec 004
-- Wrote implementation report: `docs/reports/implements/spec-004-checklist-conversion-05-19.md`
+- Added `config_.load("micecam_config.json")` call to `AppSettings` constructor
+- Created `tests/unit/test_app_settings.cpp` with two tests: persistence across instances and first-launch defaults
+- Registered new test in `CMakeLists.txt` under `if(BUILD_UI)` block with Qt6::Core linkage
+- Full test suite passes: 45/45
 
 ## Changed files
-
-- `specs/004-production-ready-plugin-app/spec.md` — rewritten (322→~90 lines)
-- `specs/004-production-ready-plugin-app/plan.md` — rewritten (315→~80 lines)
-- `project_index` — added spec 004 entry
-- `docs/reports/implements/spec-004-checklist-conversion-05-19.md` — created
-- `.pm/runtime/worker-report.md` — this file (updated)
+- `cmd/micecam_ui/AppSettings.cpp` — modified constructor to load config on start
+- `tests/unit/test_app_settings.cpp` — new test file
+- `CMakeLists.txt` — registered `test_app_settings` test
 
 ## Commands run
-
 | Command | Result |
-|---------|--------|
-| `git status --short --branch` | branch `codex/dev-readiness-audit`, modified: `next-task.md`, `worker-report.md`; untracked: `docs/reports/`, `specs/004/` |
-| `git diff --name-status` | No staged changes |
-| `test -f specs/004-production-ready-plugin-app/spec.md` | Exists |
-| `test -f specs/004-production-ready-plugin-app/plan.md` | Exists |
-| `test -f docs/reports/implements/spec-004-checklist-conversion-05-19.md` | Exists |
-| `rg -n "Production Readiness Checklist|Closure Gate|Done|Open|Deferred" specs/004-production-ready-plugin-app/spec.md` | All markers present |
-| `rg -n "Closure Plan" specs/004-production-ready-plugin-app/plan.md` | Present |
-| `rg -n "specs/004-production-ready-plugin-app|production readiness" project_index` | Entry present |
+|---|---|
+| `cmake --build build -j 4` | Build succeeded |
+| `ctest --test-dir build -R test_app_settings --output-on-failure` | 1/1 passed |
+| `ctest --test-dir build --output-on-failure` | 45/45 passed (0 failures) |
 
-## Verification
+## Test results
+- `SettingsPersistAcrossInstances`: save settings, destroy AppSettings, create new instance, verify settings loaded correctly — **PASSED**
+- `FirstLaunchUsesDefaults`: no config file present, verify all defaults used — **PASSED**
+- No regressions: all 45 tests pass (up from 44 baseline)
 
-All acceptance criteria from `next-task.md`:
+## Harness results
+- **Risk classification**: branch (multi-file behavioral change) — proceeded with tests
+- **Eval**: not explicitly required by task
 
-- [x] Spec 004 rewritten as production readiness checklist / closure gate
-- [x] Spec 004 plan rewritten as closure plan with small next branches
-- [x] 004 included in project tracking (`project_index`)
-- [x] Implementation report exists at `docs/reports/implements/spec-004-checklist-conversion-05-19.md`
-- [x] Worker report exists and lists changed files, commands, verification, problems, deviations
-- [x] Only allowed files changed (verified by `git diff --name-status`)
-- [x] No commit created
-- [x] No build or test executed (documentation-only task)
+## Acceptance criteria checklist
+- [x] `AppSettings` constructor calls `config_.load("micecam_config.json")`
+- [x] Settings loaded correctly on app start
+- [x] First launch (no config file) uses defaults, no crash
+- [x] Test: save → destroy → recreate → verify settings persist
+- [x] 45/45 tests pass
+- [x] Build passes
+- [ ] One git commit (pending)
 
 ## Problems encountered
-
-None. All file reads, spot-checks, and writes completed without errors.
+None
 
 ## Deviations from task
+None
 
-None. All required work completed within allowed file scope. Skipped full build/test as this is documentation-only per task instructions.
+## Remaining work
+- Git commit pending
+- Packaging validation deferred per task instructions
+
+## Suggested next step
+Create git commit, then close task.
+
+## Evidence
+```
+$ cmake --build build -j 4
+[100%] Built target micecam_ui
+
+$ ctest --test-dir build --output-on-failure
+100% tests passed, 0 tests failed out of 45
+
+$ ctest --test-dir build -R test_app_settings --output-on-failure
+1/1 Test #43: test_app_settings ... Passed  0.03 sec
+```

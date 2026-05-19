@@ -543,6 +543,8 @@ endif()
 if(BUILD_HIL)
     add_micecam_test(test_real_camera_hil tests/hil/test_real_camera.cpp)
     add_micecam_test(test_e2e_stress tests/hil/test_e2e_stress.cpp)
+    add_micecam_test(test_hil_e2e tests/hil/test_hil_e2e.cpp)
+    add_micecam_test(test_hil_crash_recovery tests/hil/test_hil_crash_recovery.cpp)
 endif()
 
 # Spike subdirectory (headless feasibility tests)

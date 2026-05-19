@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 #include <nlohmann/json.hpp>
 
@@ -121,38 +122,71 @@ void AppController::refreshCameras() {
     auto devices = manager_.discover_all();
     auto sources = manager_.get_sources();
 
+    std::unordered_map<std::string, const domain::PluginSource*> source_by_device;
+    for (const auto& source : sources) {
+        for (const auto& device_id : source.device_ids) {
+            source_by_device[device_id] = &source;
+        }
+    }
+    const domain::PluginSource* fallback_source = sources.size() == 1 ? &sources.front() : nullptr;
+
     std::vector<CameraRow> rows;
+    std::vector<domain::PluginDeviceInfo> plugin_devices;
     for (const auto& device : devices) {
+        const auto source_it = source_by_device.find(device.id);
+        const domain::PluginSource* source = source_it != source_by_device.end()
+            ? source_it->second
+            : fallback_source;
+
+        domain::PluginDeviceInfo plugin_device;
+        plugin_device.device_id = device.id;
+        plugin_device.display_name = device.name.empty() ? device.id : device.name;
+        plugin_device.plugin_id = source ? source->source_id : device.type;
+        plugin_device.status = "available";
+        plugin_device.max_width = 0;
+        plugin_device.max_height = 0;
+        plugin_device.max_framerate = 0.0;
+
         for (const auto& stream : device.streams) {
             CameraRow row;
             row.cameraId = QString::fromStdString(device.id) + "_" + QString::number(stream.index);
             row.name = QString::fromStdString(stream.label);
-            row.sourceId.clear();
-            row.sourceGroup.clear();
+            row.sourceId = source ? QString::fromStdString(source->source_id) : QString::fromStdString(device.type);
+            row.sourceGroup = source ? QString::fromStdString(source->source_name) : QString::fromStdString(device.type);
             row.fps = stream.supported_framerates.empty() ? 0.0 : static_cast<double>(stream.supported_framerates.front());
             row.dropCount = 0;
             row.recording = recording_;
-            row.status = 0;
-            row.alertMessage.clear();
+            row.status = stream.available ? 0 : 2;
+            row.alertMessage = QString::fromStdString(stream.unavailable_reason);
 
             for (const auto& res : stream.resolutions) {
                 row.resolutionLabels.append(
                     QString::asprintf("%d x %d", res.width, res.height));
+                plugin_device.max_width = std::max(plugin_device.max_width, res.width);
+                plugin_device.max_height = std::max(plugin_device.max_height, res.height);
             }
             for (int fr : stream.supported_framerates) {
                 row.framerateLabels.append(QStringLiteral("%1 fps").arg(fr));
+                plugin_device.max_framerate = std::max(plugin_device.max_framerate, static_cast<double>(fr));
             }
             for (const auto& fmt : stream.supported_formats) {
                 row.formatLabels.append(QString::fromStdString(fmt));
             }
             rows.push_back(std::move(row));
         }
+        if (source) {
+            plugin_devices.push_back(std::move(plugin_device));
+        }
+    }
+
+    for (const auto& source : sources) {
+        auto source_devices = manager_.get_devices_for_source(source.source_id);
+        plugin_devices.insert(plugin_devices.end(), source_devices.begin(), source_devices.end());
     }
 
     const int previous_count = cameraCount();
     camera_model_->replaceRows(std::move(rows));
 
-    std::vector<domain::PluginDeviceInfo> plugin_devices;
     source_model_->populateFromSources(sources, plugin_devices);
 
     preflight_message_ = cameraCount() == 0
@@ -334,7 +368,13 @@ QVariantList AppController::pluginList() {
         item["type"] = src.source_type == domain::PluginSourceType::BUNDLED
                             ? QStringLiteral("bundled")
                             : QStringLiteral("linked");
+        item["apiVersion"] = static_cast<int>(src.plugin_api_version);
         item["deviceCount"] = static_cast<int>(src.device_ids.size());
+        item["restartRequired"] = src.restart_required;
+        item["canToggle"] = src.source_type != domain::PluginSourceType::BUNDLED && !recording_;
+        item["canRemove"] = src.source_type == domain::PluginSourceType::LINKED && !recording_;
+        item["canOpenSettings"] = true;
+        item["statusMessage"] = QString::fromStdString(src.diagnostics_message);
 
         switch (src.diagnostics_state) {
             case domain::PluginDiagnosticsState::OK:
@@ -373,6 +413,13 @@ void AppController::togglePlugin(const QString& pluginPath, bool enabled) {
     auto sources = plugin_registry_.getSources();
     for (const auto& src : sources) {
         if (src.plugin_path == pluginPath.toStdString()) {
+            if (src.source_type == domain::PluginSourceType::BUNDLED) {
+                pushLogEntry(log_entries_,
+                    QStringLiteral("[WARN] Bundled plugin cannot be disabled: %1")
+                        .arg(QString::fromStdString(src.source_id)));
+                emit logEntriesChanged();
+                return;
+            }
             if (enabled) {
                 plugin_registry_.enablePlugin(src.source_id);
             } else {
@@ -387,6 +434,32 @@ void AppController::togglePlugin(const QString& pluginPath, bool enabled) {
             return;
         }
     }
+}
+
+bool AppController::removePlugin(const QString& pluginPath) {
+    if (recording_) return false;
+
+    auto sources = plugin_registry_.getSources();
+    for (const auto& src : sources) {
+        if (src.plugin_path == pluginPath.toStdString()) {
+            if (src.source_type != domain::PluginSourceType::LINKED) {
+                pushLogEntry(log_entries_,
+                    QStringLiteral("[WARN] Bundled plugin cannot be removed: %1")
+                        .arg(QString::fromStdString(src.source_id)));
+                emit logEntriesChanged();
+                return false;
+            }
+            bool ok = plugin_registry_.removeLinkedDirectory(src.plugin_path);
+            if (ok) {
+                pushLogEntry(log_entries_,
+                    QStringLiteral("[INFO] Plugin removed: %1 (restart required)")
+                        .arg(QString::fromStdString(src.source_id)));
+                emit pluginsChanged();
+            }
+            return ok;
+        }
+    }
+    return false;
 }
 
 QVariantMap AppController::getPluginDetail(const QString& pluginPath) {
@@ -456,6 +529,8 @@ QVariantMap AppController::getPluginDetail(const QString& pluginPath) {
             result["type"] = src.source_type == domain::PluginSourceType::BUNDLED
                                 ? QStringLiteral("bundled")
                                 : QStringLiteral("linked");
+            result["restartRequired"] = src.restart_required;
+            result["statusMessage"] = QString::fromStdString(src.diagnostics_message);
 
             switch (src.diagnostics_state) {
                 case domain::PluginDiagnosticsState::OK:

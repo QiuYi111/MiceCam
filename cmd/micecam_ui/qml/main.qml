@@ -105,16 +105,12 @@ ApplicationWindow {
                 currentViewIndex = index
             }
 
-            onCameraSelected: function(name, status) {
-                var idx = sidebar.cameraList.currentIndex
-                if (idx >= 0) {
-                    var row = appController.cameraAt(idx)
-                    if (row && Object.keys(row).length > 0) {
-                        row.resolutionOptions = row.resolutionLabels || []
-                        row.framerateOptions = row.framerateLabels || []
-                        row.formatOptions = row.formatLabels || []
-                        appRoot.openCameraDetail(row)
-                    }
+            onCameraSelected: function(cameraData) {
+                if (cameraData && Object.keys(cameraData).length > 0) {
+                    cameraData.resolutionOptions = cameraData.resolutionLabels || []
+                    cameraData.framerateOptions = cameraData.framerateLabels || []
+                    cameraData.formatOptions = cameraData.formatLabels || []
+                    appRoot.openCameraDetail(cameraData)
                 }
             }
         }

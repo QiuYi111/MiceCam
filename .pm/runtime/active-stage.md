@@ -1,49 +1,50 @@
-# Active Stage: 003 Camera Plugin Runtime — Phase 6 Hardware Gate
+# Active Stage: 007 Phase 1 — Source Model and Controller Contract Foundation
 
 ## Stage ID
 
-`003-phase-6-hardware-gate`
+`007-phase-1-source-model`
 
 ## Stage goal
 
-Prepare and run the USB/AVFoundation plugin runtime hardware validation gate for two real video sources.
+Make `CameraSourceModel` the single camera/source UI data source. Expand roles, add ordering logic, wire real plugin device data, add stable camera detail lookup. Keep `AppCameraModel` temporarily available for compatibility.
 
 ## Why this stage matters
 
-The architecture now has protocol contracts, plugin registry, FFmpeg plugin path, recording consumer, resource manager, and OAK skeleton. Phase 6 proves the available real USB/AVFoundation plugin path is production-worthy on target hardware, with explicit artifact validation and no silent drops.
+Current `CameraSourceModel` exists but is largely unpopulated (no real device data, empty plugin_devices vector). `AppCameraModel` still drives sidebar and grid QML bindings. Phase 1 establishes the data contract foundation before any QML visual changes.
 
 ## Inputs
 
-- Official FFmpeg plugin
-- Plugin recording consumer
-- Resource manager
-- Hardware matrix: MacBook Pro Camera and iPhone Continuity Camera
-- Existing recording output artifacts: `.mp4`, `.srt`, `_meta.json`, `_stats.json`
+- `specs/007-plugin-ui-integration/spec.md` — FR-001 through FR-005
+- `specs/007-plugin-ui-integration/plan.md` — Phase 1 actions
+- Existing: `cmd/micecam_ui/CameraSourceModel.*`, `AppController.*`, `AppCameraModel.*`
+- Existing: `internal/domain/PluginSource.h`, `PluginDeviceInfo.h`, `DeviceInfo.h`
 
 ## Allowed work
 
-- Add hardware gate scripts/procedures that can be skipped or dry-run without hardware
-- Add artifact validation script for MP4/SRT/meta/stats
-- Add plugin smoke test harness for two source recording
-- Add crash/disconnect test procedure documentation
-- Add ffprobe/SRT monotonicity/stat validation helpers
-- Add no-hardware-safe tests for validators/scripts
+- Add source roles to `CameraSourceModel`: pluginVersion, apiVersion, diagnosticsMessage, restartRequired, availableDeviceCount, expanded state
+- Add device/stream fields: persistentId, vendor, serial, stream payloads/capabilities
+- Add source ordering: active > available > warning > disabled; bundled > linked > unknown
+- Populate `PluginSource.device_ids` and pass real plugin device data into `CameraSourceModel::populateFromSources()`
+- Add `getCameraDetail(cameraId)` with stable index-free lookup
+- Add/expand model and controller tests
+- Keep `AppCameraModel` temporarily available for compatibility
 
 ## Forbidden work
 
-- UI/QML changes
-- Changing proto definitions
-- Security/sandboxing/signing policy
-- Requiring hardware in normal unit/CI tests
-- OAK hardware validation beyond documented pending status
+- No QML changes
+- No proto changes
+- No build system changes (CMakeLists.txt)
+- No new RPC definitions
+- No changes to `internal/` domain/infrastructure files beyond those needed to pass PluginDeviceInfo
+- No security/auth changes
 
 ## Exit criteria
 
-- [ ] Hardware gate procedure exists.
-- [ ] Artifact validation script exists and is test-covered without hardware.
-- [ ] MP4 validation uses `ffprobe` when available and reports structured skip/error when unavailable.
-- [ ] SRT timestamps are checked for monotonicity.
-- [ ] `_meta.json` and `_stats.json` required plugin fields are checked.
-- [ ] Two-source one-hour run command/procedure is documented.
-- [ ] Normal build and unit tests pass without hardware.
-- [ ] If real hardware is unavailable in this environment, PM stops with a precise user decision/request for hardware execution.
+- [ ] `CameraSourceModel` exposes all source roles from FR-002
+- [ ] `CameraSourceModel::getDeviceAt()` returns full device+stream data per FR-003
+- [ ] Source ordering follows spec (active > available > warning > disabled; bundled > linked > unknown)
+- [ ] `getCameraDetail(cameraId)` uses stable index-free lookup
+- [ ] Unit tests for `CameraSourceModel` pass
+- [ ] Unit tests for `AppController` source/device contracts pass
+- [ ] Existing tests using `AppCameraModel` still pass or are intentionally migrated
+- [ ] Build passes: `cmake --build build -j 4`

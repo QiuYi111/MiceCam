@@ -1,101 +1,120 @@
-# Task: Recheck Spec 004 Coverage and Convert to Release Checklist
+# Task: Spec 007 Phase 1 — CameraSourceModel Foundation
 
 ## Objective
 
-Re-audit `specs/004-production-ready-plugin-app/` against current `dev` baseline and convert it from a large implementation spec/plan into a production-readiness checklist that can be tracked in the repository.
-
-This is a documentation/spec maintenance task. Do not change product code, tests, build files, or workflows.
+Expand `CameraSourceModel` into the single source-of-truth for camera and plugin UI data (FR-001 through FR-005). Wire real plugin device data into the model, add source ordering, and provide stable camera detail lookup. Keep `AppCameraModel` temporarily available for compatibility tests.
 
 ## Baseline
 
-- Current branch: `codex/dev-readiness-audit`
-- Code baseline: `dev` / `origin/dev` at `ac24012`
-- Existing audit report: `docs/reports/reviews/dev-readiness-audit-05-19.md`
-- Existing 004 files are currently untracked:
-  - `specs/004-production-ready-plugin-app/spec.md`
-  - `specs/004-production-ready-plugin-app/plan.md`
+- Current branch: `codex/007-plugin-ui-release`
+- Code baseline: `dev` at `ac24012` (3 documentation-only commits ahead)
+- Build status: `cmake --build build -j 4` passes cleanly
+
+## Required Harness Process
+
+Full chain for `branch`+ risk: `harness-risk` → `harness-context` → `harness-tdd` → `harness-eval` → `harness-report`
 
 ## Required Work
 
-1. Recheck spec 004 coverage against current code and audit evidence.
-   - Read `docs/reports/reviews/dev-readiness-audit-05-19.md`.
-   - Read `specs/004-production-ready-plugin-app/spec.md` and `plan.md`.
-   - Spot-check key code paths only as needed to verify the matrix:
-     - `api/micecam/camera_plugin.proto`
-     - `cmd/micecam_ui/AppController.cpp`
-     - `internal/pipeline/PreflightValidator.cpp`
-     - `internal/pipeline/RecordingPipeline.cpp`
-     - `cmd/plugins/micecam_ffmpeg/`
-     - `cmd/plugins/micecam_oak/`
-     - `.github/workflows/ci.yml`
-     - `tests/` references for Calibrate/fMP4/stats/crash recovery/stream liveness
-2. Rewrite `specs/004-production-ready-plugin-app/spec.md` so it is no longer a large implementation feature spec.
-   - Rename its purpose in the document to **Production Readiness Checklist / Closure Gate**.
-   - Preserve useful acceptance criteria as checklist items.
-   - Mark already-covered items as `Done` with evidence pointers.
-   - Mark remaining items as `Open` or `Deferred`.
-   - Explicitly state that implementation scope was mostly completed by specs 003/005/006 on `dev`.
-   - Keep the remaining open items clear:
-     - merge `dev` to `main`
-     - fix/harden macOS flaky `StallCountResetsOnActivity`
-     - add formal HIL tests (`test_hil_e2e`, `test_hil_crash_recovery`) or track them separately
-     - update stale PM runtime state after merge
-     - manual UI sign-off if still required
-3. Rewrite `specs/004-production-ready-plugin-app/plan.md` into a closure plan.
-   - Remove or demote phased implementation work that is already done.
-   - Replace it with a small sequence of closure tasks and branch recommendations.
-   - Make clear that this spec should not spawn a broad `feat/004-production-ready` implementation branch.
-4. Include/nest 004 into project tracking.
-   - Update `project_index` to mention `specs/004-production-ready-plugin-app/` as the production readiness closure checklist.
-   - If there is a better existing index/tracking doc, update that instead or in addition, but keep scope documentation-only.
-5. Write a short implementation report:
-   - `docs/reports/implements/spec-004-checklist-conversion-05-19.md`
-   - Include what changed, why 004 was downgraded, remaining open gates, and next recommended branches.
-6. Update `.pm/runtime/worker-report.md` with a truthful report.
+### 1. Expand CameraSourceModel Source Roles (FR-002)
+
+Add these roles to `CmdRoleNames` and `CameraSourceModel`:
+- `SourceGroupRole` — source group identifier string
+- `PluginVersionRole` — plugin version string
+- `ApiVersionRole` — API version string
+- `DiagnosticsStateRole` — diagnostic state enum (ok/warning/error)
+- `DiagnosticsMessageRole` — user-readable diagnostic message
+- `RestartRequiredRole` — boolean
+- `AvailableDeviceCountRole` — count of available/enabled devices
+- `IsExpandedRole` — source collapsible state
+
+### 2. Expand Device-Level Roles (FR-003)
+
+Add to device rows:
+- `PersistentIdRole` — stable device ID string
+- `VendorInfoRole` — vendor string
+- `SerialNumberRole` — serial string
+- Payload badges per stream
+
+Ensure `getDeviceAt(sourceIdx, devIdx)` returns all existing `CameraRow` fields plus the new `DeviceInfo` fields.
+
+### 3. Implement Source Ordering (FR-004, FR-008)
+
+In `populateFromSources()`:
+- Order sources: active > available > warning > disabled
+- Within each tier: bundled before linked before unknown
+
+### 4. Wire Plugin Device Data (FR-005)
+
+Populate `PluginSource.device_ids` by mapping enumerated devices to their originating plugin source.
+Pass real `PluginDeviceInfo` data into `CameraSourceModel::populateFromSources()`.
+Remove or update any code that passes an empty `plugin_devices` vector.
+
+### 5. Add getCameraDetail(cameraId)
+
+Add `Q_INVOKABLE getCameraDetail(cameraId)` to `AppController` with stable, index-free lookup that returns correct device and stream data regardless of current source ordering.
+
+Update `refreshCameras()` to preserve `sourceId` and `sourceGroup` on each `CameraRow`.
+
+### 6. Keep AppCameraModel Compatibility
+
+Do not remove `AppCameraModel` yet. Existing tests/test code may still reference it. Deprecation is OK (comments), removal is for a later phase.
 
 ## Allowed Files
 
-You may modify/create only:
-
-- `specs/004-production-ready-plugin-app/spec.md`
-- `specs/004-production-ready-plugin-app/plan.md`
-- `project_index`
-- `docs/reports/implements/spec-004-checklist-conversion-05-19.md`
+You may modify:
+- `cmd/micecam_ui/CameraSourceModel.h`
+- `cmd/micecam_ui/CameraSourceModel.cpp`
+- `cmd/micecam_ui/AppController.h`
+- `cmd/micecam_ui/AppController.cpp`
+- `cmd/micecam_ui/AppCameraModel.h` (deprecation comments only, no behavior change)
+- `cmd/micecam_ui/AppCameraModel.cpp` (deprecation comments only, no behavior change)
+- `internal/domain/PluginSource.h` (if needed for device_ids mapping)
+- `internal/domain/PluginDeviceInfo.h` (if needed for role exposure)
+- `internal/domain/DeviceInfo.h` (if needed for role exposure)
+- `tests/unit/test_app_models.cpp`
+- `tests/unit/test_app_controller.cpp`
+- New test files under `tests/unit/` if warranted (e.g., `test_camera_source_model.cpp`)
+- `docs/reports/` (implementation report)
 - `.pm/runtime/worker-report.md`
+- `project_index`
 
 ## Forbidden Scope
 
-- No product code changes.
-- No test changes.
-- No CI/workflow changes.
-- No build system changes.
-- No dependency changes.
-- No commits.
-- No merges, rebases, pushes, or destructive git commands.
-- Do not modify `.pm/runtime/state.yaml`, `.pm/runtime/handoff.md`, `.pm/runtime/acceptance-review.md`, or `.pm/runtime/loop-log.md`.
+- **No QML changes.** Phase 2 handles QML.
+- **No proto changes.**
+- **No CMakeLists.txt changes** unless needed to add a new test file.
+- **No new RPC definitions.**
+- **No security/auth/sandboxing changes.**
+- **Do not remove AppCameraModel** (only add deprecation comments).
+- **Do not modify `internal/infrastructure/`** files beyond what's needed for data pass-through.
+- **No merges, rebases, or pushes.**
 
 ## Verification Commands
 
 Run and record:
 
 ```bash
-git status --short --branch
-git diff --name-status
-test -f specs/004-production-ready-plugin-app/spec.md
-test -f specs/004-production-ready-plugin-app/plan.md
-test -f docs/reports/implements/spec-004-checklist-conversion-05-19.md
-rg -n "Production Readiness Checklist|Closure Gate|Done|Open|Deferred" specs/004-production-ready-plugin-app docs/reports/implements/spec-004-checklist-conversion-05-19.md
-rg -n "specs/004-production-ready-plugin-app|production readiness" project_index
+cmake --build build -j 4
+ctest --test-dir build --output-on-failure
 ```
 
-No full build is required because this task is documentation-only. If you run no build/test, state that explicitly.
+If a new test file requires CMakeLists.txt registration, add it but verify all existing tests still pass.
 
 ## Acceptance Criteria
 
-- [ ] Spec 004 is rewritten as a production readiness checklist / closure gate, not a broad implementation feature.
-- [ ] Spec 004 plan is rewritten as a closure plan with small next branches.
-- [ ] 004 is included in project tracking/index.
-- [ ] A concise implementation report exists.
-- [ ] Worker report exists and lists changed files, commands, verification, problems, deviations.
-- [ ] Only allowed files changed.
-- [ ] No commit created.
+- [ ] `CameraSourceModel` exposes source-level roles: `pluginVersion`, `apiVersion`, `diagnosticsState`, `diagnosticsMessage`, `restartRequired`, `deviceCount`, `availableDeviceCount`, `isExpanded`
+- [ ] `CameraSourceModel::getDeviceAt(sourceIdx, devIdx)` returns full device+stream data including persistentId, vendor, serial, payload badges
+- [ ] Source ordering follows: active > available > warning > disabled; bundled > linked > unknown within each tier
+- [ ] `PluginSource.device_ids` is populated; real plugin device data reaches `CameraSourceModel`
+- [ ] `AppController::getCameraDetail(cameraId)` returns correct data via index-free lookup
+- [ ] `refreshCameras()` preserves `sourceId` and `sourceGroup` on each `CameraRow`
+- [ ] New or expanded unit tests cover source roles, ordering, and device lookup (RED→GREEN)
+- [ ] All existing tests pass (no regressions)
+- [ ] Build passes: `cmake --build build -j 4`
+- [ ] Worker report lists changed files, commands, test results, problems, deviations
+- [ ] One git commit with task changes only
+
+## Context
+
+Phase 1 is `branch` (branch-level) risk. The changes are additive to existing model/controller code and do not touch QML. Existing tests protect against regression.

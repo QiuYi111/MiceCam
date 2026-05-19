@@ -69,8 +69,39 @@ TEST(AppController, PluginListReturnsBundledPlugins) {
         EXPECT_TRUE(m.contains("enabled"));
         EXPECT_TRUE(m.contains("type"));
         EXPECT_TRUE(m.contains("status"));
+        EXPECT_TRUE(m.contains("apiVersion"));
+        EXPECT_TRUE(m.contains("restartRequired"));
+        EXPECT_TRUE(m.contains("canToggle"));
+        EXPECT_TRUE(m.contains("canRemove"));
+        EXPECT_TRUE(m.contains("statusMessage"));
         EXPECT_EQ(m["type"].toString(), QStringLiteral("bundled"));
+        EXPECT_FALSE(m["canToggle"].toBool());
+        EXPECT_FALSE(m["canRemove"].toBool());
     }
+}
+
+TEST(AppController, BundledPluginToggleIsLocked) {
+    micecam::ui::AppController controller;
+
+    QVariantList plugins = controller.pluginList();
+    ASSERT_GE(plugins.size(), 1);
+
+    QVariantMap first = plugins.first().toMap();
+    ASSERT_EQ(first["type"].toString(), QStringLiteral("bundled"));
+
+    controller.togglePlugin(first["path"].toString(), false);
+
+    QVariantList updated = controller.pluginList();
+    bool found = false;
+    for (const auto& item : updated) {
+        QVariantMap m = item.toMap();
+        if (m["path"].toString() == first["path"].toString()) {
+            found = true;
+            EXPECT_TRUE(m["enabled"].toBool());
+            EXPECT_FALSE(m["canToggle"].toBool());
+        }
+    }
+    EXPECT_TRUE(found);
 }
 
 TEST(AppController, ImportPluginRejectsInvalidPath) {

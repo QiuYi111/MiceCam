@@ -2,35 +2,26 @@
 
 ## Current state
 
-Spec `003-camera-plugin-runtime` Phase 6 Hardware Gate preparation is accepted at commit `8555131`, but the Ubuntu/jingyi-lab hardware and stress gate is blocked by infrastructure.
+Transitioned from spec 003 Phase 6 (BLOCKED — jingyi-lab unreachable) to spec 007 Phase 1 (Source Model Foundation).
 
-PM verified Phase 6 prep before delegation:
+Spec 007 is the final work round before MiceCam release. It closes the gap between the fully implemented plugin backend runtime and the native Qt/QML UI. Blast radius is `core` — user has reviewed and directed PM to proceed.
 
-- `cmake --build build -j 4` — PASS
-- `ctest --test-dir build --output-on-failure` — PASS, 33/33 tests
-- `python3 tests/unit/test_validate_session_artifacts.py -v` — PASS, 30/30 tests
-- `bash scripts/hardware_gate_two_source.sh --dry-run` — PASS
-- Independent OpenCode review — ACCEPT, 0 blocking issues
+**Baseline**: `codex/007-plugin-ui-release` branch, 3 documentation commits ahead of `dev` at `ac24012`. Build passes cleanly.
 
-Worker then attempted the Ubuntu gate and stopped correctly because `jingyi-lab` is unreachable:
-
-- SSH to `192.168.2.2:22` — `No route to host`
-- Ping to `192.168.2.2` — 100% packet loss
-- Tailscale — `jingyi-lab` offline, last seen 120d ago
+**Phase 0** (Planning/Branch Hygiene): Complete — spec.md, ui-spec.md, plan.md, visual anchors, project_index all exist on branch.
 
 ## Last action
 
-Reviewed and accepted the Worker blocker report as valid infrastructure blockage. No product code or tests were modified.
+Wrote Phase 1 task packet to `.pm/runtime/next-task.md`: expand `CameraSourceModel` into single UI data source, add source ordering, wire plugin device data, add stable camera detail lookup. Keep `AppCameraModel` temporarily available.
 
 ## Next expected action
 
-User must power on or network-attach `jingyi-lab`, or provide another reachable Ubuntu/HIL target. Once reachable, re-run `.pm/runtime/next-task.md` unchanged to sync commit `8555131`, build on Ubuntu, run HIL/stress gates, and validate artifacts.
+Delegate Phase 1 task via OpenCode Intern (Task tool). Wait for `worker-report.md`.
 
 ## Open decisions
 
-- Restore `jingyi-lab` connectivity, or
-- Provide an alternate Ubuntu machine with camera/GPU access for the same gate.
+None. Phase 1 is well-defined in specs/007-plugin-ui-integration/spec.md (FR-001 through FR-005).
 
 ## Branch
 
-Current branch: `plugin-system`. Do not merge. PM runtime files are dirty by design.
+Current branch: `codex/007-plugin-ui-release`. Do not merge. PM runtime files are dirty by design.

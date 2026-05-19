@@ -102,7 +102,7 @@ TEST_F(FMP4SmokeTest, FileReadableWithoutTrailer) {
     ASSERT_FALSE(encoded_packets.empty()) << "No packets were encoded";
 
     AVFormatContext* fmt_ctx = nullptr;
-    ASSERT_GE(avformat_alloc_output_context2(&fmt_ctx, nullptr, nullptr, test_file_.c_str()), 0);
+    ASSERT_GE(avformat_alloc_output_context2(&fmt_ctx, nullptr, nullptr, test_file_.string().c_str()), 0);
     ASSERT_NE(fmt_ctx, nullptr);
 
     AVStream* stream = avformat_new_stream(fmt_ctx, nullptr);
@@ -114,7 +114,7 @@ TEST_F(FMP4SmokeTest, FileReadableWithoutTrailer) {
     stream->codecpar->format = AV_PIX_FMT_YUV420P;
     stream->time_base = {1, kFps};
 
-    ASSERT_GE(avio_open(&fmt_ctx->pb, test_file_.c_str(), AVIO_FLAG_WRITE), 0);
+    ASSERT_GE(avio_open(&fmt_ctx->pb, test_file_.string().c_str(), AVIO_FLAG_WRITE), 0);
 
     AVDictionary* opts = nullptr;
     av_dict_set(&opts, "movflags", "+frag_keyframe+empty_moov+default_base_moof", 0);
@@ -147,7 +147,7 @@ TEST_F(FMP4SmokeTest, FileReadableWithoutTrailer) {
     ASSERT_GT(std::filesystem::file_size(test_file_), 0u);
 
     AVFormatContext* read_ctx = nullptr;
-    ASSERT_GE(avformat_open_input(&read_ctx, test_file_.c_str(), nullptr, nullptr), 0)
+    ASSERT_GE(avformat_open_input(&read_ctx, test_file_.string().c_str(), nullptr, nullptr), 0)
         << "Failed to open fMP4 file";
     avformat_find_stream_info(read_ctx, nullptr);
 
@@ -241,7 +241,7 @@ TEST_F(FMP4SmokeTest, FileReadableAfterCrashNoTrailer) {
     ASSERT_FALSE(encoded_packets.empty()) << "No packets were encoded";
 
     AVFormatContext* fmt_ctx = nullptr;
-    ASSERT_GE(avformat_alloc_output_context2(&fmt_ctx, nullptr, nullptr, test_file_.c_str()), 0);
+    ASSERT_GE(avformat_alloc_output_context2(&fmt_ctx, nullptr, nullptr, test_file_.string().c_str()), 0);
     ASSERT_NE(fmt_ctx, nullptr);
 
     AVStream* stream = avformat_new_stream(fmt_ctx, nullptr);
@@ -253,7 +253,7 @@ TEST_F(FMP4SmokeTest, FileReadableAfterCrashNoTrailer) {
     stream->codecpar->format = AV_PIX_FMT_YUV420P;
     stream->time_base = {1, kFps};
 
-    ASSERT_GE(avio_open(&fmt_ctx->pb, test_file_.c_str(), AVIO_FLAG_WRITE), 0);
+    ASSERT_GE(avio_open(&fmt_ctx->pb, test_file_.string().c_str(), AVIO_FLAG_WRITE), 0);
 
     AVDictionary* opts = nullptr;
     av_dict_set(&opts, "movflags", "+frag_keyframe+empty_moov+default_base_moof", 0);
@@ -286,7 +286,7 @@ TEST_F(FMP4SmokeTest, FileReadableAfterCrashNoTrailer) {
 
     // Verify the crash-dumped fMP4 file is at least openable and has a video stream
     AVFormatContext* read_ctx = nullptr;
-    int open_ret = avformat_open_input(&read_ctx, test_file_.c_str(), nullptr, nullptr);
+    int open_ret = avformat_open_input(&read_ctx, test_file_.string().c_str(), nullptr, nullptr);
     ASSERT_GE(open_ret, 0) << "Failed to open fMP4 file without trailer";
 
     avformat_find_stream_info(read_ctx, nullptr);

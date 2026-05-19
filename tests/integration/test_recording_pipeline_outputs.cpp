@@ -1,3 +1,5 @@
+#ifndef _WIN32
+
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -406,3 +408,5 @@ TEST(PluginPipelineIntegration, PluginSourceAbsentWhenNotSet) {
 
     std::filesystem::remove_all(root);
 }
+
+#endif // _WIN32

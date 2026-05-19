@@ -6,8 +6,8 @@
 |-------|-------|
 | Spec ID | `007-plugin-ui-integration` |
 | Document | `ui-spec.md` |
-| Status | Release-candidate scope |
-| Target | Native Qt/QML UI, plugin runtime wiring, multi-platform release validation |
+| Status | Release-candidate scope (+ spec 004 closure inherited) |
+| Target | Native Qt/QML UI, plugin runtime wiring, multi-platform release validation, spec 004 closure items |
 | Baseline | `dev` at `ac24012` |
 | Related | `specs/003-camera-plugin-runtime/`, `specs/004-production-ready-plugin-app/`, `docs/requirements/plugin-camera-backend-system.md` |
 | Visual anchors | `specs/007-plugin-ui-integration/pluginUI/*.png` |
@@ -15,6 +15,8 @@
 ## Purpose
 
 The backend plugin runtime is now largely implemented, but the native UI is still only partially adapted to it. This spec defines how the plugin system should appear in MiceCam without disrupting the current successful UI structure.
+
+Additionally, spec 004 (`production-ready-plugin-app`) has been downgraded to a closure gate — its 27/28 FRs are implemented, but several open and deferred items remain. Spec 007 absorbs these items and becomes the **single closing spec** for both 004 and 007.
 
 The primary rule: **do not collapse camera operation, plugin management, and plugin configuration into one screen**. They are separate workflows and must remain separate screens.
 
@@ -51,6 +53,36 @@ Non-goals for 007:
 - plugin signing/sandboxing UX
 - large product redesign outside the plugin runtime integration path
 - deep OCT-specific visualization beyond generic plugin config/device/diagnostic support
+
+## Inherited from Spec 004
+
+Spec 004 (`production-ready-plugin-app`) is a closure gate with 27/28 FRs already implemented on `dev`. The following open and deferred items are inherited into 007 and must be resolved before or alongside the 007 release gate.
+
+### Blocking
+
+| # | Item | Origin | Action |
+|---|------|--------|--------|
+| I-1 | Fix flaky `StallCountResetsOnActivity` on macOS | FR-026 blocker | Harden timing in `test_stream_liveness_monitor`; branch `fix/flaky-stallcount-test` |
+| I-2 | Merge `dev` to `main` | FR-026 | Execute after I-1 passes; this is the final gate |
+
+### Non-blocking / Deferred
+
+| # | Item | Origin | Action |
+|---|------|--------|--------|
+| I-3 | Create HIL tests (`test_hil_e2e`, `test_hil_crash_recovery`) | Deferred | Gated behind `BUILD_HIL=ON`; branch `feat/hil-tests` |
+| I-4 | Update stale `.pm/runtime/` state files | Deferred | `state.yaml`, `acceptance-review.md`, `active-stage.md`, `handoff.md` |
+| I-5 | Manual UI sign-off | Deferred | Post-merge visual validation against `pluginUI/` anchors |
+
+### Integration into 007 Phases
+
+These inherited items map to 007 implementation phases as follows:
+
+- **Phase 1–4** (UI work): No dependency on inherited items.
+- **I-1** (flaky test fix): Should land early, ideally before Phase 5, so all subsequent CI runs are clean.
+- **I-2** (merge dev→main): Final step of Phase 8 (Release Candidate Gate).
+- **I-3** (HIL tests): Maps to Phase 7 (HIL Closure). Create test files and run on `jingyi-lab`.
+- **I-4** (PM state update): Maps to Phase 8. Update after all work is complete.
+- **I-5** (UI sign-off): Maps to Phase 5 (UI Smoke and Sign-Off). Compare screenshots against visual anchors.
 
 ## Visual Design Inputs
 

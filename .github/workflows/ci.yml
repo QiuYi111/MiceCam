@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    timeout-minutes: 180
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -46,45 +46,46 @@ jobs:
           brew install ffmpeg protobuf grpc qt@6 spdlog nlohmann-json googletest pkg-config
           echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
 
-      # ====== Windows ======
-      - name: Setup vcpkg (Windows)
+      # ====== Windows (MSYS2 UCRT64 — all prebuilt binaries) ======
+      - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-        run: |
-          git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ github.workspace }}/vcpkg"
-          & "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
-          echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
-          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $env:GITHUB_ENV
-
-      - name: Cache vcpkg installed packages
-        if: runner.os == 'Windows'
-        uses: actions/cache@v4
+        uses: msys2/setup-msys2@v2
         with:
-          path: |
-            ${{ github.workspace }}/vcpkg_installed
-          key: vcpkg-installed-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-installed-${{ runner.os }}-
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-ffmpeg
+            mingw-w64-ucrt-x86_64-protobuf
+            mingw-w64-ucrt-x86_64-grpc
+            mingw-w64-ucrt-x86_64-spdlog
+            mingw-w64-ucrt-x86_64-nlohmann-json
+            mingw-w64-ucrt-x86_64-gtest
 
-      - name: Install vcpkg deps (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          & "${{ github.workspace }}\vcpkg\vcpkg.exe" install --triplet x64-windows
-
-      # ====== Configure ======
       - name: Configure (Windows)
         if: runner.os == 'Windows'
+        shell: msys2 {0}
         run: |
-          cmake -B build -S . `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DBUILD_SPIKE=OFF `
+          cmake -B build -S . \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SPIKE=OFF \
             -DBUILD_UI=${{ matrix.build_ui }}
-        shell: pwsh
 
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cmake --build build --config Release -j
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
+
+      # ====== Configure & Build (Unix) ======
       - name: Configure (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -93,11 +94,12 @@ jobs:
             -DBUILD_SPIKE=OFF \
             -DBUILD_UI=${{ matrix.build_ui }}
 
-      # ====== Build & Test ======
-      - name: Build
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
         run: cmake --build build --config Release -j
 
-      - name: Test
+      - name: Test (Unix)
+        if: runner.os != 'Windows'
         run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
       # ====== Artifacts ======

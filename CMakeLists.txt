@@ -264,8 +264,9 @@ if(BUILD_PLUGINS)
 
     find_program(FFMPEG_TEST_PROTOC protoc REQUIRED)
     find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN
-        NAMES grpc_cpp_plugin
+        NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
         HINTS
+            /ucrt64/bin
             /usr/bin
             /usr/local/bin
             /opt/homebrew/bin
@@ -595,7 +596,25 @@ endif()
 
 # Plugin executables (out-of-process camera backends via gRPC)
 if(BUILD_PLUGINS)
-    find_package(gRPC CONFIG REQUIRED)
+    find_package(gRPC CONFIG QUIET)
+    if(NOT gRPC_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(gRPC REQUIRED IMPORTED_TARGET grpc grpc++)
+        if(NOT TARGET gRPC::grpc++)
+            add_library(gRPC::grpc++ ALIAS PkgConfig::gRPC)
+        endif()
+        if(NOT TARGET gRPC::grpc)
+            add_library(gRPC::grpc ALIAS PkgConfig::gRPC)
+        endif()
+    endif()
+    find_package(protobuf CONFIG QUIET)
+    if(NOT protobuf_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(protobuf REQUIRED IMPORTED_TARGET protobuf)
+        if(NOT TARGET protobuf::libprotobuf)
+            add_library(protobuf::libprotobuf ALIAS PkgConfig::protobuf)
+        endif()
+    endif()
     add_subdirectory(cmd/plugins/micecam_ffmpeg)
     add_subdirectory(cmd/plugins/micecam_oak)
 
@@ -606,8 +625,9 @@ if(BUILD_PLUGINS)
 
     find_program(OAK_TEST_PROTOC protoc REQUIRED)
     find_program(OAK_TEST_GRPC_CPP_PLUGIN
-        NAMES grpc_cpp_plugin
+        NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
         HINTS
+            /ucrt64/bin
             /usr/bin
             /usr/local/bin
             /opt/homebrew/bin

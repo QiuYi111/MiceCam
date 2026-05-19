@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 find_program(PROTOC protoc REQUIRED)
 find_program(GRPC_CPP_PLUGIN
-    NAMES grpc_cpp_plugin
+    NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
     HINTS
+        /ucrt64/bin
         /usr/bin
         /usr/local/bin
         /opt/homebrew/bin

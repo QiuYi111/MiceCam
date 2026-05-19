@@ -50,23 +50,23 @@ jobs:
       - name: Setup vcpkg (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
         run: |
-          $vcpkgRoot = "${{ github.workspace }}/vcpkg"
-          if (-not (Test-Path $vcpkgRoot)) {
-            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgRoot
-            & "$vcpkgRoot/bootstrap-vcpkg.bat" -disableMetrics
-          }
-          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ github.workspace }}/vcpkg"
+          & "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+          echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $env:GITHUB_ENV
+          echo "VCPKG_BINARY_SOURCES=clear;x-gha,readwrite" >> $env:GITHUB_ENV
 
-      - name: Cache vcpkg binaries
+      - name: Cache vcpkg installed packages
         if: runner.os == 'Windows'
         uses: actions/cache@v4
         with:
           path: |
             ${{ github.workspace }}/vcpkg_installed
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-installed-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-${{ runner.os }}-
+            vcpkg-installed-${{ runner.os }}-
 
       - name: Install vcpkg deps (Windows)
         if: runner.os == 'Windows'

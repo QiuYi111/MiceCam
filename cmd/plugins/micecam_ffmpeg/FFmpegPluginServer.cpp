@@ -10,6 +10,7 @@
 #include <io.h>
 #define F_OK 0
 #define access _access
+#undef ERROR
 #endif
 
 #include <spdlog/spdlog.h>

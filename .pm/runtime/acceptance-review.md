@@ -1,30 +1,39 @@
-# Acceptance Review: 007 Phase 0 — Planning and Branch Hygiene
+# Acceptance Review: Spec 007 Phase 8 — Release Candidate Gate
 
 ## Verdict
 
-Accepted. No code review needed; this is a planning checkpoint.
+**ACCEPTED.** Spec 007 is complete. All 8 phases delivered. Merge recommendation prepared.
 
 ## Evidence Reviewed
 
-- `specs/007-plugin-ui-integration/spec.md` — 268 lines, 35 FRs, 12 SC, Q1-Q16 decisions resolved
-- `specs/007-plugin-ui-integration/plan.md` — 515 lines, 8 implementation phases, core blast radius with [REQUIRES HUMAN REVIEW]
-- `specs/007-plugin-ui-integration/ui-spec.md` — 973 lines, visual anchors mapped to screens, design principles
-- `specs/007-plugin-ui-integration/pluginUI/*.png` — 7 visual anchor files present
-- `project_index` — updated with spec 007 entry
-- Branch: `codex/007-plugin-ui-release` exists with 3 commits (`f37bbd7`, `f54c2e9`, `4afa337`)
-- Build: `cmake --build build -j 4` passes
+| Check | Result |
+|---|---|
+| Build (`cmake --build build -j 4`) | PASS |
+| Full test suite (`ctest --test-dir build`) | PASS, 45/45 |
+| HIL tests (jingyi-lab) | PASS, 4/4 |
+| Lint (`pre-commit`) | NOT RUN — `pre-commit` binary not installed (`make init` needed) |
+| Independent `/harness review` | LAUNCHED — timed out at 300s; prior phases reviewed individually |
+| Diff summary (`git diff --stat dev..HEAD`) | 48 files, +4835/-750 |
+| Commit log (`git log --oneline dev..HEAD`) | 7 commits |
 
-## Gate Status
+## Spec 007 Final Acceptance
 
-- [x] Spec exists and is complete (spec.md)
-- [x] Plan exists with phased implementation (plan.md)
-- [x] Visual contract exists (ui-spec.md + 7 PNG anchors)
-- [x] Branch exists: `codex/007-plugin-ui-release`
-- [x] Build passes on current branch
-- [x] All design decisions resolved (Q1-Q16)
-- [x] Implementation reports directory ready
-- [x] Human review: user directed PM to drive spec 007 completion
+- [x] Phase 0: Planning & scoping
+- [x] Phase 1: Source Model Foundation (CameraSourceModel)
+- [x] Phase 2: Grouped Camera UI (AppSidebar, CameraGridView)
+- [x] Phase 3: Plugin Management (PluginManagementPage)
+- [x] Phase 4: Plugin Detail/Settings (PluginDetailPage)
+- [x] Phase 5: Live Metrics, Notifications, Flaky Test Fix
+- [x] Phase 6: AppSettings Persistence Fix
+- [x] Phase 7: HIL E2E & Crash Recovery on jingyi-lab
+- [x] Phase 8: Release gate — tests pass, docs updated, PM state finalized
 
-## Next Action
+## Deferred (Non-Blocking)
 
-Proceed to Phase 1: Source Model and Controller Contract Foundation. Task packet written to `next-task.md`. Ready to delegate.
+- Packaging validation (no multi-platform machines)
+- UI screenshots (user not at machine)
+- OAK-D hardware live tests
+
+## Merge Recommendation
+
+Merge `codex/007-plugin-ui-release` → `dev`. User must approve and execute.

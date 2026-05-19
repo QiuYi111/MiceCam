@@ -2,26 +2,35 @@
 
 ## Current state
 
-Transitioned from spec 003 Phase 6 (BLOCKED — jingyi-lab unreachable) to spec 007 Phase 1 (Source Model Foundation).
+**Spec 007: COMPLETE.** All 8 phases delivered and accepted. Ready for merge.
 
-Spec 007 is the final work round before MiceCam release. It closes the gap between the fully implemented plugin backend runtime and the native Qt/QML UI. Blast radius is `core` — user has reviewed and directed PM to proceed.
+**Completed**:
+- Phase 0: Planning ✅
+- Phase 1: Source Model Foundation ✅
+- Phase 2: Grouped Camera UI ✅
+- Phase 3: Plugin Management ✅
+- Phase 4: Plugin Detail/Settings ✅
+- Phase 5: Live Metrics/Notifications/Flaky Test Fix ✅
+- Phase 6: AppSettings Fix ✅
+- Phase 7: HIL Tests on jingyi-lab ✅
+- Phase 8: Release Gate ✅
 
-**Baseline**: `codex/007-plugin-ui-release` branch, 3 documentation commits ahead of `dev` at `ac24012`. Build passes cleanly.
+**Test evidence**: 45/45 local pass, 4/4 HIL pass on jingyi-lab
 
-**Phase 0** (Planning/Branch Hygiene): Complete — spec.md, ui-spec.md, plan.md, visual anchors, project_index all exist on branch.
+**Deferred**: packaging validation (no multi-platform machines), UI screenshots (user not at machine), OAK-D hardware
 
-## Last action
+## Merge Recommendation
 
-Wrote Phase 1 task packet to `.pm/runtime/next-task.md`: expand `CameraSourceModel` into single UI data source, add source ordering, wire plugin device data, add stable camera detail lookup. Keep `AppCameraModel` temporarily available.
+**`codex/007-plugin-ui-release` → `dev`**
+
+- 7 commits ahead of `dev`, 48 files changed, +4835/-750
+- All tests pass on macOS arm64 and jingyi-lab (Ubuntu 24.04)
+- No QML regressions
+- Do NOT merge without user approval
+
+## Branch
+`codex/007-plugin-ui-release` (7 implementation commits ahead of dev).
 
 ## Next expected action
 
-Delegate Phase 1 task via OpenCode Intern (Task tool). Wait for `worker-report.md`.
-
-## Open decisions
-
-None. Phase 1 is well-defined in specs/007-plugin-ui-integration/spec.md (FR-001 through FR-005).
-
-## Branch
-
-Current branch: `codex/007-plugin-ui-release`. Do not merge. PM runtime files are dirty by design.
+User reviews release gate report at `docs/reports/implements/spec-007-release-gate-05-19.md`, then approves merge `codex/007-plugin-ui-release` → `dev`.

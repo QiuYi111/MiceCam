@@ -2,6 +2,10 @@
 
 | Iteration | Phase | Action | Result |
 |---|---|---|---|
-| 0 | bootstrap | PM structure initialized from grill/spec/plan artifacts | All .pm/stable/ and .pm/runtime/ files created |
-| 14 | stage-transition | Transitioned from 003-phase-6 BLOCKED to 007-phase-1 | Spec 007 plan reviewed, Phase 0 docs done, Phase 1 task written |
-| 15 | delegate | Phase 1: CameraSourceModel Foundation task delegated | Pending worker report |
+| 14 | stage-transition | 003-phase-6 BLOCKED → 007-phase-1 | Phase 0 accepted |
+| 15 | product-review | Phases 1-4 (bd074e2): source model+UI | Accepted. UI frozen. |
+| 16 | delegate | Phase 5: metrics/notifications/flaky test | Accepted (52c2258), 44/44 |
+| 17 | delegate | Phase 7: HIL on jingyi-lab | Accepted (43c3bee), 4/4 e2e pass |
+| 18 | delegate | Phase 6: AppSettings fix | Accepted (5eadb7d), 45/45 |
+| 19 | delegate | Phase 8: Release Candidate Gate | Delegated |
+| 20 | complete | Phase 8: Release gate finalized | ACCEPTED. 45/45 tests, docs updated, merge recommendation ready. |

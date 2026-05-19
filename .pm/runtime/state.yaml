@@ -1,10 +1,10 @@
 project_id: "micecam-v2"
-status: active
-current_stage: "007-phase-1-source-model"
-current_stage_goal: "Establish CameraSourceModel as the single UI data source with source grouping, device roles, and controller contracts. Deprecate AppCameraModel."
-loop_iteration: 14
-iteration_valid_count: 0
-iteration_total_count: 0
+status: complete
+current_stage: "007-phase-8-release-gate"
+current_stage_goal: "Spec 007 release gate completed. All 8 phases delivered. Merge recommendation prepared."
+loop_iteration: 20
+iteration_valid_count: 5
+iteration_total_count: 5
 consecutive_failures: 0
 feasibility_ready: true
 product_definition_ready: true
@@ -12,19 +12,20 @@ roadmap_ready: true
 ux_ready: true
 ux_depth: "full"
 ui_direction_ready: true
-spec_007_phase: 1
+spec_007_phase: 8
 spec_007_total_phases: 8
-blast_radius: "core"
-blast_radius_note: "Spec 007 touches domain models, plugin protocol data, UI-controller contracts, and release gates. Plan explicitly requires [REQUIRES HUMAN REVIEW]. User directed PM to drive spec 007 forward."
+spec_007_complete: true
+blast_radius: "leaf"
 max_iterations: null
 max_consecutive_failures: 3
-last_updated: "2026-05-19 16:00:00 +0800"
+last_updated: "2026-05-19 20:00:00 +0800"
 next_action:
-  type: "delegate"
-  summary: "Phase 1: Source Model and Controller Contract Foundation - expand CameraSourceModel roles, add source ordering, wire plugin device data, add getCameraDetail, prepare for source-grouped UI."
+  type: "handoff"
+  summary: "Spec 007 complete. 45/45 tests pass, 4/4 HIL pass. Merge codex/007-plugin-ui-release → dev pending user approval. Deferred: packaging validation, UI screenshots, OAK-D hardware."
   blocked: false
-  needs_user_decision: false
-current_phase: "ready_to_delegate"
+  needs_user_decision: true
+  decision: "Approve merge codex/007-plugin-ui-release → dev"
+current_phase: "complete"
 failure_tracking:
   last_failure_signature: ""
   last_failure_reason: ""

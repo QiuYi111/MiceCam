@@ -11,8 +11,7 @@
 - `docs/plan/`: Phase-level implementation plans.
 - `docs/reports/`: Review and implementation reports.
 - `specs/004-production-ready-plugin-app/`: Production readiness checklist / closure gate (27/28 FRs done on `dev`, remaining: merge to main + flaky test fix + HIL tests).
-- `specs/007-plugin-ui-integration/`: Final pre-release work round for plugin UI design, runtime wiring, multi-platform build validation, HIL testing, and release gate. `spec.md` is the grilled feature spec; `plan.md` is the implementation plan; `ui-spec.md` is the visual/screen contract; `pluginUI/` contains canonical visual anchors for plugin management, plugin detail/config/diagnostics, import failure, recording lock, and no-plugin states.
-- `docs/wikis/`: Architecture and design knowledge base.
+- `specs/007-plugin-ui-integration/`: Final pre-release work round for plugin UI design, runtime wiring, multi-platform build validation, HIL testing, and release gate. `spec.md` is the grilled feature spec; `plan.md` is the implementation plan; `ui-spec.md` is the visual/screen contract; `pluginUI/` contains canonical visual anchors for plugin management, plugin detail/config/diagnostics, import failure, recording lock, and no-plugin states. **STATUS: COMPLETE** — all 8 phases accepted; 45/45 local tests pass, 4/4 HIL tests pass on jingyi-lab; merge recommendation prepared on `codex/007-plugin-ui-release`; deferred: packaging validation, UI screenshots, OAK-D hardware.
 
 ## Current UI Stack
 - Current shipping native UI entry: `cmd/micecam_ui/main.cpp`

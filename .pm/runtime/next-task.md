@@ -1,127 +1,101 @@
-# Worker Task Packet
+# Task: Recheck Spec 004 Coverage and Convert to Release Checklist
 
 ## Objective
 
-Run spec `003-camera-plugin-runtime` Phase 6 Ubuntu hardware/stress gate by syncing the current code to `jingyi-lab`, compiling on Ubuntu, and collecting real HIL/stress evidence.
+Re-audit `specs/004-production-ready-plugin-app/` against current `dev` baseline and convert it from a large implementation spec/plan into a production-readiness checklist that can be tracked in the repository.
 
-## Stage context
+This is a documentation/spec maintenance task. Do not change product code, tests, build files, or workflows.
 
-Current stage: `003-phase-6-hardware-gate`.
+## Baseline
 
-Phase 6 preparation is accepted at commit `8555131`. The local macOS no-hardware gate passes, but the real hardware/stress gate remains pending. This task is for execution and evidence collection on the Ubuntu lab machine, not feature implementation.
+- Current branch: `codex/dev-readiness-audit`
+- Code baseline: `dev` / `origin/dev` at `ac24012`
+- Existing audit report: `docs/reports/reviews/dev-readiness-audit-05-19.md`
+- Existing 004 files are currently untracked:
+  - `specs/004-production-ready-plugin-app/spec.md`
+  - `specs/004-production-ready-plugin-app/plan.md`
 
-## Read first
+## Required Work
 
-- `.pm/runtime/active-stage.md`
-- `.pm/runtime/acceptance-review.md`
-- `.pm/runtime/handoff.md`
-- `docs/plan/phase-camera-plugin-runtime.md`
-- `specs/003-camera-plugin-runtime/spec.md`
-- `scripts/hil-test.sh`
-- `scripts/validate_session_artifacts.py`
-- `tests/hil/test_real_camera.cpp`
-- `tests/hil/test_e2e_stress.cpp`
-- `cmd/stress_1h/main.cpp`
-- `CMakeLists.txt`
+1. Recheck spec 004 coverage against current code and audit evidence.
+   - Read `docs/reports/reviews/dev-readiness-audit-05-19.md`.
+   - Read `specs/004-production-ready-plugin-app/spec.md` and `plan.md`.
+   - Spot-check key code paths only as needed to verify the matrix:
+     - `api/micecam/camera_plugin.proto`
+     - `cmd/micecam_ui/AppController.cpp`
+     - `internal/pipeline/PreflightValidator.cpp`
+     - `internal/pipeline/RecordingPipeline.cpp`
+     - `cmd/plugins/micecam_ffmpeg/`
+     - `cmd/plugins/micecam_oak/`
+     - `.github/workflows/ci.yml`
+     - `tests/` references for Calibrate/fMP4/stats/crash recovery/stream liveness
+2. Rewrite `specs/004-production-ready-plugin-app/spec.md` so it is no longer a large implementation feature spec.
+   - Rename its purpose in the document to **Production Readiness Checklist / Closure Gate**.
+   - Preserve useful acceptance criteria as checklist items.
+   - Mark already-covered items as `Done` with evidence pointers.
+   - Mark remaining items as `Open` or `Deferred`.
+   - Explicitly state that implementation scope was mostly completed by specs 003/005/006 on `dev`.
+   - Keep the remaining open items clear:
+     - merge `dev` to `main`
+     - fix/harden macOS flaky `StallCountResetsOnActivity`
+     - add formal HIL tests (`test_hil_e2e`, `test_hil_crash_recovery`) or track them separately
+     - update stale PM runtime state after merge
+     - manual UI sign-off if still required
+3. Rewrite `specs/004-production-ready-plugin-app/plan.md` into a closure plan.
+   - Remove or demote phased implementation work that is already done.
+   - Replace it with a small sequence of closure tasks and branch recommendations.
+   - Make clear that this spec should not spawn a broad `feat/004-production-ready` implementation branch.
+4. Include/nest 004 into project tracking.
+   - Update `project_index` to mention `specs/004-production-ready-plugin-app/` as the production readiness closure checklist.
+   - If there is a better existing index/tracking doc, update that instead or in addition, but keep scope documentation-only.
+5. Write a short implementation report:
+   - `docs/reports/implements/spec-004-checklist-conversion-05-19.md`
+   - Include what changed, why 004 was downgraded, remaining open gates, and next recommended branches.
+6. Update `.pm/runtime/worker-report.md` with a truthful report.
 
-## Task
+## Allowed Files
 
-1. Confirm local source state before sync.
-   - Record branch, commit, and dirty status.
-   - Required source commit: `8555131` or a descendant containing it.
-   - Do not include local build directories or generated artifacts in sync.
-2. Sync code to `jingyi-lab`.
-   - Prefer existing SSH alias `jingyi-lab`.
-   - Use a clean remote workspace or clean remote git checkout.
-   - Verify the remote checkout commit hash after sync.
-   - If SSH or remote workspace is unavailable, write a blocker with exact command/output.
-3. Capture Ubuntu environment facts.
-   - `hostname`
-   - `uname -a`
-   - `lsb_release -a` or `/etc/os-release`
-   - compiler and CMake versions
-   - FFmpeg/ffprobe versions
-   - GPU/NVENC visibility if applicable (`nvidia-smi` when present)
-   - camera visibility (`ls /dev/video*`, `v4l2-ctl --list-devices` when present)
-4. Build and run the normal no-hardware Ubuntu gate.
-   - Configure a clean Ubuntu build directory.
-   - Prefer `-DBUILD_UI=OFF` if Qt UI dependencies are not installed on `jingyi-lab`.
-   - Build all non-HIL targets.
-   - Run `ctest --test-dir <build-dir> --output-on-failure`.
-5. Build and run HIL/stress gates.
-   - Configure a separate build with `-DBUILD_HIL=ON -DBUILD_STRESS=ON`.
-   - Build HIL and stress targets.
-   - Run the HIL CTest suite with output on failure.
-   - Run available stress binaries/tests. If the one-hour binary is available and hardware is ready, run it and capture logs.
-   - If one-hour stress cannot run because hardware, GPU/NVENC, `/mnt/data`, or permissions are missing, report the precise blocker and still provide all earlier compile/test evidence.
-6. Validate artifacts when produced.
-   - For any generated `.mp4/.srt/_meta.json/_stats.json` session output, run `python3 scripts/validate_session_artifacts.py <session_dir> --strict`.
-   - If current stress outputs do not match validator-required plugin transport fields, report that mismatch as gate evidence rather than editing the validator or weakening checks.
-7. Report results.
-   - Write `.pm/runtime/worker-report.md`.
-   - Include exact remote commands and summarized outputs.
-   - Include whether the Ubuntu compile gate passed.
-   - Include whether HIL passed, failed, skipped, or was blocked.
-   - Include whether one-hour stress passed, failed, skipped, or was blocked.
-   - Include artifact paths and validation results.
+You may modify/create only:
 
-## Allowed scope
-
-- Remote `jingyi-lab` workspace operations needed to build/test this commit
+- `specs/004-production-ready-plugin-app/spec.md`
+- `specs/004-production-ready-plugin-app/plan.md`
+- `project_index`
+- `docs/reports/implements/spec-004-checklist-conversion-05-19.md`
 - `.pm/runtime/worker-report.md`
-- `.pm/runtime/blockers.md` if blocked
 
-## Forbidden scope
+## Forbidden Scope
 
-- Product code changes
-- Test changes
-- UI/QML changes
-- Proto changes
-- Changing validation thresholds
-- Disabling failing tests
-- Claiming hardware/stress success without real command output
-- Merging branches
-- Editing `.pm/runtime/acceptance-review.md`, `.pm/runtime/state.yaml`, `.pm/runtime/loop-log.md`, `.pm/runtime/handoff.md`, or `.pm/runtime/active-stage.md`
+- No product code changes.
+- No test changes.
+- No CI/workflow changes.
+- No build system changes.
+- No dependency changes.
+- No commits.
+- No merges, rebases, pushes, or destructive git commands.
+- Do not modify `.pm/runtime/state.yaml`, `.pm/runtime/handoff.md`, `.pm/runtime/acceptance-review.md`, or `.pm/runtime/loop-log.md`.
 
-## Acceptance criteria
+## Verification Commands
 
-- [ ] `jingyi-lab` remote checkout is at commit `8555131` or a verified descendant.
-- [ ] Ubuntu environment facts are recorded.
-- [ ] Ubuntu no-hardware configure/build result is recorded.
-- [ ] Ubuntu no-hardware CTest result is recorded.
-- [ ] HIL build result is recorded.
-- [ ] HIL test result is recorded with pass/fail/blocker evidence.
-- [ ] One-hour stress result is recorded with pass/fail/blocker evidence.
-- [ ] Any generated artifacts are validated with `scripts/validate_session_artifacts.py --strict`, or absence/mismatch is reported precisely.
-- [ ] `.pm/runtime/worker-report.md` contains changed-files, commands-run, test-results, acceptance checklist, problems encountered, and deviations sections.
-
-## Required verification commands
-
-Run local equivalents where useful, but the gate evidence must come from `jingyi-lab`:
+Run and record:
 
 ```bash
-git status --short
-git rev-parse --short HEAD
-ssh jingyi-lab 'hostname && uname -a'
-ssh jingyi-lab 'ls /dev/video* 2>/dev/null || true'
-ssh jingyi-lab 'v4l2-ctl --list-devices 2>/dev/null || true'
-ssh jingyi-lab 'nvidia-smi || true'
-cmake -S . -B build-ubuntu -DCMAKE_BUILD_TYPE=Release -DBUILD_UI=OFF
-cmake --build build-ubuntu -j "$(nproc)"
-ctest --test-dir build-ubuntu --output-on-failure
-cmake -S . -B build-ubuntu-hil -DCMAKE_BUILD_TYPE=Release -DBUILD_UI=OFF -DBUILD_HIL=ON -DBUILD_STRESS=ON
-cmake --build build-ubuntu-hil -j "$(nproc)"
-ctest --test-dir build-ubuntu-hil --output-on-failure
-./build-ubuntu-hil/stress_1h_120fps
-python3 scripts/validate_session_artifacts.py <session_dir> --strict
+git status --short --branch
+git diff --name-status
+test -f specs/004-production-ready-plugin-app/spec.md
+test -f specs/004-production-ready-plugin-app/plan.md
+test -f docs/reports/implements/spec-004-checklist-conversion-05-19.md
+rg -n "Production Readiness Checklist|Closure Gate|Done|Open|Deferred" specs/004-production-ready-plugin-app docs/reports/implements/spec-004-checklist-conversion-05-19.md
+rg -n "specs/004-production-ready-plugin-app|production readiness" project_index
 ```
 
-Adjust paths only to match the actual remote workspace/build layout. Capture exact commands used.
+No full build is required because this task is documentation-only. If you run no build/test, state that explicitly.
 
-## Required report file
+## Acceptance Criteria
 
-`.pm/runtime/worker-report.md`
-
-## If blocked
-
-Write `.pm/runtime/blockers.md` and `.pm/runtime/worker-report.md` with the blocker signature and command output. Do not modify implementation code to bypass the gate.
+- [ ] Spec 004 is rewritten as a production readiness checklist / closure gate, not a broad implementation feature.
+- [ ] Spec 004 plan is rewritten as a closure plan with small next branches.
+- [ ] 004 is included in project tracking/index.
+- [ ] A concise implementation report exists.
+- [ ] Worker report exists and lists changed files, commands, verification, problems, deviations.
+- [ ] Only allowed files changed.
+- [ ] No commit created.

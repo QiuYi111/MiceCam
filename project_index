@@ -10,6 +10,8 @@
 - `docs/adr/`: Architecture decision records.
 - `docs/plan/`: Phase-level implementation plans.
 - `docs/reports/`: Review and implementation reports.
+- `specs/004-production-ready-plugin-app/`: Production readiness checklist / closure gate (27/28 FRs done on `dev`, remaining: merge to main + flaky test fix + HIL tests).
+- `specs/007-plugin-ui-integration/`: Final pre-release work round for plugin UI design, runtime wiring, multi-platform build validation, HIL testing, and release gate; `pluginUI/` contains canonical visual anchors for plugin management, plugin detail/config/diagnostics, import failure, recording lock, and no-plugin states.
 - `docs/wikis/`: Architecture and design knowledge base.
 
 ## Current UI Stack

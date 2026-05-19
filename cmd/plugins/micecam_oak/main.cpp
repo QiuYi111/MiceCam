@@ -5,6 +5,10 @@
 #include <string>
 #include <thread>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <grpcpp/grpcpp.h>
 #include <spdlog/spdlog.h>
 
@@ -16,6 +20,17 @@ static std::atomic<bool> g_shutdown_requested{false};
 static void signal_handler(int) {
     g_shutdown_requested.store(true);
 }
+
+#ifdef _WIN32
+static BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
+    if (ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_CLOSE_EVENT ||
+        ctrl_type == CTRL_BREAK_EVENT || ctrl_type == CTRL_SHUTDOWN_EVENT) {
+        g_shutdown_requested.store(true);
+        return TRUE;
+    }
+    return FALSE;
+}
+#endif
 
 static void print_usage(const char* prog) {
     std::cerr << "Usage: " << prog << " [--port=PORT]\n\n"
@@ -50,6 +65,10 @@ int main(int argc, char* argv[]) {
 
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
+
+#ifdef _WIN32
+    SetConsoleCtrlHandler(console_ctrl_handler, TRUE);
+#endif
 
     micecam::plugin::OAKPluginServer service;
     grpc::ServerBuilder builder;

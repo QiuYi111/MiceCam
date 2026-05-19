@@ -1,7 +1,17 @@
 cmake_minimum_required(VERSION 3.20)
 
 find_program(PROTOC protoc REQUIRED)
-find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+find_program(GRPC_CPP_PLUGIN
+    NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
+    HINTS
+        /ucrt64/bin
+        /usr/bin
+        /usr/local/bin
+        /opt/homebrew/bin
+        ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+    REQUIRED
+)
 
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto)
 set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -61,17 +71,19 @@ target_link_libraries(micecam_oak_plugin PRIVATE
     PkgConfig::spdlog
 )
 
+target_compile_definitions(micecam_oak_plugin PRIVATE
+    _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+    $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+    $<$<PLATFORM_ID:Windows>:NOMINMAX>
+)
+
 target_compile_options(micecam_oak_plugin PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )
 
 set_target_properties(micecam_oak_plugin PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/cmd/plugins/micecam_oak"
-)
-
-target_compile_definitions(micecam_oak_plugin PRIVATE
-    _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
 )
 
 # DepthAI SDK integration (optional)

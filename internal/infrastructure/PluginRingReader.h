@@ -2,11 +2,13 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include "domain/StreamRingDescriptor.h"
+#include "infrastructure/SharedMemoryBackend.h"
 
 namespace micecam::infrastructure {
 
@@ -75,6 +77,8 @@ private:
     uint64_t backpressure_events_ = 0;
     int64_t current_lag_ = 0;
     int64_t max_lag_ = 0;
+
+    std::unique_ptr<SharedMemoryBackend> backend_ = create_shared_memory_backend();
 };
 
 } // namespace micecam::infrastructure

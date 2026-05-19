@@ -4,7 +4,17 @@ cmake_minimum_required(VERSION 3.20)
 # Find gRPC and Protobuf (found in parent scope by root CMakeLists.txt)
 # find_package already invoked in parent scope with CONFIG REQUIRED
 find_program(PROTOC protoc REQUIRED)
-find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+find_program(GRPC_CPP_PLUGIN
+    NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
+    HINTS
+        /ucrt64/bin
+        /usr/bin
+        /usr/local/bin
+        /opt/homebrew/bin
+        ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+    REQUIRED
+)
 
 # Proto codegen
 set(PROTO_FILE ${CMAKE_SOURCE_DIR}/api/micecam/camera_plugin.proto)
@@ -37,7 +47,18 @@ set(PLUGIN_SOURCES
     AVFoundationEnumerator.cpp
     RingFrameProducer.cpp
     PlatformUtil.cpp
+    ${CMAKE_SOURCE_DIR}/internal/infrastructure/SharedMemoryBackend.cpp
 )
+
+if(WIN32)
+    list(APPEND PLUGIN_SOURCES
+        ${CMAKE_SOURCE_DIR}/internal/infrastructure/Win32SharedMemory.cpp
+    )
+else()
+    list(APPEND PLUGIN_SOURCES
+        ${CMAKE_SOURCE_DIR}/internal/infrastructure/PosixSharedMemory.cpp
+    )
+endif()
 
 set(PLUGIN_PROTO_SOURCES
     ${PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
@@ -87,4 +108,11 @@ set_target_properties(micecam_ffmpeg_plugin PROPERTIES
 # Avoid C++17 deprecation warnings from gRPC/abseil compiled under C++20
 target_compile_definitions(micecam_ffmpeg_plugin PRIVATE
     _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+    $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+    $<$<PLATFORM_ID:Windows>:NOMINMAX>
+)
+
+target_compile_options(micecam_ffmpeg_plugin PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )

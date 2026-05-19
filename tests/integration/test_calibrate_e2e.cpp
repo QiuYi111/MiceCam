@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include <gtest/gtest.h>
 
 #include <grpcpp/grpcpp.h>
@@ -206,3 +207,4 @@ TEST_F(CalibrateE2ETest, CalibrateWithRealEncoder) {
                               + std::chrono::milliseconds(5000));
     stub->Shutdown(&shutdown_ctx, shutdown_req, &shutdown_resp);
 }
+#endif // _WIN32

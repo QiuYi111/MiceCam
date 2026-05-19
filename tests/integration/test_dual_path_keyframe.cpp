@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include <gtest/gtest.h>
 
 #include <grpcpp/grpcpp.h>
@@ -320,3 +321,4 @@ TEST_F(DualPathKeyframeTest, H264AndRawStreamsWithKeyframeInterval) {
     auto s = stub->Shutdown(&shutdown_ctx, shutdown_req, &shutdown_resp);
     EXPECT_TRUE(s.ok());
 }
+#endif // _WIN32

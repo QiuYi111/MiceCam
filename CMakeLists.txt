@@ -76,6 +76,9 @@ if(BUILD_UI)
     find_package(Qt6 REQUIRED COMPONENTS Core Qml Quick QuickControls2)
     set(CMAKE_AUTOMOC ON)
     set(CMAKE_AUTORCC ON)
+    if(UNIX AND NOT APPLE)
+        set(MiceCam_QML_NO_CACHEGEN "NO_CACHEGEN")
+    endif()
 endif()
 
 # depthai-core (optional)
@@ -120,6 +123,7 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/FFmpegCameraBackend.cpp
     internal/infrastructure/PluginRingReader.cpp
     internal/infrastructure/PluginStreamConsumer.cpp
+    internal/infrastructure/SharedMemoryBackend.cpp
     internal/infrastructure/ResourceManager.cpp
     internal/infrastructure/StreamLivenessMonitor.cpp
     internal/pipeline/TranscodeStage.cpp
@@ -140,10 +144,26 @@ target_link_libraries(micecam_encoding PUBLIC
     PkgConfig::nlohmann_json
 )
 
-target_compile_options(micecam_encoding PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
-)
+    target_compile_options(micecam_encoding PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+
+    target_compile_definitions(micecam_encoding PRIVATE
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
+        $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>
+    )
+
+    if(WIN32)
+        target_sources(micecam_encoding PRIVATE
+            internal/infrastructure/Win32SharedMemory.cpp
+        )
+    else()
+        target_sources(micecam_encoding PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
+        )
+    endif()
 
 # MiceCam v2 executable (requires Qt6, skipped in CI headless mode)
 if(BUILD_UI)
@@ -218,18 +238,25 @@ add_micecam_test(test_stats_collector tests/unit/test_stats_collector.cpp)
 add_micecam_test(test_watchdog tests/unit/test_watchdog.cpp)
 add_micecam_test(test_feishu_webhook tests/unit/test_feishu_webhook.cpp)
 add_micecam_test(test_backend_ui_contract tests/unit/test_backend_ui_contract.cpp)
-add_micecam_test(test_recording_pipeline tests/unit/test_recording_pipeline.cpp)
-add_micecam_test(test_recording_pipeline_outputs tests/integration/test_recording_pipeline_outputs.cpp)
-add_micecam_test(test_fmp4_smoke tests/integration/test_fmp4_smoke.cpp)
+    add_micecam_test(test_recording_pipeline tests/unit/test_recording_pipeline.cpp)
+    if(NOT WIN32)
+        add_micecam_test(test_recording_pipeline_outputs tests/integration/test_recording_pipeline_outputs.cpp)
+    endif()
+    add_micecam_test(test_fmp4_smoke tests/integration/test_fmp4_smoke.cpp)
 add_micecam_test(test_camera_pipeline_integration tests/integration/test_camera_pipeline.cpp)
 add_micecam_test(test_watchdog_alerting_integration tests/integration/test_watchdog_alerting.cpp)
 add_micecam_test(test_plugin_contract tests/unit/test_plugin_contract.cpp)
 add_micecam_test(test_plugin_registry tests/unit/test_plugin_registry.cpp)
 add_micecam_test(test_linked_plugin_config tests/unit/test_linked_plugin_config.cpp)
-add_micecam_test(test_plugin_ring_reader tests/unit/test_plugin_ring_reader.cpp)
-add_micecam_test(test_plugin_stream_consumer tests/unit/test_plugin_stream_consumer.cpp)
+if(NOT WIN32)
+    add_micecam_test(test_plugin_ring_reader tests/unit/test_plugin_ring_reader.cpp)
+    add_micecam_test(test_plugin_stream_consumer tests/unit/test_plugin_stream_consumer.cpp)
+endif()
 add_micecam_test(test_resource_manager tests/unit/test_resource_manager.cpp)
 add_micecam_test(test_timestamp_engine tests/unit/test_timestamp_engine.cpp)
+if(NOT WIN32)
+    add_micecam_test(test_shared_memory_backend tests/unit/test_shared_memory_backend.cpp)
+endif()
 add_micecam_test(test_stream_liveness_monitor tests/unit/test_stream_liveness_monitor.cpp)
 
 if(BUILD_PLUGINS)
@@ -240,7 +267,17 @@ if(BUILD_PLUGINS)
     file(MAKE_DIRECTORY "${FFMPEG_PLUGIN_PROTO_GEN_DIR}")
 
     find_program(FFMPEG_TEST_PROTOC protoc REQUIRED)
-    find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+    find_program(FFMPEG_TEST_GRPC_CPP_PLUGIN
+        NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
+        HINTS
+            /ucrt64/bin
+            /usr/bin
+            /usr/local/bin
+            /opt/homebrew/bin
+            ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+            ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        REQUIRED
+    )
 
     add_custom_command(
         OUTPUT
@@ -267,7 +304,18 @@ if(BUILD_PLUGINS)
         cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
         cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
         cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
+        internal/infrastructure/SharedMemoryBackend.cpp
     )
+
+    if(WIN32)
+        target_sources(test_ffmpeg_plugin_server PRIVATE
+            internal/infrastructure/Win32SharedMemory.cpp
+        )
+    else()
+        target_sources(test_ffmpeg_plugin_server PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
+        )
+    endif()
 
     target_include_directories(test_ffmpeg_plugin_server PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -293,12 +341,14 @@ if(BUILD_PLUGINS)
     )
 
     target_compile_options(test_ffmpeg_plugin_server PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
     )
 
     target_compile_definitions(test_ffmpeg_plugin_server PRIVATE
         _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
     )
 
     set_target_properties(test_ffmpeg_plugin_server PROPERTIES
@@ -306,6 +356,60 @@ if(BUILD_PLUGINS)
     )
 
     add_test(NAME test_ffmpeg_plugin_server COMMAND test_ffmpeg_plugin_server
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+    add_executable(test_negative_plugin_rpcs
+        tests/unit/test_negative_plugin_rpcs.cpp
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}/micecam/camera_plugin.grpc.pb.cc
+        cmd/plugins/micecam_ffmpeg/FFmpegPluginServer.cpp
+        cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
+        cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
+        cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
+        internal/infrastructure/SharedMemoryBackend.cpp
+    )
+    if(WIN32)
+        target_sources(test_negative_plugin_rpcs PRIVATE
+            internal/infrastructure/Win32SharedMemory.cpp
+        )
+    else()
+        target_sources(test_negative_plugin_rpcs PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
+        )
+    endif()
+    target_include_directories(test_negative_plugin_rpcs PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/api
+        ${CMAKE_CURRENT_SOURCE_DIR}/internal
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmd/plugins/micecam_ffmpeg
+        ${FFMPEG_PLUGIN_PROTO_GEN_DIR}
+    )
+    if(APPLE)
+        target_include_directories(test_negative_plugin_rpcs PRIVATE /opt/homebrew/include)
+    endif()
+    target_link_libraries(test_negative_plugin_rpcs PRIVATE
+        gRPC::grpc++
+        gRPC::grpc
+        protobuf::libprotobuf
+        GTest::gtest
+        GTest::gtest_main
+        PkgConfig::FFMPEG
+        PkgConfig::spdlog
+        PkgConfig::nlohmann_json
+    )
+    target_compile_options(test_negative_plugin_rpcs PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+    target_compile_definitions(test_negative_plugin_rpcs PRIVATE
+        _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
+    )
+    set_target_properties(test_negative_plugin_rpcs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+    )
+    add_test(NAME test_negative_plugin_rpcs COMMAND test_negative_plugin_rpcs
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
     add_executable(test_proto_calibrate
@@ -496,7 +600,25 @@ endif()
 
 # Plugin executables (out-of-process camera backends via gRPC)
 if(BUILD_PLUGINS)
-    find_package(gRPC CONFIG REQUIRED)
+    find_package(gRPC CONFIG QUIET)
+    if(NOT gRPC_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(gRPC REQUIRED IMPORTED_TARGET grpc grpc++)
+        if(NOT TARGET gRPC::grpc++)
+            add_library(gRPC::grpc++ ALIAS PkgConfig::gRPC)
+        endif()
+        if(NOT TARGET gRPC::grpc)
+            add_library(gRPC::grpc ALIAS PkgConfig::gRPC)
+        endif()
+    endif()
+    find_package(protobuf CONFIG QUIET)
+    if(NOT protobuf_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(protobuf REQUIRED IMPORTED_TARGET protobuf)
+        if(NOT TARGET protobuf::libprotobuf)
+            add_library(protobuf::libprotobuf ALIAS PkgConfig::protobuf)
+        endif()
+    endif()
     add_subdirectory(cmd/plugins/micecam_ffmpeg)
     add_subdirectory(cmd/plugins/micecam_oak)
 
@@ -506,7 +628,17 @@ if(BUILD_PLUGINS)
     file(MAKE_DIRECTORY "${OAK_PLUGIN_PROTO_GEN_DIR}")
 
     find_program(OAK_TEST_PROTOC protoc REQUIRED)
-    find_program(OAK_TEST_GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+    find_program(OAK_TEST_GRPC_CPP_PLUGIN
+        NAMES grpc_cpp_plugin grpc_cpp_plugin.exe
+        HINTS
+            /ucrt64/bin
+            /usr/bin
+            /usr/local/bin
+            /opt/homebrew/bin
+            ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
+            ${CMAKE_SOURCE_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/tools/grpc
+        REQUIRED
+    )
 
     add_custom_command(
         OUTPUT
@@ -556,12 +688,14 @@ if(BUILD_PLUGINS)
     )
 
     target_compile_options(test_oak_plugin_server PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
     )
 
     target_compile_definitions(test_oak_plugin_server PRIVATE
         _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
     )
 
     set_target_properties(test_oak_plugin_server PROPERTIES

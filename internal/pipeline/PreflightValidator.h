@@ -83,7 +83,7 @@ public:
                                double fps);
 
 private:
-    uint64_t available_bytes_;
+    uint64_t available_bytes_ = 0;
 };
 
 } // namespace micecam::pipeline

@@ -21,7 +21,11 @@ static std::string ns_to_iso8601(uint64_t ns) {
     uint64_t microseconds = remaining_ns / 1000ULL;
 
     struct tm tm_buf;
+#ifdef _WIN32
+    localtime_s(&tm_buf, &total_sec);
+#else
     localtime_r(&total_sec, &tm_buf);
+#endif
 
     char time_buf[64];
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S", &tm_buf);

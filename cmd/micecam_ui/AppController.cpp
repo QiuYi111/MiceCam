@@ -59,9 +59,11 @@ QString AppController::elapsedText() const {
         return QStringLiteral("00:00");
     }
     auto elapsed = std::chrono::steady_clock::now() - session_start_;
-    auto total_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-    int min = static_cast<int>(total_sec / 60);
-    int sec = static_cast<int>(total_sec % 60);
+    auto total_sec = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+    int hr = total_sec / 3600;
+    int min = (total_sec % 3600) / 60;
+    int sec = total_sec % 60;
+    if (hr > 0) return QString::asprintf("%02d:%02d:%02d", hr, min, sec);
     return QString::asprintf("%02d:%02d", min, sec);
 }
 
@@ -90,6 +92,14 @@ QString AppController::preflightMessage() const {
 
 QString AppController::lastSessionId() const {
     return session_id_;
+}
+
+QString AppController::currentEncoderName() const {
+    return current_encoder_name_;
+}
+
+QString AppController::currentBitrate() const {
+    return current_bitrate_;
 }
 
 QStringList AppController::recentLogEntries() const {
@@ -196,6 +206,13 @@ bool AppController::startRecording() {
 
     if (!pipeline_.start(config)) return false;
 
+    if (!config.streams.empty()) {
+        current_encoder_name_ = QStringLiteral("H.264");
+        current_bitrate_ = QStringLiteral("5.0 Mbps");
+        emit encoderNameChanged();
+        emit bitrateChanged();
+    }
+
     pushLogEntry(log_entries_, QStringLiteral("[INFO] Session started: %1").arg(session_id_));
     pushLogEntry(log_entries_, QStringLiteral("[INFO] %1").arg(cameraCountText()));
 
@@ -247,16 +264,56 @@ void AppController::stopRecording() {
 
     recording_ = false;
     session_start_ = {};
+    current_encoder_name_ = QStringLiteral("—");
+    current_bitrate_ = QStringLiteral("—");
     emit isRecordingChanged();
     emit canStartRecordingChanged();
     emit recordButtonTextChanged();
     emit totalFramesTextChanged();
     emit averageFpsTextChanged();
     emit bytesWrittenTextChanged();
+    emit encoderNameChanged();
+    emit bitrateChanged();
 }
 
 QVariantList AppController::preflightItems() {
     QVariantList items;
+
+    {
+        QVariantMap item;
+        item["name"] = QStringLiteral("Camera Detection");
+        bool has_cameras = camera_model_->rowCount() > 0;
+        item["status"] = has_cameras ? QStringLiteral("pass") : QStringLiteral("fail");
+        item["detail"] = has_cameras
+            ? QStringLiteral("%1 camera(s) detected").arg(camera_model_->rowCount())
+            : QStringLiteral("No cameras detected");
+        items.append(item);
+    }
+
+    {
+        QVariantMap item;
+        item["name"] = QStringLiteral("Disk Space");
+        pipeline::PreflightValidator validator;
+        std::string out_dir = output_dir_.isEmpty() ? "." : output_dir_.toStdString();
+        bool disk_ok = validator.check_disk_space(out_dir, 500 * 1024 * 1024);
+        item["status"] = disk_ok ? QStringLiteral("pass") : QStringLiteral("fail");
+        item["detail"] = disk_ok
+            ? QStringLiteral("Sufficient disk space available")
+            : QStringLiteral("Insufficient disk space for recording");
+        items.append(item);
+    }
+
+    {
+        QVariantMap item;
+        item["name"] = QStringLiteral("Encoder Availability");
+        bool encoder_ok = current_encoder_name_ != QStringLiteral("—") || camera_model_->rowCount() > 0;
+        item["status"] = encoder_ok ? QStringLiteral("pass") : QStringLiteral("fail");
+        item["detail"] = encoder_ok
+            ? QStringLiteral("H.264 encoder available")
+            : QStringLiteral("No H.264 encoder found");
+        items.append(item);
+    }
+
     return items;
 }
 

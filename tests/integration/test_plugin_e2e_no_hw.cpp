@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include <gtest/gtest.h>
 
 #include <grpcpp/grpcpp.h>
@@ -247,3 +248,4 @@ TEST_F(PluginE2ENoHwTest, FullLifecycle) {
         EXPECT_TRUE(resp.success());
     }
 }
+#endif // _WIN32

@@ -8,12 +8,11 @@ add_executable(micecam_ui
     CameraSourceModel.cpp
 )
 
-qt_policy(SET QTP0004 NEW)
-
 qt_add_qml_module(micecam_ui
     URI "MiceCam.UI"
     VERSION 1.0
     RESOURCE_PREFIX /
+    ${MiceCam_QML_NO_CACHEGEN}
     QML_FILES
         qml/main.qml
         qml/theme/Theme.qml

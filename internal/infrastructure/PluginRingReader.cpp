@@ -5,10 +5,7 @@
 #include <cstring>
 #include <thread>
 
-#include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include <spdlog/spdlog.h>
 
@@ -21,16 +18,15 @@ PluginRingReader::~PluginRingReader() {
 bool PluginRingReader::open(const std::string& shm_name) {
     shm_name_ = shm_name;
 
-    shm_fd_ = shm_open(shm_name.c_str(), O_RDWR, 0);
+    shm_fd_ = backend_->open(shm_name, 0);
     if (shm_fd_ < 0) {
-        spdlog::error("PluginRingReader: shm_open failed for {}: {}", shm_name, strerror(errno));
         return false;
     }
 
     struct stat st;
     if (fstat(shm_fd_, &st) != 0) {
         spdlog::error("PluginRingReader: fstat failed for {}: {}", shm_name, strerror(errno));
-        ::close(shm_fd_);
+        backend_->close(shm_fd_);
         shm_fd_ = -1;
         return false;
     }
@@ -38,17 +34,15 @@ bool PluginRingReader::open(const std::string& shm_name) {
 
     if (shm_size_ < kHeaderSize) {
         spdlog::error("PluginRingReader: SHM too small ({}) for {}", shm_size_, shm_name);
-        ::close(shm_fd_);
+        backend_->close(shm_fd_);
         shm_fd_ = -1;
         return false;
     }
 
-    mapped_mem_ = mmap(nullptr, shm_size_, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd_, 0);
-    if (mapped_mem_ == MAP_FAILED) {
-        spdlog::error("PluginRingReader: mmap failed for {}: {}", shm_name, strerror(errno));
-        ::close(shm_fd_);
+    mapped_mem_ = backend_->map(shm_fd_, shm_size_);
+    if (!mapped_mem_) {
+        backend_->close(shm_fd_);
         shm_fd_ = -1;
-        mapped_mem_ = nullptr;
         return false;
     }
 
@@ -60,8 +54,8 @@ bool PluginRingReader::open(const std::string& shm_name) {
     if (shm_size_ < expected_size) {
         spdlog::error("PluginRingReader: SHM size {} < expected {} for {}",
                       shm_size_, expected_size, shm_name);
-        munmap(mapped_mem_, shm_size_);
-        ::close(shm_fd_);
+        backend_->unmap(mapped_mem_, shm_size_);
+        backend_->close(shm_fd_);
         mapped_mem_ = nullptr;
         shm_fd_ = -1;
         header_ = nullptr;
@@ -173,12 +167,12 @@ bool PluginRingReader::readNextFrame(ReadSlotData& out, int timeout_ms) {
 
 void PluginRingReader::close() {
     if (mapped_mem_) {
-        munmap(mapped_mem_, shm_size_);
+        backend_->unmap(mapped_mem_, shm_size_);
         mapped_mem_ = nullptr;
         header_ = nullptr;
     }
     if (shm_fd_ >= 0) {
-        ::close(shm_fd_);
+        backend_->close(shm_fd_);
         shm_fd_ = -1;
     }
     shm_name_.clear();

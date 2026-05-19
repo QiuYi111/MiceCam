@@ -14,14 +14,13 @@ constexpr int kTestTimeoutMs = 3000;
 class FFmpegPluginServerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        server_thread_ = std::make_unique<std::jthread>([this](std::stop_token /*st*/) {
+        server_thread_ = std::make_unique<std::thread>([this] {
             grpc::ServerBuilder builder;
             std::string addr = "localhost:0";
             builder.AddListeningPort(addr, grpc::InsecureServerCredentials(), &port_);
             builder.RegisterService(&service_);
             server_ = builder.BuildAndStart();
             if (server_) {
-                // Wait until stopped
                 server_->Wait();
             }
         });
@@ -42,12 +41,15 @@ protected:
         if (server_) {
             server_->Shutdown();
         }
+        if (server_thread_ && server_thread_->joinable()) {
+            server_thread_->join();
+        }
         server_thread_.reset();
     }
 
     micecam::plugin::FFmpegPluginServer service_;
     std::unique_ptr<grpc::Server> server_;
-    std::unique_ptr<std::jthread> server_thread_;
+    std::unique_ptr<std::thread> server_thread_;
     int port_ = 0;
     std::shared_ptr<grpc::Channel> channel_;
     std::unique_ptr<micecam::plugin::CameraPluginService::Stub> stub_;
@@ -243,7 +245,7 @@ TEST_F(FFmpegPluginServerTest, OpenStreamReturnsRingDescriptor) {
     EXPECT_GT(resp.ring_descriptor().slot_size(), 0u);
     EXPECT_FALSE(resp.ring_descriptor().ring_id().empty());
     EXPECT_FALSE(resp.ring_descriptor().stream_id().empty());
-    EXPECT_EQ(resp.ring_descriptor().platform_handle_type(), "posix_shm");
+    EXPECT_FALSE(resp.ring_descriptor().platform_handle_type().empty());
     EXPECT_EQ(resp.ring_descriptor().ownership(),
               micecam::plugin::RingOwnership::PLUGIN_OWNS);
     EXPECT_GT(resp.ring_descriptor().header_size(), 0u);
@@ -464,7 +466,7 @@ TEST(RingFrameProducerTest, CreateAndWrite) {
     EXPECT_EQ(desc.stream_id, "my_stream");
     EXPECT_EQ(desc.slot_count, 4u);
     EXPECT_EQ(desc.slot_size, 8192u);
-    EXPECT_EQ(desc.platform_handle_type, "posix_shm");
+    EXPECT_FALSE(desc.platform_handle_type.empty());
     EXPECT_EQ(desc.producer_sequence_offset, 0u);
     EXPECT_EQ(desc.consumer_sequence_offset, 8u);
     EXPECT_EQ(desc.payload_offset, 64u);

@@ -8,18 +8,21 @@
 #include <spdlog/spdlog.h>
 
 #include <fcntl.h>
+#ifndef _WIN32
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 
 namespace micecam::infrastructure {
 
 namespace fs = std::filesystem;
 
 static int default_shm_unlink(const std::string& name) {
-#ifdef __APPLE__
+#ifndef _WIN32
     return shm_unlink(name.c_str());
 #else
-    return shm_unlink(name.c_str());
+    (void)name;
+    return -1;
 #endif
 }
 

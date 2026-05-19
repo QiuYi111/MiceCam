@@ -5,6 +5,10 @@
 #include <string_view>
 #include <unordered_map>
 
+#ifdef ERROR
+#undef ERROR
+#endif
+
 namespace micecam::domain {
 
 enum class ErrorSeverity { INFO = 0, WARN = 1, ERROR = 2, FATAL = 3 };

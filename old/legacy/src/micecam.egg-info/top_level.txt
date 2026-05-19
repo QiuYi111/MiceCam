@@ -1,4 +1,0 @@
-camera
-core
-gpu
-pipeline

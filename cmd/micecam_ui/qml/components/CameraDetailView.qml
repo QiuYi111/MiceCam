@@ -264,8 +264,8 @@ Item {
                             { label: "Resolution", value: root.selectedResolution },
                             { label: "Frame Rate", value: root.selectedFrameRate },
                             { label: "Pixel Format", value: root.selectedPixelFormat },
-                            { label: "Encoder", value: "H.265 (HEVC)" },
-                            { label: "Bitrate", value: "12.0 Mbps" },
+                            { label: "Encoder", value: appController.currentEncoderName || "—" },
+                            { label: "Bitrate", value: appController.currentBitrate || "—" },
                             { label: "Frame Drops", value: root.cameraDrops.toString() },
                             { label: "Buffer", value: "48/64" },
                             { label: "Uptime", value: root.elapsedText }
@@ -934,7 +934,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "H.265"
+                                        text: appController.currentEncoderName || "—"
                                         font.family: Theme.fontMono
                                         font.pixelSize: 12
                                         color: Theme.textSecondary
@@ -951,7 +951,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "12.0 Mbps"
+                                        text: appController.currentBitrate || "—"
                                         font.family: Theme.fontMono
                                         font.pixelSize: 12
                                         color: Theme.textSecondary

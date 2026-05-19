@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "domain/StreamRingDescriptor.h"
+#include "infrastructure/SharedMemoryBackend.h"
 
 namespace micecam::plugin {
 
@@ -62,6 +63,9 @@ private:
     std::string ring_id_;
 
     void writePayloadHeader(uint8_t* slot, const FrameData& frame, uint64_t seq);
+
+    std::unique_ptr<micecam::infrastructure::SharedMemoryBackend> backend_ =
+        micecam::infrastructure::create_shared_memory_backend();
 };
 
 } // namespace micecam::plugin

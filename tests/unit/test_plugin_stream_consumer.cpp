@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include <gtest/gtest.h>
 
 #include <atomic>
@@ -475,3 +476,4 @@ TEST(PluginStreamConsumerTest, H265PayloadKindAccepted) {
 
     std::filesystem::remove_all("/tmp/micecam_consumer_h265");
 }
+#endif // _WIN32

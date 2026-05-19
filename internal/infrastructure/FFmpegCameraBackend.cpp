@@ -55,9 +55,11 @@ public:
         }
 
         // Pack YUV planar data into contiguous buffer
-        int y_size = dec_frame_->linesize[0] * dec_ctx_->height;
-        int u_size = dec_frame_->linesize[1] * dec_ctx_->height / 2;
-        int v_size = dec_frame_->linesize[2] * dec_ctx_->height / 2;
+        int w = dec_ctx_->width;
+        int h = dec_ctx_->height;
+        int y_size = w * h;
+        int u_size = w * h / 4;
+        int v_size = w * h / 4;
         out_data.resize(y_size + u_size + v_size);
         auto* dst = out_data.data();
         for (int i = 0; i < dec_ctx_->height; i++) {

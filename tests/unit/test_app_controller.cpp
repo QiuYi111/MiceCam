@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 #include <QCoreApplication>
 #include <QThread>
+#include <chrono>
+#define private public
 #include "cmd/micecam_ui/AppController.h"
+#undef private
 
 static int s_argc2 = 0;
 
@@ -138,4 +141,34 @@ TEST(AppController, RefreshCamerasEmitsCountSignals) {
     controller.refreshCameras();
     EXPECT_EQ(controller.cameraCount(), 0);
     EXPECT_EQ(countChanged, 0);
+}
+
+TEST(AppController, ElapsedText90Seconds) {
+    micecam::ui::AppController controller;
+    auto now = std::chrono::steady_clock::now();
+    controller.session_start_ = now - std::chrono::seconds(90);
+    EXPECT_EQ(controller.elapsedText().toStdString(), "01:30");
+}
+
+TEST(AppController, ElapsedText65Minutes) {
+    micecam::ui::AppController controller;
+    auto now = std::chrono::steady_clock::now();
+    controller.session_start_ = now - std::chrono::seconds(3900);
+    EXPECT_EQ(controller.elapsedText().toStdString(), "01:05:00");
+}
+
+TEST(AppController, ElapsedText3h7m5s) {
+    micecam::ui::AppController controller;
+    auto now = std::chrono::steady_clock::now();
+    controller.session_start_ = now - std::chrono::seconds(11225);
+    EXPECT_EQ(controller.elapsedText().toStdString(), "03:07:05");
+}
+
+TEST(AppController, ElapsedTextZeroSeconds) {
+    micecam::ui::AppController controller;
+    auto now = std::chrono::steady_clock::now();
+    controller.session_start_ = now;
+    QString text = controller.elapsedText();
+    EXPECT_TRUE(text == "00:00" || text == "00:01")
+        << "Expected '00:00' or '00:01' (timing), got '" << text.toStdString() << "'";
 }

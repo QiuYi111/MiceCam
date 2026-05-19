@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -232,6 +234,45 @@ TEST_F(StreamLivenessMonitorTest, StallCountResetsWhenStreamRecoversInMonitorLoo
     EXPECT_GE(stall_events_.size(), 1u);
     auto last = stall_events_.back();
     EXPECT_EQ(last.stall_count, 1);
+}
+
+TEST_F(StreamLivenessMonitorTest, ConcurrentStressNoDeadlock) {
+    monitor_->start();
+
+    constexpr int kNumThreads = 4;
+    constexpr auto kTestDuration = std::chrono::seconds(5);
+    std::atomic<bool> done{false};
+    std::vector<std::thread> threads;
+
+    for (int t = 0; t < kNumThreads; t++) {
+        threads.emplace_back([&, t]() {
+            int counter = 0;
+            while (!done.load(std::memory_order_relaxed)) {
+                std::string id = "stress_" + std::to_string(t) + "_" + std::to_string(counter % 10);
+                monitor_->register_stream(id, "plugin_stress");
+                monitor_->update_activity(id);
+                if (counter % 3 == 0) {
+                    monitor_->unregister_stream(id);
+                }
+                counter++;
+            }
+        });
+    }
+
+    auto wall_start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(kTestDuration);
+    done.store(true, std::memory_order_relaxed);
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    auto wall_end = std::chrono::steady_clock::now();
+    auto wall_elapsed = std::chrono::duration_cast<std::chrono::seconds>(wall_end - wall_start).count();
+
+    monitor_->stop();
+
+    EXPECT_LT(wall_elapsed, 10) << "Concurrent stress test took too long, possible deadlock";
 }
 
 } // namespace

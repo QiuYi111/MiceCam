@@ -41,7 +41,8 @@ private:
     ClockFn clock_;
     uint64_t stall_timeout_ms_;
     std::atomic<bool> running_{false};
-    std::jthread monitor_thread_;
+    std::atomic<bool> stop_requested_{false};
+    std::thread monitor_thread_;
 
     std::mutex mutex_;
     std::unordered_map<std::string, std::chrono::steady_clock::time_point> last_active_;

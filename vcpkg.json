@@ -6,6 +6,8 @@
       "name": "ffmpeg",
       "features": ["avcodec", "avformat", "avdevice", "swscale", "x264", "gpl"]
     },
+    "protobuf",
+    "grpc",
     "spdlog",
     "nlohmann-json",
     "gtest",

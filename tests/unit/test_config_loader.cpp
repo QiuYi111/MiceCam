@@ -134,7 +134,7 @@ TEST(ConfigLoader, SavePersistsNewSettingsProperties) {
 }
 
 TEST(ConfigLoader, SavePersistsUiEditableSettings) {
-    const std::string path = "/tmp/micecam_ui_settings_test.json";
+    const std::string path = std::string(TEST_DIR) + "/micecam_ui_settings_test.json";
     std::remove(path.c_str());
 
     micecam::infrastructure::ConfigLoader config;

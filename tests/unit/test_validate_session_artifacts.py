@@ -10,6 +10,7 @@ Run: python3 -m pytest tests/unit/test_validate_session_artifacts.py -v
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -31,6 +32,15 @@ from validate_session_artifacts import (
 
 
 class TestValidateMP4(unittest.TestCase):
+    @staticmethod
+    def _unlink(path, retries=5, delay=0.1):
+        for _ in range(retries):
+            try:
+                os.unlink(path)
+                return
+            except PermissionError:
+                time.sleep(delay)
+
     def test_missing_file(self):
         r = validate_mp4("/nonexistent/video.mp4")
         self.assertEqual(r.status, "FAIL")
@@ -40,22 +50,24 @@ class TestValidateMP4(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             f.write(b"")
             f.flush()
+            f.close()
             try:
                 r = validate_mp4(f.name)
                 self.assertEqual(r.status, "FAIL")
                 self.assertIn("empty", r.message)
             finally:
-                os.unlink(f.name)
+                self._unlink(f.name)
 
     def test_non_mp4_file_ffprobe_skip_or_fail(self):
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             f.write(b"This is not an MP4 file at all, just garbage data")
             f.flush()
+            f.close()
             try:
                 r = validate_mp4(f.name)
                 self.assertIn(r.status, ("FAIL", "SKIP"))
             finally:
-                os.unlink(f.name)
+                self._unlink(f.name)
 
 
 class TestValidateSRT(unittest.TestCase):

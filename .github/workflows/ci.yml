@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -64,6 +65,8 @@ jobs:
           path: |
             ${{ github.workspace }}/vcpkg_installed
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
 
       - name: Install vcpkg deps (Windows)
         if: runner.os == 'Windows'

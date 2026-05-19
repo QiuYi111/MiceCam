@@ -123,7 +123,6 @@ add_library(micecam_encoding STATIC
     internal/infrastructure/FFmpegCameraBackend.cpp
     internal/infrastructure/PluginRingReader.cpp
     internal/infrastructure/PluginStreamConsumer.cpp
-    internal/infrastructure/PosixSharedMemory.cpp
     internal/infrastructure/SharedMemoryBackend.cpp
     internal/infrastructure/ResourceManager.cpp
     internal/infrastructure/StreamLivenessMonitor.cpp
@@ -146,13 +145,23 @@ target_link_libraries(micecam_encoding PUBLIC
 )
 
     target_compile_options(micecam_encoding PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
+    )
+
+    target_compile_definitions(micecam_encoding PRIVATE
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
+        $<$<PLATFORM_ID:Windows>:_CRT_SECURE_NO_WARNINGS>
     )
 
     if(WIN32)
         target_sources(micecam_encoding PRIVATE
             internal/infrastructure/Win32SharedMemory.cpp
+        )
+    else()
+        target_sources(micecam_encoding PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
         )
     endif()
 
@@ -290,9 +299,18 @@ if(BUILD_PLUGINS)
         cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
         cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
         cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
-        internal/infrastructure/PosixSharedMemory.cpp
         internal/infrastructure/SharedMemoryBackend.cpp
     )
+
+    if(WIN32)
+        target_sources(test_ffmpeg_plugin_server PRIVATE
+            internal/infrastructure/Win32SharedMemory.cpp
+        )
+    else()
+        target_sources(test_ffmpeg_plugin_server PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
+        )
+    endif()
 
     target_include_directories(test_ffmpeg_plugin_server PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -318,12 +336,14 @@ if(BUILD_PLUGINS)
     )
 
     target_compile_options(test_ffmpeg_plugin_server PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
     )
 
     target_compile_definitions(test_ffmpeg_plugin_server PRIVATE
         _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
     )
 
     set_target_properties(test_ffmpeg_plugin_server PROPERTIES
@@ -341,9 +361,17 @@ if(BUILD_PLUGINS)
         cmd/plugins/micecam_ffmpeg/AVFoundationEnumerator.cpp
         cmd/plugins/micecam_ffmpeg/RingFrameProducer.cpp
         cmd/plugins/micecam_ffmpeg/PlatformUtil.cpp
-        internal/infrastructure/PosixSharedMemory.cpp
         internal/infrastructure/SharedMemoryBackend.cpp
     )
+    if(WIN32)
+        target_sources(test_negative_plugin_rpcs PRIVATE
+            internal/infrastructure/Win32SharedMemory.cpp
+        )
+    else()
+        target_sources(test_negative_plugin_rpcs PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
+        )
+    endif()
     target_include_directories(test_negative_plugin_rpcs PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/api
@@ -365,11 +393,13 @@ if(BUILD_PLUGINS)
         PkgConfig::nlohmann_json
     )
     target_compile_options(test_negative_plugin_rpcs PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
     )
     target_compile_definitions(test_negative_plugin_rpcs PRIVATE
         _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
     )
     set_target_properties(test_negative_plugin_rpcs PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
@@ -634,12 +664,14 @@ if(BUILD_PLUGINS)
     )
 
     target_compile_options(test_oak_plugin_server PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
     )
 
     target_compile_definitions(test_oak_plugin_server PRIVATE
         _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+        $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+        $<$<PLATFORM_ID:Windows>:NOMINMAX>
     )
 
     set_target_properties(test_oak_plugin_server PROPERTIES

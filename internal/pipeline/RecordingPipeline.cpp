@@ -242,7 +242,11 @@ bool RecordingPipeline::start_reconnect(const std::string& stream_id, int reconn
     uint64_t remaining_ns = now_ns % 1000000000ULL;
     uint64_t microseconds = remaining_ns / 1000ULL;
     struct tm tm_buf;
+#ifdef _WIN32
+    localtime_s(&tm_buf, &total_sec);
+#else
     localtime_r(&total_sec, &tm_buf);
+#endif
     char time_buf[64];
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S", &tm_buf);
     char iso_buf[96];

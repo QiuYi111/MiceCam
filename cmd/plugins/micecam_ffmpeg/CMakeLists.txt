@@ -7,6 +7,7 @@ find_program(PROTOC protoc REQUIRED)
 find_program(GRPC_CPP_PLUGIN
     NAMES grpc_cpp_plugin
     HINTS
+        /usr/bin
         /usr/local/bin
         /opt/homebrew/bin
         ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/tools/grpc
@@ -45,9 +46,18 @@ set(PLUGIN_SOURCES
     AVFoundationEnumerator.cpp
     RingFrameProducer.cpp
     PlatformUtil.cpp
-    ${CMAKE_SOURCE_DIR}/internal/infrastructure/PosixSharedMemory.cpp
     ${CMAKE_SOURCE_DIR}/internal/infrastructure/SharedMemoryBackend.cpp
 )
+
+if(WIN32)
+    list(APPEND PLUGIN_SOURCES
+        ${CMAKE_SOURCE_DIR}/internal/infrastructure/Win32SharedMemory.cpp
+    )
+else()
+    list(APPEND PLUGIN_SOURCES
+        ${CMAKE_SOURCE_DIR}/internal/infrastructure/PosixSharedMemory.cpp
+    )
+endif()
 
 set(PLUGIN_PROTO_SOURCES
     ${PROTO_GEN_DIR}/micecam/camera_plugin.pb.cc
@@ -67,12 +77,6 @@ target_include_directories(micecam_ffmpeg_plugin PRIVATE
     ${CMAKE_SOURCE_DIR}/api
     ${CMAKE_SOURCE_DIR}/internal
 )
-
-if(WIN32)
-    target_sources(micecam_ffmpeg_plugin PRIVATE
-        ${CMAKE_SOURCE_DIR}/internal/infrastructure/Win32SharedMemory.cpp
-    )
-endif()
 
 # macOS: Add Homebrew include paths
 if(APPLE)
@@ -103,4 +107,11 @@ set_target_properties(micecam_ffmpeg_plugin PROPERTIES
 # Avoid C++17 deprecation warnings from gRPC/abseil compiled under C++20
 target_compile_definitions(micecam_ffmpeg_plugin PRIVATE
     _LIBCPP_ENABLE_CXX20_REMOVED_ALLOCATOR_MEMBERS
+    $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
+    $<$<PLATFORM_ID:Windows>:NOMINMAX>
+)
+
+target_compile_options(micecam_ffmpeg_plugin PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4 /Zc:designatedInitializers>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
 )

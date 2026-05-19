@@ -1,3 +1,4 @@
+#ifndef _WIN32
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -415,3 +416,4 @@ TEST(PluginRingReaderTest, MultiplePayloadKinds) {
     reader.close();
     ring.destroy();
 }
+#endif // _WIN32

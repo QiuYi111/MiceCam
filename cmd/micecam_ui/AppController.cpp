@@ -27,6 +27,10 @@ AppController::AppController(QObject* parent)
     plugin_registry_.initialize();
     manager_.set_plugin_registry(&plugin_registry_);
     setupCrashAlertHandler();
+
+    metrics_timer_ = new QTimer(this);
+    metrics_timer_->setInterval(1000);
+    connect(metrics_timer_, &QTimer::timeout, this, [this] { pushLiveMetrics(); });
 }
 
 QAbstractListModel* AppController::cameraModel() const { return camera_model_; }
@@ -263,6 +267,10 @@ bool AppController::startRecording() {
 
     session_start_ = std::chrono::steady_clock::now();
     recording_ = true;
+    stream_frame_counts_.clear();
+    stream_drop_counts_.clear();
+    last_metrics_push_ = std::chrono::steady_clock::now();
+    metrics_timer_->start();
     emit isRecordingChanged();
     emit canStartRecordingChanged();
     emit recordButtonTextChanged();
@@ -273,6 +281,7 @@ bool AppController::startRecording() {
 void AppController::stopRecording() {
     if (!recording_) return;
 
+    metrics_timer_->stop();
     stopCaptureLoop();
     pipeline_.stop();
 
@@ -573,9 +582,11 @@ void AppController::captureLoop() {
             if (!active.stream->read_frame(bytes, pts))
                 continue;
 
-            pipeline::FrameData frame;
-            frame.stream_id = active.config.device_id + "_" +
+            std::string stream_id = active.config.device_id + "_" +
                 std::to_string(active.config.stream_index);
+
+            pipeline::FrameData frame;
+            frame.stream_id = stream_id;
             frame.data = bytes.data();
             frame.size = bytes.size();
             frame.width = active.stream->width();
@@ -586,6 +597,8 @@ void AppController::captureLoop() {
             if (pipeline_.push_frame(frame)) {
                 total_frames_++;
                 bytes_written_ += bytes.size();
+                stream_frame_counts_[stream_id]++;
+                stream_drop_counts_[stream_id] += frame.dropped_frame_count;
             }
         }
         QMetaObject::invokeMethod(this, [this] { refreshLiveStatus(); },
@@ -611,6 +624,29 @@ void AppController::refreshLiveStatus() {
     emit logEntriesChanged();
 }
 
+void AppController::pushLiveMetrics() {
+    if (!recording_) return;
+
+    auto now = std::chrono::steady_clock::now();
+    double elapsed_sec = std::chrono::duration<double>(now - last_metrics_push_).count();
+    if (elapsed_sec < 0.5) return;
+    last_metrics_push_ = now;
+
+    for (auto& active : active_streams_) {
+        std::string sid = active.config.device_id + "_" +
+            std::to_string(active.config.stream_index);
+
+        uint64_t frames = stream_frame_counts_[sid];
+        double fps = elapsed_sec > 0 ? static_cast<double>(frames) / elapsed_sec : 0.0;
+        uint64_t drops = stream_drop_counts_[sid];
+
+        QString deviceId = QString::fromStdString(active.config.device_id);
+        source_model_->updateDeviceMetrics(deviceId, fps, static_cast<int>(drops));
+
+        stream_frame_counts_[sid] = 0;
+    }
+}
+
 void AppController::setupCrashAlertHandler() {
     plugin_registry_.set_crash_alert_callback([this](const std::string& plugin_id) {
         QMetaObject::invokeMethod(this, [this, plugin_id] {
@@ -620,9 +656,17 @@ void AppController::setupCrashAlertHandler() {
 }
 
 void AppController::handlePluginCrash(const std::string& pluginId) {
+    QString pluginName = QString::fromStdString(pluginId);
     pushLogEntry(log_entries_,
-        QStringLiteral("[WARN] Plugin crashed: %1").arg(QString::fromStdString(pluginId)));
-    emit pluginCrashAlert(QString::fromStdString(pluginId));
+        QStringLiteral("[WARN] Plugin crashed: %1").arg(pluginName));
+
+    alert_model_->pushAlert(
+        QStringLiteral("Plugin crash detected — recovering..."),
+        pluginName, 1,
+        QStringLiteral("crash_%1").arg(pluginName),
+        true);
+
+    emit pluginCrashAlert(pluginName);
 
     auto streams = plugin_registry_.get_streams_for_plugin(pluginId);
     for (const auto& stream_id : streams) {
@@ -631,23 +675,42 @@ void AppController::handlePluginCrash(const std::string& pluginId) {
 
     auto result = plugin_registry_.handle_plugin_crash(pluginId);
     if (result.restart_succeeded) {
+        alert_model_->dismissBySource(pluginName);
         pushLogEntry(log_entries_,
             QStringLiteral("[INFO] Plugin %1 restarted, starting reconnect recording")
-                .arg(QString::fromStdString(pluginId)));
+                .arg(pluginName));
         int reconnect_idx = 1;
         for (const auto& stream_id : result.finalized_streams) {
             pipeline_.start_reconnect(stream_id, reconnect_idx);
         }
+    } else {
+        alert_model_->dismissBySource(pluginName);
+        alert_model_->pushAlert(
+            QStringLiteral("Plugin recovery failed — %1").arg(pluginName),
+            pluginName, 2,
+            QStringLiteral("crash_%1").arg(pluginName),
+            false);
+        pushLogEntry(log_entries_,
+            QStringLiteral("[ERROR] Plugin %1 recovery failed")
+                .arg(pluginName));
     }
 }
 
 void AppController::handleDeviceDisconnect(const std::string& streamId,
                                             const std::string& deviceName) {
+    QString devName = QString::fromStdString(deviceName);
     pushLogEntry(log_entries_,
         QStringLiteral("[WARN] Device disconnected: %1 (stream: %2)")
-            .arg(QString::fromStdString(deviceName),
+            .arg(devName,
                  QString::fromStdString(streamId)));
-    emit deviceDisconnected(QString::fromStdString(deviceName));
+
+    alert_model_->pushAlert(
+        QStringLiteral("Device disconnected: %1 — check connection").arg(devName),
+        devName, 1,
+        QStringLiteral("disconnect_%1").arg(QString::fromStdString(streamId)),
+        false);
+
+    emit deviceDisconnected(devName);
 
     if (recording_) {
         pipeline_.finalize_stream(streamId);

@@ -502,8 +502,10 @@ endif()
 if(BUILD_UI)
     add_micecam_test(test_app_models tests/unit/test_app_models.cpp)
     add_micecam_test(test_app_controller tests/unit/test_app_controller.cpp)
+    add_micecam_test(test_app_alert_notifications tests/unit/test_app_alert_notifications.cpp)
     target_link_libraries(test_app_models PRIVATE Qt6::Core)
     target_link_libraries(test_app_controller PRIVATE Qt6::Core Qt6::Qml)
+    target_link_libraries(test_app_alert_notifications PRIVATE Qt6::Core)
     target_sources(test_app_models PRIVATE
         cmd/micecam_ui/AppCameraModel.cpp
         cmd/micecam_ui/AppAlertModel.cpp
@@ -515,6 +517,9 @@ if(BUILD_UI)
         cmd/micecam_ui/AppSettings.cpp
         cmd/micecam_ui/AppController.cpp
         cmd/micecam_ui/CameraSourceModel.cpp
+    )
+    target_sources(test_app_alert_notifications PRIVATE
+        cmd/micecam_ui/AppAlertModel.cpp
     )
 endif()
 

@@ -5,6 +5,8 @@
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "domain/PluginDeviceInfo.h"
@@ -42,6 +44,7 @@ public:
 
     void populateFromSources(const std::vector<domain::PluginSource>& sources,
                              const std::vector<domain::PluginDeviceInfo>& devices);
+    Q_INVOKABLE void updateDeviceMetrics(const QString& deviceId, double fps, int dropCount);
     Q_INVOKABLE QVariantMap getDeviceAt(int sourceIndex, int deviceIndex) const;
     Q_INVOKABLE QVariantMap getSourceAt(int sourceIndex) const;
 
@@ -52,13 +55,14 @@ private:
         bool is_expanded = true;
     };
     std::vector<SourceRow> rows_;
+    std::unordered_map<std::string, std::pair<double, int>> deviceMetrics_;
 
     static int availableDeviceCount(const SourceRow& row);
     static QString diagnosticsLabel(domain::PluginDiagnosticsState state);
     static QString sourceTypeLabel(domain::PluginSourceType type);
-    static QVariantMap deviceToMap(const domain::PluginSource& source,
-                                   const domain::PluginDeviceInfo& device);
-    static QVariantList devicesToList(const SourceRow& row);
+    QVariantMap deviceToMap(const domain::PluginSource& source,
+                            const domain::PluginDeviceInfo& device) const;
+    QVariantList devicesToList(const SourceRow& row) const;
 };
 
 } // namespace micecam::ui

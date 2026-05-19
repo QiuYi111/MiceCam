@@ -7,10 +7,12 @@
 namespace micecam::ui {
 
 struct AlertRow {
+    QString alertId;
     int severity = 0;
     QString title;
     QString source;
     QString relativeTime;
+    bool autoDismiss = false;
 };
 
 class AppAlertModel : public QAbstractListModel {
@@ -33,6 +35,10 @@ public:
 
     int badgeCount() const;
     void replaceRows(std::vector<AlertRow> rows);
+    void pushAlert(const QString& title, const QString& source, int severity = 1,
+                   const QString& alertId = QString(), bool autoDismiss = false);
+    void dismissAlert(const QString& alertId);
+    void dismissBySource(const QString& source);
     void clear();
 
 signals:

@@ -61,6 +61,10 @@ void StreamLivenessMonitor::set_all_stalled_callback(AllStalledCallback cb) {
     all_stalled_cb_ = std::move(cb);
 }
 
+int StreamLivenessMonitor::cycle_count() const {
+    return cycle_count_.load();
+}
+
 void StreamLivenessMonitor::monitor_loop() {
     while (running_.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -98,6 +102,7 @@ void StreamLivenessMonitor::monitor_loop() {
                 }
             }
         }
+        cycle_count_++;
     }
 }
 

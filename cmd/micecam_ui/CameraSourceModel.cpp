@@ -158,7 +158,7 @@ QString CameraSourceModel::sourceTypeLabel(domain::PluginSourceType type) {
 }
 
 QVariantMap CameraSourceModel::deviceToMap(const domain::PluginSource& source,
-                                           const domain::PluginDeviceInfo& d) {
+                                           const domain::PluginDeviceInfo& d) const {
     QVariantMap map;
     map["deviceId"] = QString::fromStdString(d.device_id);
     map["cameraId"] = QString::fromStdString(d.device_id);
@@ -176,8 +176,17 @@ QVariantMap CameraSourceModel::deviceToMap(const domain::PluginSource& source,
     map["maxWidth"] = d.max_width;
     map["maxHeight"] = d.max_height;
     map["maxFramerate"] = d.max_framerate;
-    map["fps"] = d.max_framerate;
-    map["dropCount"] = 0;
+
+    QString deviceId = QString::fromStdString(d.device_id);
+    auto it = deviceMetrics_.find(d.device_id);
+    if (it != deviceMetrics_.end()) {
+        map["fps"] = it->second.first;
+        map["dropCount"] = it->second.second;
+    } else {
+        map["fps"] = d.max_framerate;
+        map["dropCount"] = 0;
+    }
+
     map["isRecording"] = false;
     map["exclusiveResourceId"] = d.exclusive_resource_id
         ? QString::fromStdString(*d.exclusive_resource_id)
@@ -188,12 +197,26 @@ QVariantMap CameraSourceModel::deviceToMap(const domain::PluginSource& source,
     return map;
 }
 
-QVariantList CameraSourceModel::devicesToList(const SourceRow& row) {
+QVariantList CameraSourceModel::devicesToList(const SourceRow& row) const {
     QVariantList list;
     for (const auto& device : row.devices) {
         list.append(deviceToMap(row.source, device));
     }
     return list;
+}
+
+void CameraSourceModel::updateDeviceMetrics(const QString& deviceId, double fps, int dropCount) {
+    std::string id = deviceId.toStdString();
+    deviceMetrics_[id] = {fps, dropCount};
+    for (int i = 0; i < static_cast<int>(rows_.size()); ++i) {
+        for (const auto& d : rows_[i].devices) {
+            if (d.device_id == id) {
+                QModelIndex idx = index(i, 0);
+                emit dataChanged(idx, idx, {DevicesRole});
+                return;
+            }
+        }
+    }
 }
 
 } // namespace micecam::ui

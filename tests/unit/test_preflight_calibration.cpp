@@ -8,6 +8,12 @@
 
 using namespace micecam;
 
+#ifdef _WIN32
+constexpr const char* TEST_TMP = ".";
+#else
+constexpr const char* TEST_TMP = "/tmp";
+#endif
+
 class MockCalibrationClient : public pipeline::ICalibrationClient {
 public:
     domain::CalibrationResult calibrate(
@@ -252,7 +258,7 @@ TEST(PreflightCalibration, FullValidateWithCalibrationAndStress) {
 
     pipeline::PreflightValidator validator;
     auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
-    auto result = validator.validate(configs, "/tmp", 60,
+    auto result = validator.validate(configs, TEST_TMP, 60,
                                       &cal_client, &stream_ctrl, 50);
 
     EXPECT_TRUE(result.passed);
@@ -272,7 +278,7 @@ TEST(PreflightCalibration, FullValidateFailsWhenPhase1Blocked) {
 
     pipeline::PreflightValidator validator;
     auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
-    auto result = validator.validate(configs, "/tmp", 60,
+    auto result = validator.validate(configs, TEST_TMP, 60,
                                       &cal_client, &stream_ctrl, 50);
 
     EXPECT_FALSE(result.passed);
@@ -292,7 +298,7 @@ TEST(PreflightCalibration, FullValidateWithPhase2Warnings) {
 
     pipeline::PreflightValidator validator;
     auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
-    auto result = validator.validate(configs, "/tmp", 60,
+    auto result = validator.validate(configs, TEST_TMP, 60,
                                       &cal_client, &stream_ctrl, 50);
 
     EXPECT_TRUE(result.passed);
@@ -313,7 +319,7 @@ TEST(PreflightCalibration, KeyframeIntervalPropagatedToOpenStream) {
 
     pipeline::PreflightValidator validator;
     auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
-    auto result = validator.validate(configs, "/tmp", 60,
+    auto result = validator.validate(configs, TEST_TMP, 60,
                                       &cal_client, &stream_ctrl, 50);
 
     EXPECT_TRUE(result.passed);
@@ -331,7 +337,7 @@ TEST(PreflightCalibration, KeyframeIntervalDefaultWithoutCalibration) {
 
     pipeline::PreflightValidator validator;
     auto configs = {makeConfig("cam0", 0, 1920, 1080, 30)};
-    auto result = validator.validate(configs, "/tmp", 60,
+    auto result = validator.validate(configs, TEST_TMP, 60,
                                       nullptr, &stream_ctrl, 50);
 
     EXPECT_TRUE(result.passed);

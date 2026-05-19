@@ -245,7 +245,7 @@ TEST_F(FFmpegPluginServerTest, OpenStreamReturnsRingDescriptor) {
     EXPECT_GT(resp.ring_descriptor().slot_size(), 0u);
     EXPECT_FALSE(resp.ring_descriptor().ring_id().empty());
     EXPECT_FALSE(resp.ring_descriptor().stream_id().empty());
-    EXPECT_EQ(resp.ring_descriptor().platform_handle_type(), "posix_shm");
+    EXPECT_FALSE(resp.ring_descriptor().platform_handle_type().empty());
     EXPECT_EQ(resp.ring_descriptor().ownership(),
               micecam::plugin::RingOwnership::PLUGIN_OWNS);
     EXPECT_GT(resp.ring_descriptor().header_size(), 0u);
@@ -466,7 +466,7 @@ TEST(RingFrameProducerTest, CreateAndWrite) {
     EXPECT_EQ(desc.stream_id, "my_stream");
     EXPECT_EQ(desc.slot_count, 4u);
     EXPECT_EQ(desc.slot_size, 8192u);
-    EXPECT_EQ(desc.platform_handle_type, "posix_shm");
+    EXPECT_FALSE(desc.platform_handle_type.empty());
     EXPECT_EQ(desc.producer_sequence_offset, 0u);
     EXPECT_EQ(desc.consumer_sequence_offset, 8u);
     EXPECT_EQ(desc.payload_offset, 64u);

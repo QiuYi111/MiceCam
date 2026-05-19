@@ -1,0 +1,27 @@
+{
+  "id": "micecam.ffmpeg",
+  "name": "MiceCam FFmpeg Capture",
+  "version": "1.0.0",
+  "plugin_api_version": 2,
+  "min_micecam_version": "2.0.0",
+  "description": "Official MiceCam camera backend using FFmpeg/libavdevice for AVFoundation and V4L2 video capture.",
+  "author": "MiceCam Team",
+  "platforms": {
+    "darwin": {
+      "entrypoint": "bin/micecam-ffmpeg",
+      "arch": "universal"
+    },
+    "linux": {
+      "entrypoint": "bin/micecam-ffmpeg",
+      "arch": "x86_64"
+    },
+    "win32": {
+      "entrypoint": "bin/micecam-ffmpeg.exe",
+      "arch": "x86_64"
+    }
+  },
+  "required_features": [],
+  "optional_features": [],
+  "supported_process_models": ["SINGLETON", "PER_DEVICE"],
+  "preferred_process_model": "PER_DEVICE"
+}

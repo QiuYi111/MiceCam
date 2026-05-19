@@ -1,7 +1,7 @@
 # Neural-Grid Standard Makefile
 # "The only valid interface to the project"
 
-.PHONY: init up down proto test lint verify clean help build
+.PHONY: init up down proto test lint verify verify-ai clean help build spec-init
 
 # --- Configuration ---
 PROJECT_NAME := micecam
@@ -99,3 +99,16 @@ package: ## Build Python Package (Wheel/Sdist)
 
 verify: build lint test ## Run full verification (Pre-Push Gate)
 	@echo "🛡️  Full System Verification Passed."
+
+verify-ai: ## Run AI compliance checks (TODO scan, file integrity)
+	@echo "🤖 Running AI Compliance Checks..."
+	@chmod +x scripts/verify-ai.sh && scripts/verify-ai.sh
+	@echo "✅ AI compliance check passed."
+
+spec-init: ## Scaffold a new feature spec directory (usage: make spec-init FEATURE=NNN-name)
+	@if [ -z "$(FEATURE)" ]; then \
+		echo "Usage: make spec-init FEATURE=001-my-feature"; \
+		exit 1; \
+	fi
+	@mkdir -p specs/$(FEATURE)
+	@echo "✅ specs/$(FEATURE)/ created."

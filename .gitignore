@@ -21,6 +21,7 @@ recordings/
 *.jsonl
 # Python caches
 *.pyc
+old/
 
 # PyInstaller
 build/

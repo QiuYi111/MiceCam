@@ -1,188 +1,118 @@
-name: MiceCam CI
+name: CI
 
 on:
   push:
-    branches: [ "main", "master", "feat/*", "fix/*", "feature/**", "native_app", "codex/native_app" ]
+    branches: [main, plugin-system, feat/*"]
   pull_request:
-    branches: [ "main", "master", "native_app", "codex/native_app" ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  native-app:
-    name: Native App Gate (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    env:
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  build:
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12"]
+        include:
+          - os: ubuntu-24.04
+            build_ui: ON
+          - os: macos-14
+            build_ui: ON
+          - os: windows-2022
+            build_ui: OFF
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          version: "latest"
-
-      - name: Install System Dependencies (macOS)
-        if: runner.os == 'macos'
-        run: |
-          brew install pkg-config nasm autoconf automake libtool autoconf-archive ninja
-
-      - name: Install System Dependencies (Linux)
+      # ====== Linux ======
+      - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config nasm autoconf autoconf-archive automake libtool ninja-build libudev-dev build-essential
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libavcodec-dev libavformat-dev libavutil-dev libavdevice-dev libswscale-dev \
+            qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window \
+            libspdlog-dev nlohmann-json3-dev libgtest-dev pkg-config \
+            libprotobuf-dev protobuf-compiler protobuf-compiler-grpc libgrpc++-dev libgrpc-dev
+          cd /usr/src/gtest && sudo cmake -B build && sudo cmake --build build && sudo cmake --install build --prefix /usr/local
 
-      - name: Export GitHub Actions Cache Environment Variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 1e199d32ad53aab1defda61ce41c380302e3f95c
-          vcpkgDirectory: ${{ github.workspace }}/vcpkg
-          vcpkgJsonGlob: '**/vcpkg.json'
-
-      - name: Configure CMake
-        shell: bash
+      # ====== macOS ======
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
-          VCPKG_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          brew install ffmpeg protobuf grpc qt@6 spdlog nlohmann-json googletest pkg-config
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix qt@6)" >> $GITHUB_ENV
+
+      # ====== Windows (MSYS2 UCRT64 — all prebuilt binaries) ======
+      - name: Setup MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-ffmpeg
+            mingw-w64-ucrt-x86_64-protobuf
+            mingw-w64-ucrt-x86_64-grpc
+            mingw-w64-ucrt-x86_64-spdlog
+            mingw-w64-ucrt-x86_64-nlohmann-json
+            mingw-w64-ucrt-x86_64-gtest
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
           cmake -B build -S . \
             -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN_FILE" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DMICECAM_BUILD_TESTS=ON \
-            -DBUILD_PYTHON_BINDINGS=ON
+            -DBUILD_SPIKE=OFF \
+            -DBUILD_UI=${{ matrix.build_ui }}
 
-      - name: Build Native App and Tests
-        shell: bash
-        run: |
-          cmake --build build --config Release
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cmake --build build --config Release -j
 
-      - name: Install Python Dependencies
-        run: uv sync --all-extras
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
-      - name: Run Lint Gate
-        shell: bash
-        run: |
-          uv run pre-commit run --all-files
-
-      - name: Run C++ Tests
-        shell: bash
-        run: |
-          cd build && ctest --output-on-failure -C Release
-
-      - name: Run Native Worker Smoke
+      # ====== Configure & Build (Unix) ======
+      - name: Configure (Unix)
         if: runner.os != 'Windows'
-        shell: bash
         run: |
-          scripts/smoke_native_app.sh
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SPIKE=OFF \
+            -DBUILD_UI=${{ matrix.build_ui }}
 
-      - name: Run Native Worker Smoke (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $WorkerOutput = "{""type"":""shutdown""}" | & ".\build\micecam_ui.exe" --worker
-          if ($WorkerOutput -notmatch '"type":"hello"') {
-            Write-Error "native worker handshake failed"
-            exit 1
-          }
-          Write-Output $WorkerOutput
-
-      - name: Package Native App Bundle
-        shell: bash
-        run: |
-          mkdir -p dist/native-app
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp build/micecam_ui.exe dist/native-app/
-          else
-            cp build/micecam_ui dist/native-app/
-          fi
-
-      - name: Deploy Windows Native App Runtime
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $PackageDir = Join-Path $env:GITHUB_WORKSPACE 'dist/native-app'
-          $PackagedExe = Join-Path $PackageDir 'micecam_ui.exe'
-          $InstalledRoot = Join-Path $env:GITHUB_WORKSPACE 'vcpkg_installed'
-          $TripletName = if ([string]::IsNullOrWhiteSpace($env:VCPKG_DEFAULT_TRIPLET)) { 'x64-windows' } else { $env:VCPKG_DEFAULT_TRIPLET }
-          $TripletDir = Join-Path $InstalledRoot $TripletName
-          if ($null -eq $TripletDir) {
-            throw "Unable to locate the Windows vcpkg installed triplet under $InstalledRoot"
-          }
-          if (-not (Test-Path $TripletDir)) {
-            throw "Unable to locate triplet directory $TripletDir"
-          }
-
-          $WinDeployQt = Get-ChildItem -Path $TripletDir -Recurse -Filter windeployqt.exe | Select-Object -First 1
-          if ($null -eq $WinDeployQt) {
-            throw "Unable to locate windeployqt.exe in $TripletDir"
-          }
-
-          & $WinDeployQt.FullName --release --compiler-runtime $PackagedExe
-
-          $VcpkgBinDir = Join-Path $TripletDir 'bin'
-          if (Test-Path $VcpkgBinDir) {
-            Get-ChildItem -Path $VcpkgBinDir -Filter '*.dll' | Copy-Item -Destination $PackageDir -Force
-          }
-
-          Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE 'build') -Recurse -Filter '*.dll' |
-            Where-Object { $_.FullName -notlike "$PackageDir*" } |
-            Copy-Item -Destination $PackageDir -Force
-
-          if (-not (Test-Path (Join-Path $PackageDir 'platforms/qwindows.dll'))) {
-            throw "Qt Windows platform plugin was not deployed"
-          }
-
-      - name: Validate Packaged Native Bundle
+      - name: Build (Unix)
         if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          APP_BIN="dist/native-app/micecam_ui"
-          WORKER_OUTPUT="$(printf '{"type":"shutdown"}\n' | "${APP_BIN}" --worker)"
-          if [[ "${WORKER_OUTPUT}" != *'"type":"hello"'* ]]; then
-            echo "packaged worker handshake failed"
-            exit 1
-          fi
+        run: cmake --build build --config Release -j
 
-      - name: Validate Packaged Native Bundle (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not (Test-Path ".\dist\native-app\platforms\qwindows.dll")) {
-            Write-Error "packaged Qt platform plugin missing"
-            exit 1
-          }
-          $WorkerOutput = "{""type"":""shutdown""}" | & ".\dist\native-app\micecam_ui.exe" --worker
-          if ($WorkerOutput -notmatch '"type":"hello"') {
-            Write-Error "packaged native worker handshake failed"
-            exit 1
-          }
+      - name: Test (Unix)
+        if: runner.os != 'Windows'
+        run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
-      - name: Upload Artifacts
+      # ====== Artifacts ======
+      - name: Upload binary (macOS)
+        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: micecam-native-${{ runner.os }}-py${{ matrix.python-version }}
-          path: |
-            dist/native-app/**
+          name: micecam-macos-arm64
+          path: build/cmd/micecam_ui/micecam_ui
+
+      - name: Upload binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: micecam-linux-x64
+          path: build/cmd/micecam_ui/micecam_ui

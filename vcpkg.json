@@ -1,33 +1,16 @@
 {
   "name": "micecam",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "dependencies": [
-    "ffmpeg",
-    "opencv4",
+    {
+      "name": "ffmpeg",
+      "features": ["avcodec", "avformat", "avdevice", "swscale", "x264", "gpl"]
+    },
+    "protobuf",
+    "grpc",
+    "spdlog",
     "nlohmann-json",
     "gtest",
-    "pybind11",
-    "bzip2",
-    "liblzma",
-    "zlib",
-    "fp16",
-    {
-      "name": "libarchive",
-      "default-features": false
-    },
-    "spdlog",
-    "ghc-filesystem",
-    "backward-cpp",
-    "libusb",
-    "libnop",
-    "lz4",
-    "neargye-semver",
-    "magic-enum",
-    "eigen3",
-    "argparse",
-    "yaml-cpp",
-    "fmt",
-    "xtensor",
-    "xtl"
+    "pkgconf"
   ]
 }

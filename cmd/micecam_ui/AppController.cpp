@@ -1,12 +1,15 @@
 #include "AppController.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <vector>
 
 #include <nlohmann/json.hpp>
+#include <QCoreApplication>
 
 #include "domain/Capabilities.h"
 #include "domain/PluginManifest.h"
@@ -16,9 +19,40 @@ namespace micecam::ui {
 
 namespace fs = std::filesystem;
 
+namespace {
+
+std::string resolveBundledPluginsDir() {
+    if (const char* override_dir = std::getenv("MICECAM_BUNDLED_PLUGINS_DIR")) {
+        if (*override_dir != '\0') {
+            return fs::absolute(override_dir).lexically_normal().string();
+        }
+    }
+
+    std::vector<fs::path> candidates;
+    candidates.push_back(fs::current_path() / "3rdParty" / "bundled_plugins");
+    candidates.push_back(fs::current_path() / ".." / "3rdParty" / "bundled_plugins");
+
+    const auto app_dir = fs::path(QCoreApplication::applicationDirPath().toStdString());
+    candidates.push_back(app_dir / ".." / ".." / ".." / "3rdParty" / "bundled_plugins");
+    candidates.push_back(app_dir / ".." / "Resources" / "3rdParty" / "bundled_plugins");
+
+    for (const auto& candidate : candidates) {
+        std::error_code ec;
+        const auto normalized = fs::weakly_canonical(candidate, ec);
+        const auto& path = ec ? candidate.lexically_normal() : normalized;
+        if (fs::exists(path) && fs::is_directory(path)) {
+            return path.string();
+        }
+    }
+
+    return candidates.front().lexically_normal().string();
+}
+
+} // namespace
+
 AppController::AppController(QObject* parent)
     : QObject(parent)
-    , plugin_registry_("../3rdParty/bundled_plugins", ".")
+    , plugin_registry_(resolveBundledPluginsDir(), ".")
     , camera_model_(new AppCameraModel(this))
     , source_model_(new CameraSourceModel(this))
     , alert_model_(new AppAlertModel(this))

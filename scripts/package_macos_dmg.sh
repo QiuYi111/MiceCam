@@ -100,9 +100,9 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
 EOF
 
 if command -v macdeployqt >/dev/null 2>&1; then
-  macdeployqt "${APP_DIR}" -always-overwrite
+  macdeployqt "${APP_DIR}" -qmldir="${ROOT_DIR}/cmd/micecam_ui/qml" -always-overwrite
 elif [[ -x "$(brew --prefix qt@6 2>/dev/null)/bin/macdeployqt" ]]; then
-  "$(brew --prefix qt@6)/bin/macdeployqt" "${APP_DIR}" -always-overwrite
+  "$(brew --prefix qt@6)/bin/macdeployqt" "${APP_DIR}" -qmldir="${ROOT_DIR}/cmd/micecam_ui/qml" -always-overwrite
 else
   echo "macdeployqt is missing. Install Qt 6 or add macdeployqt to PATH." >&2
   exit 1

@@ -1,164 +1,58 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$SourceDir,
-
-    [Parameter(Mandatory = $true)]
-    [string]$OutputFile,
-
-    [string]$DirectoryRefId = "INSTALLFOLDER",
+    [string]$SourceDir = "dist\MiceCam",
+    [string]$OutputFile = "packaging\windows\components.wxs",
     [string]$ComponentGroupId = "ProductComponents"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Get-HashSuffix {
-    param([string]$Value)
+if (-not (Test-Path -LiteralPath $SourceDir)) {
+    throw "Source directory not found: $SourceDir"
+}
 
-    $sha1 = [System.Security.Cryptography.SHA1]::Create()
-    try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Value)
-        $hash = $sha1.ComputeHash($bytes)
-        return ([System.BitConverter]::ToString($hash)).Replace("-", "").Substring(0, 10)
-    }
-    finally {
-        $sha1.Dispose()
+$sourcePath = (Resolve-Path -LiteralPath $SourceDir).Path
+$sourcePath = $sourcePath.TrimEnd('\') + '\'
+
+# Generate WiX component manifest
+$components = @()
+$componentIndex = 0
+
+Get-ChildItem -LiteralPath $sourcePath -Recurse -File | ForEach-Object {
+    $relPath = $_.FullName.Substring($sourcePath.Length)
+    $dir = Split-Path -Parent $relPath
+    $componentId = "cmp_" + [string]($componentIndex++).ToString("D5")
+
+    $components += @{
+        Id          = $componentId
+        Guid        = [guid]::NewGuid().ToString("B").ToUpper()
+        Directory   = if ($dir) { "dir_$(($dir -replace '[\\/]', '_'))" } else { "INSTALLFOLDER" }
+        Source      = $_.FullName
+        Name        = $_.Name
     }
 }
 
-function New-WixId {
-    param(
-        [string]$Prefix,
-        [string]$Value
-    )
+# Build XML
+$xml = '<?xml version="1.0" encoding="utf-8"?>' + "`n"
+$xml += '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">' + "`n"
+$xml += "  <Fragment>`n"
+$xml += "    <ComponentGroup Id=`"$ComponentGroupId`" Directory=`"INSTALLFOLDER`">`n"
 
-    $normalized = $Value -replace "[^A-Za-z0-9_\.]", "_"
-    if ([string]::IsNullOrWhiteSpace($normalized)) {
-        $normalized = "root"
-    }
-    if ($normalized[0] -match "[0-9]") {
-        $normalized = "_$normalized"
-    }
-    $normalized = $normalized.Trim("_")
-    if ([string]::IsNullOrWhiteSpace($normalized)) {
-        $normalized = "root"
-    }
-
-    $hash = Get-HashSuffix -Value $Value
-    $maxStemLength = 48
-    if ($normalized.Length -gt $maxStemLength) {
-        $normalized = $normalized.Substring(0, $maxStemLength)
-    }
-
-    return "{0}_{1}_{2}" -f $Prefix, $normalized, $hash
+foreach ($c in $components) {
+    $xml += "      <Component Id=`"$($c.Id)`" Guid=`"$($c.Guid)`">`n"
+    $xml += "        <File Id=`"file_$($c.Id)`" Source=`"$($c.Source)`" />`n"
+    $xml += "      </Component>`n"
 }
 
-function Escape-Xml {
-    param([string]$Value)
+$xml += "    </ComponentGroup>`n"
+$xml += "  </Fragment>`n"
+$xml += "</Wix>`n"
 
-    return [System.Security.SecurityElement]::Escape($Value)
+$outDir = Split-Path -Parent $OutputFile
+if ($outDir -and -not (Test-Path -LiteralPath $outDir)) {
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 }
 
-$resolvedSourceDir = (Resolve-Path $SourceDir).Path
-$outputDir = Split-Path -Parent $OutputFile
-if ($outputDir -and -not (Test-Path $outputDir)) {
-    New-Item -ItemType Directory -Path $outputDir | Out-Null
-}
-
-$componentIds = New-Object System.Collections.Generic.List[string]
-
-function Build-DirectoryXml {
-    param(
-        [string]$CurrentDir,
-        [string]$RelativePath,
-        [int]$IndentLevel
-    )
-
-    $indent = "  " * $IndentLevel
-    $lines = New-Object System.Collections.Generic.List[string]
-
-    $files = Get-ChildItem -LiteralPath $CurrentDir -File | Sort-Object Name
-    foreach ($file in $files) {
-        $relativeFile = if ([string]::IsNullOrEmpty($RelativePath)) {
-            $file.Name
-        }
-        else {
-            Join-Path $RelativePath $file.Name
-        }
-
-        $componentId = New-WixId -Prefix "CMP" -Value $relativeFile
-        $fileId = New-WixId -Prefix "FIL" -Value $relativeFile
-        $componentIds.Add($componentId) | Out-Null
-
-        $source = Escape-Xml $file.FullName
-        $name = Escape-Xml $file.Name
-
-        $lines.Add("$indent<Component Id=`"$componentId`">") | Out-Null
-        $lines.Add("$indent  <File Id=`"$fileId`" Source=`"$source`" Name=`"$name`" />") | Out-Null
-        $lines.Add("$indent</Component>") | Out-Null
-    }
-
-    $directories = Get-ChildItem -LiteralPath $CurrentDir -Directory | Sort-Object Name
-    foreach ($directory in $directories) {
-        $relativeChild = if ([string]::IsNullOrEmpty($RelativePath)) {
-            $directory.Name
-        }
-        else {
-            Join-Path $RelativePath $directory.Name
-        }
-
-        $childLines = Build-DirectoryXml -CurrentDir $directory.FullName -RelativePath $relativeChild -IndentLevel ($IndentLevel + 1)
-        if ($childLines.Count -eq 0) {
-            continue
-        }
-
-        $directoryId = New-WixId -Prefix "DIR" -Value $relativeChild
-        $name = Escape-Xml $directory.Name
-
-        $lines.Add("$indent<Directory Id=`"$directoryId`" Name=`"$name`">") | Out-Null
-        foreach ($childLine in $childLines) {
-            $lines.Add($childLine) | Out-Null
-        }
-        $lines.Add("$indent</Directory>") | Out-Null
-    }
-
-    return $lines
-}
-
-$directoryLines = Build-DirectoryXml -CurrentDir $resolvedSourceDir -RelativePath "" -IndentLevel 2
-
-$componentRefLines = New-Object System.Collections.Generic.List[string]
-foreach ($componentId in $componentIds) {
-    $componentRefLines.Add("    <ComponentRef Id=`"$componentId`" />") | Out-Null
-}
-
-$content = @(
-    "<Wix xmlns=`"http://wixtoolset.org/schemas/v4/wxs`">",
-    "  <Fragment>",
-    "    <DirectoryRef Id=`"$DirectoryRefId`">"
-)
-
-foreach ($line in $directoryLines) {
-    $content += $line
-}
-
-$content += @(
-    "    </DirectoryRef>",
-    "  </Fragment>",
-    "  <Fragment>",
-    "    <ComponentGroup Id=`"$ComponentGroupId`">"
-)
-
-foreach ($line in $componentRefLines) {
-    $content += $line
-}
-
-$content += @(
-    "    </ComponentGroup>",
-    "  </Fragment>",
-    "</Wix>"
-)
-
-[System.IO.File]::WriteAllLines($OutputFile, $content, [System.Text.UTF8Encoding]::new($false))
-Write-Host "Generated WiX component manifest: $OutputFile"
+Set-Content -LiteralPath $OutputFile -Value $xml -Encoding UTF8
+Write-Host "WiX components written to $OutputFile ($($components.Count) files)"

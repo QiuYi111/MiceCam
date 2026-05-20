@@ -2,9 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [main, plugin-system, feat/*"]
+    branches:
+      - main
+      - dev
+      - beta
+      - plugin-system
+      - "feat/**"
+      - "codex/**"
   pull_request:
-    branches: [main]
+    branches: [main, dev, beta]
   workflow_dispatch:
 
 jobs:

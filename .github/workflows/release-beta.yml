@@ -216,29 +216,24 @@ jobs:
           # Write README
           cat > "${STAGE}/README-beta.txt" <<'EOF'
           MiceCam native beta package.
-          This MSI installs the native Qt/QML application plus official bundled camera plugins.
+          Extract this ZIP and run MiceCam.exe from the extracted directory.
           EOF
 
-      - name: Build native Windows MSI
-        shell: pwsh
+      - name: Package Windows ZIP
+        shell: msys2 {0}
         run: |
-          $version = "${env:GITHUB_REF_NAME}" -replace '^v',''
-          if ($version -match '^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$') {
-            $msiVersion = "$($Matches[1]).$($Matches[2]).$($Matches[4])"
-          } else {
-            $msiVersion = ($version -split '-')[0]
-          }
-          powershell -ExecutionPolicy Bypass -File .\scripts\package_windows_native_msi.ps1 `
-            -BuildDir build `
-            -DistDir dist `
-            -Version $msiVersion `
-            -SkipStage
+          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${VERSION%%-*}"
+          ARCHIVE="MiceCam-${VERSION}-windows-x64.zip"
+          cd dist
+          7z a "${ARCHIVE}" MiceCam/ -mx=5
+          mv "${ARCHIVE}" ..
 
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: MiceCam-windows-x64
-          path: dist/MiceCam-*-windows-x64.msi
+          path: MiceCam-*-windows-x64.zip
 
   publish:
     name: Publish beta prerelease
@@ -279,6 +274,6 @@ jobs:
 
             Notes:
             - macOS artifact is a DMG containing a native .app bundle.
-            - Windows artifact is a native Qt/QML MSI containing official bundled plugins.
+            - Windows artifact is a ZIP containing the native Qt/QML application plus official bundled plugins.
             - Linux artifact is a tarball containing the native UI binary plus official bundled plugins.
             - HIL/OAK hardware validation is expected to run outside GitHub-hosted runners.

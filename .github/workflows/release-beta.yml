@@ -220,12 +220,10 @@ jobs:
           EOF
 
       - name: Package Windows ZIP
-        shell: msys2 {0}
+        shell: pwsh
         run: |
-          ARCHIVE="MiceCam-${GITHUB_REF_NAME#v}-windows-x64.zip"
-          cd dist
-          7z a "${ARCHIVE}" MiceCam/ -mx=5
-          mv "${ARCHIVE}" ..
+          $archive = "MiceCam-$($env:GITHUB_REF_NAME -replace '^v','')-windows-x64.zip"
+          Compress-Archive -Path dist\MiceCam\* -DestinationPath $archive -CompressionLevel Optimal
 
       - name: Upload package
         uses: actions/upload-artifact@v4

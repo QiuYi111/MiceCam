@@ -158,10 +158,11 @@ jobs:
         shell: msys2 {0}
         run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
-      - name: Deploy Qt runtime (windeployqt)
+      - name: Deploy Qt runtime
         shell: msys2 {0}
         run: |
           STAGE="dist/MiceCam"
+          PREFIX="${MINGW_PREFIX}"
           mkdir -p "${STAGE}"
           cp build/cmd/micecam_ui/micecam_ui.exe "${STAGE}/MiceCam.exe"
           mkdir -p "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/bin"
@@ -174,7 +175,49 @@ jobs:
              "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/plugin.json"
           cp 3rdParty/bundled_plugins/micecam.oak/plugin.json \
              "${STAGE}/3rdParty/bundled_plugins/micecam.oak/plugin.json"
-          windeployqt6 --release --qmldir cmd/micecam_ui/qml "${STAGE}/MiceCam.exe"
+
+          # qt.conf — tells Qt where to find plugins and QML imports
+          cat > "${STAGE}/qt.conf" <<'QTCONF'
+          [Paths]
+          Plugins=.
+          Qml2Imports=.
+          QTCONF
+
+          # Deploy Qt platform plugin
+          mkdir -p "${STAGE}/platforms"
+          PLATFORM_SRC="${PREFIX}/share/qt6/plugins/platforms/qwindows.dll"
+          [ -f "${PLATFORM_SRC}" ] || PLATFORM_SRC="${PREFIX}/plugins/platforms/qwindows.dll"
+          cp "${PLATFORM_SRC}" "${STAGE}/platforms/" 2>/dev/null || echo "Warning: qwindows.dll not found at expected paths"
+
+          # Deploy Qt platform themes plugin
+          mkdir -p "${STAGE}/platformthemes"
+          THEME_SRC="${PREFIX}/share/qt6/plugins/platformthemes/qxdgdesktopportal.dll"
+          [ -f "${THEME_SRC}" ] || THEME_SRC="${PREFIX}/plugins/platformthemes/qxdgdesktopportal.dll"
+          cp "${THEME_SRC}" "${STAGE}/platformthemes/" 2>/dev/null || true
+
+          # Deploy QML modules: copy all from MSYS2 Qt6 qml directory
+          QML_SRC="${PREFIX}/share/qt6/qml"
+          if [ ! -d "${QML_SRC}" ]; then
+            QML_SRC="${PREFIX}/qml"
+          fi
+          echo "Copying QML modules from ${QML_SRC} ..."
+          cp -r "${QML_SRC}/" "${STAGE}/"
+
+          # Copy all transitive DLL dependencies via ldd
+          bash scripts/copy_msys2_deps.sh "${STAGE}/MiceCam.exe" "${STAGE}" \
+            "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/bin/micecam-ffmpeg.exe" \
+            "${STAGE}/3rdParty/bundled_plugins/micecam.oak/bin/micecam-oak.exe"
+
+          # Remove .gitignore, .qmlc, and other source artifacts from QML tree
+          find "${STAGE}" -name '.gitignore' -delete 2>/dev/null || true
+          find "${STAGE}" -name '*.qmlc' -delete 2>/dev/null || true
+          find "${STAGE}" -name '*.jsc' -delete 2>/dev/null || true
+
+          # Write README
+          cat > "${STAGE}/README-beta.txt" <<'EOF'
+          MiceCam native beta package.
+          This MSI installs the native Qt/QML application plus official bundled camera plugins.
+          EOF
 
       - name: Build native Windows MSI
         shell: pwsh

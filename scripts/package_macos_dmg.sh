@@ -108,6 +108,12 @@ else
   exit 1
 fi
 
+# Ad-hoc code sign to pass macOS Gatekeeper (beta release, no developer cert)
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - "${APP_DIR}"
+  echo "Ad-hoc signed: ${APP_DIR}"
+fi
+
 hdiutil create \
   -volname "${APP_NAME} ${VERSION}" \
   -srcfolder "${APP_DIR}" \

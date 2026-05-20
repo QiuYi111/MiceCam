@@ -20,7 +20,7 @@ Item {
         }
         
         Text {
-            text: "Version 2.0.0 (Build 2026-05-13)"
+            text: "Version " + appController.appVersion + " (Build " + appController.buildDate + ")"
             font.family: Theme.fontPrimary
             font.pixelSize: 18
             color: Theme.textSecondary

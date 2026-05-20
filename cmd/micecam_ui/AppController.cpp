@@ -62,6 +62,14 @@ AppController::AppController(QObject* parent)
     plugin_registry_.initialize();
     manager_.set_plugin_registry(&plugin_registry_);
     manager_.register_backend(std::make_unique<infrastructure::FFmpegCameraBackend>());
+
+#ifdef MICECAM_VERSION
+    app_version_ = QStringLiteral(MICECAM_VERSION);
+#else
+    app_version_ = QStringLiteral("0.0.0");
+#endif
+    build_date_ = QStringLiteral(__DATE__);
+
     setupCrashAlertHandler();
 
     metrics_timer_ = new QTimer(this);
@@ -146,6 +154,9 @@ QString AppController::currentBitrate() const {
 QStringList AppController::recentLogEntries() const {
     return log_entries_;
 }
+
+QString AppController::appVersion() const { return app_version_; }
+QString AppController::buildDate() const { return build_date_; }
 
 void AppController::setOutputDirectory(const QString& dir) {
     output_dir_ = dir;

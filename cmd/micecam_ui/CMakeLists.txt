@@ -8,6 +8,10 @@ add_executable(micecam_ui
     CameraSourceModel.cpp
 )
 
+target_compile_definitions(micecam_ui PRIVATE
+    MICECAM_VERSION="${PROJECT_VERSION}"
+)
+
 qt_add_qml_module(micecam_ui
     URI "MiceCam.UI"
     VERSION 1.0

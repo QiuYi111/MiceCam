@@ -42,6 +42,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString lastSessionId READ lastSessionId NOTIFY lastSessionIdChanged)
     Q_PROPERTY(QString currentEncoderName READ currentEncoderName NOTIFY encoderNameChanged)
     Q_PROPERTY(QString currentBitrate READ currentBitrate NOTIFY bitrateChanged)
+    Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
+    Q_PROPERTY(QString buildDate READ buildDate CONSTANT)
 
     Q_PROPERTY(QStringList recentLogEntries READ recentLogEntries NOTIFY logEntriesChanged)
 
@@ -66,6 +68,9 @@ public:
     QString lastSessionId() const;
     QString currentEncoderName() const;
     QString currentBitrate() const;
+
+    QString appVersion() const;
+    QString buildDate() const;
     QStringList recentLogEntries() const;
 
     Q_INVOKABLE void refreshCameras();
@@ -130,6 +135,8 @@ private:
     QString preflight_message_;
     QString current_encoder_name_ = QStringLiteral("—");
     QString current_bitrate_ = QStringLiteral("—");
+    QString app_version_ = QStringLiteral("0.0.0");
+    QString build_date_ = QStringLiteral("unknown");
     std::chrono::steady_clock::time_point session_start_;
 
     std::atomic<bool> capture_running_{false};

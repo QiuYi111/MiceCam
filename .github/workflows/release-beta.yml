@@ -222,9 +222,7 @@ jobs:
       - name: Package Windows ZIP
         shell: msys2 {0}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          VERSION="${VERSION%%-*}"
-          ARCHIVE="MiceCam-${VERSION}-windows-x64.zip"
+          ARCHIVE="MiceCam-${GITHUB_REF_NAME#v}-windows-x64.zip"
           cd dist
           7z a "${ARCHIVE}" MiceCam/ -mx=5
           mv "${ARCHIVE}" ..

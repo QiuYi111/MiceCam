@@ -158,6 +158,24 @@ jobs:
         shell: msys2 {0}
         run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
+      - name: Deploy Qt runtime (windeployqt)
+        shell: msys2 {0}
+        run: |
+          STAGE="dist/MiceCam"
+          mkdir -p "${STAGE}"
+          cp build/cmd/micecam_ui/micecam_ui.exe "${STAGE}/MiceCam.exe"
+          mkdir -p "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/bin"
+          mkdir -p "${STAGE}/3rdParty/bundled_plugins/micecam.oak/bin"
+          cp build/cmd/plugins/micecam_ffmpeg/micecam_ffmpeg_plugin.exe \
+             "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/bin/micecam-ffmpeg.exe"
+          cp build/cmd/plugins/micecam_oak/micecam_oak_plugin.exe \
+             "${STAGE}/3rdParty/bundled_plugins/micecam.oak/bin/micecam-oak.exe"
+          cp 3rdParty/bundled_plugins/micecam.ffmpeg/plugin.json \
+             "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/plugin.json"
+          cp 3rdParty/bundled_plugins/micecam.oak/plugin.json \
+             "${STAGE}/3rdParty/bundled_plugins/micecam.oak/plugin.json"
+          windeployqt6 --release --qmldir cmd/micecam_ui/qml "${STAGE}/MiceCam.exe"
+
       - name: Build native Windows MSI
         shell: pwsh
         run: |
@@ -170,7 +188,8 @@ jobs:
           powershell -ExecutionPolicy Bypass -File .\scripts\package_windows_native_msi.ps1 `
             -BuildDir build `
             -DistDir dist `
-            -Version $msiVersion
+            -Version $msiVersion `
+            -SkipStage
 
       - name: Upload package
         uses: actions/upload-artifact@v4

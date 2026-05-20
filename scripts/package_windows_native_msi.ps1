@@ -3,7 +3,8 @@ param(
     [string]$BuildDir = "build",
     [string]$DistDir = "dist",
     [string]$Version = "0.1.0",
-    [string]$WixToolPath = ".wix-tools"
+    [string]$WixToolPath = ".wix-tools",
+    [switch]$SkipStage
 )
 
 Set-StrictMode -Version Latest
@@ -32,6 +33,44 @@ function Resolve-FirstExisting {
         }
     }
     return $null
+}
+
+function Resolve-MsysUcrtPrefix {
+    $candidates = @()
+
+    foreach ($prefix in @($env:MSYSTEM_PREFIX, $env:MINGW_PREFIX)) {
+        if (-not [string]::IsNullOrWhiteSpace($prefix)) {
+            $candidates += $prefix
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+        $candidates += (Join-Path $env:RUNNER_TEMP "msys64\ucrt64")
+    }
+
+    foreach ($commandName in @("windeployqt6.exe", "windeployqt.exe")) {
+        $command = Get-Command $commandName -ErrorAction SilentlyContinue
+        if ($command) {
+            $candidates += (Split-Path -Parent (Split-Path -Parent $command.Source))
+        }
+    }
+
+    $candidates += @(
+        "C:\msys64\ucrt64",
+        "D:\a\_temp\msys64\ucrt64"
+    )
+
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+        $bin = Join-Path $candidate "bin"
+        if (Test-Path -LiteralPath $bin) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    throw "MSYS2 UCRT64 prefix was not found."
 }
 
 function Copy-DependencyDlls {
@@ -77,62 +116,84 @@ function Copy-DependencyDlls {
     }
 }
 
-New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
-if (Test-Path -LiteralPath $Stage) {
-    Remove-Item -LiteralPath $Stage -Recurse -Force
-}
-New-Item -ItemType Directory -Force -Path $Stage | Out-Null
+$UcrtPrefix = Resolve-MsysUcrtPrefix
+$UcrtBin = Join-Path $UcrtPrefix "bin"
+$MsysUsrBin = Join-Path (Split-Path -Parent $UcrtPrefix) "usr\bin"
+$env:Path = "$UcrtBin;$MsysUsrBin;$env:Path"
 
-$uiExe = Resolve-FirstExisting @(
-    (Join-Path $BuildRoot "cmd\micecam_ui\micecam_ui.exe"),
-    (Join-Path $BuildRoot "cmd\micecam_ui\MiceCam.exe")
-)
-$ffmpegPlugin = Join-Path $BuildRoot "cmd\plugins\micecam_ffmpeg\micecam_ffmpeg_plugin.exe"
-$oakPlugin = Join-Path $BuildRoot "cmd\plugins\micecam_oak\micecam_oak_plugin.exe"
-$ffmpegManifest = Join-Path $ProjectRoot "3rdParty\bundled_plugins\micecam.ffmpeg\plugin.json"
-$oakManifest = Join-Path $ProjectRoot "3rdParty\bundled_plugins\micecam.oak\plugin.json"
+if (-not $SkipStage) {
+    New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
+    if (Test-Path -LiteralPath $Stage) {
+        Remove-Item -LiteralPath $Stage -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 
-if (-not $uiExe) {
-    throw "Native UI executable was not found in $BuildRoot\cmd\micecam_ui"
-}
-Require-File $ffmpegPlugin
-Require-File $oakPlugin
-Require-File $ffmpegManifest
-Require-File $oakManifest
+    $uiExe = Resolve-FirstExisting @(
+        (Join-Path $BuildRoot "cmd\micecam_ui\micecam_ui.exe"),
+        (Join-Path $BuildRoot "cmd\micecam_ui\MiceCam.exe")
+    )
+    $ffmpegPlugin = Join-Path $BuildRoot "cmd\plugins\micecam_ffmpeg\micecam_ffmpeg_plugin.exe"
+    $oakPlugin = Join-Path $BuildRoot "cmd\plugins\micecam_oak\micecam_oak_plugin.exe"
+    $ffmpegManifest = Join-Path $ProjectRoot "3rdParty\bundled_plugins\micecam.ffmpeg\plugin.json"
+    $oakManifest = Join-Path $ProjectRoot "3rdParty\bundled_plugins\micecam.oak\plugin.json"
 
-Copy-Item -LiteralPath $uiExe -Destination (Join-Path $Stage "MiceCam.exe") -Force
-New-Item -ItemType Directory -Force -Path "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\bin" | Out-Null
-New-Item -ItemType Directory -Force -Path "$Stage\3rdParty\bundled_plugins\micecam.oak\bin" | Out-Null
-Copy-Item -LiteralPath $ffmpegManifest -Destination "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\plugin.json" -Force
-Copy-Item -LiteralPath $oakManifest -Destination "$Stage\3rdParty\bundled_plugins\micecam.oak\plugin.json" -Force
-Copy-Item -LiteralPath $ffmpegPlugin -Destination "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\bin\micecam-ffmpeg.exe" -Force
-Copy-Item -LiteralPath $oakPlugin -Destination "$Stage\3rdParty\bundled_plugins\micecam.oak\bin\micecam-oak.exe" -Force
+    if (-not $uiExe) {
+        throw "Native UI executable was not found in $BuildRoot\cmd\micecam_ui"
+    }
+    Require-File $ffmpegPlugin
+    Require-File $oakPlugin
+    Require-File $ffmpegManifest
+    Require-File $oakManifest
 
-$windeployqt = Resolve-FirstExisting @(
-    "C:\msys64\ucrt64\bin\windeployqt6.exe",
-    "C:\msys64\ucrt64\bin\windeployqt.exe"
-)
-if (-not $windeployqt) {
-    throw "windeployqt was not found in C:\msys64\ucrt64\bin"
-}
+    Copy-Item -LiteralPath $uiExe -Destination (Join-Path $Stage "MiceCam.exe") -Force
+    New-Item -ItemType Directory -Force -Path "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\bin" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$Stage\3rdParty\bundled_plugins\micecam.oak\bin" | Out-Null
+    Copy-Item -LiteralPath $ffmpegManifest -Destination "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\plugin.json" -Force
+    Copy-Item -LiteralPath $oakManifest -Destination "$Stage\3rdParty\bundled_plugins\micecam.oak\plugin.json" -Force
+    Copy-Item -LiteralPath $ffmpegPlugin -Destination "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\bin\micecam-ffmpeg.exe" -Force
+    Copy-Item -LiteralPath $oakPlugin -Destination "$Stage\3rdParty\bundled_plugins\micecam.oak\bin\micecam-oak.exe" -Force
 
-& $windeployqt --release --qmldir (Join-Path $ProjectRoot "cmd\micecam_ui\qml") (Join-Path $Stage "MiceCam.exe")
-if ($LASTEXITCODE -ne 0) {
-    throw "windeployqt failed."
-}
+    $windeployqt = Resolve-FirstExisting @(
+        (Join-Path $UcrtBin "windeployqt6.exe"),
+        (Join-Path $UcrtBin "windeployqt.exe"),
+        (Join-Path $UcrtPrefix "qt6\bin\windeployqt6.exe"),
+        (Join-Path $UcrtPrefix "qt6\bin\windeployqt.exe"),
+        (Join-Path $UcrtPrefix "lib\qt6\bin\windeployqt6.exe"),
+        (Join-Path $UcrtPrefix "lib\qt6\bin\windeployqt.exe")
+    )
+    if (-not $windeployqt) {
+        $found = Get-ChildItem -Path $UcrtPrefix -Filter "windeployqt*.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {
+            $windeployqt = $found.FullName
+        }
+    }
+    if (-not $windeployqt) {
+        throw "windeployqt was not found in $UcrtPrefix (checked: bin, qt6/bin, lib/qt6/bin, recursive)"
+    }
 
-Copy-DependencyDlls -Executables @(
-    (Join-Path $Stage "MiceCam.exe"),
-    (Join-Path $Stage "3rdParty\bundled_plugins\micecam.ffmpeg\bin\micecam-ffmpeg.exe"),
-    (Join-Path $Stage "3rdParty\bundled_plugins\micecam.oak\bin\micecam-oak.exe")
-) -Destination $Stage
+    & $windeployqt --release --qmldir (Join-Path $ProjectRoot "cmd\micecam_ui\qml") (Join-Path $Stage "MiceCam.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "windeployqt failed."
+    }
 
-@"
+    Copy-DependencyDlls -Executables @(
+        (Join-Path $Stage "MiceCam.exe"),
+        (Join-Path $Stage "3rdParty\bundled_plugins\micecam.ffmpeg\bin\micecam-ffmpeg.exe"),
+        (Join-Path $Stage "3rdParty\bundled_plugins\micecam.oak\bin\micecam-oak.exe")
+    ) -Destination $Stage
+
+    @"
 MiceCam native beta package.
 
 This MSI installs the native Qt/QML application plus official bundled camera
 plugins. Hardware-in-the-loop validation must be performed on target machines.
 "@ | Set-Content (Join-Path $Stage "README-beta.txt")
+} else {
+    New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
+    if (-not (Test-Path -LiteralPath $Stage)) {
+        throw "Stage directory not found: $Stage. Run without -SkipStage first."
+    }
+}
 
 if (-not (Test-Path -LiteralPath $WixExe)) {
     dotnet tool install wix --tool-path (Join-Path $ProjectRoot $WixToolPath)

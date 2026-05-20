@@ -149,8 +149,10 @@ if (-not (Test-Path -LiteralPath $WixExe)) {
     }
 }
 
-# Accept WiX OSMF EULA (required for v5+)
-$env:WIX_ACCEPT_OSMF_EULA = "true"
+# Accept WiX v7 OSMF EULA (checked via ~/.wix/wix7-osmf-eula.txt)
+$eulaDir = Join-Path $env:USERPROFILE ".wix"
+New-Item -ItemType Directory -Force -Path $eulaDir | Out-Null
+Set-Content -Path (Join-Path $eulaDir "wix7-osmf-eula.txt") -Value "accepted"
 
 & $WixExe extension add WixToolset.UI.wixext
 if ($LASTEXITCODE -ne 0) {

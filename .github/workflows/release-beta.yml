@@ -104,6 +104,8 @@ jobs:
         run: |
           chmod +x scripts/package_macos_dmg.sh
           scripts/package_macos_dmg.sh build dist "${GITHUB_REF_NAME#v}"
+          # Flatten DMG to workspace root so artifact upload includes it at top level
+          cp dist/MiceCam-*-macos-arm64.dmg .
 
       - name: Upload package
         uses: actions/upload-artifact@v4
@@ -111,7 +113,7 @@ jobs:
           name: MiceCam-${{ matrix.name }}
           path: |
             MiceCam-linux-x64.tar.gz
-            dist/MiceCam-*-macos-arm64.dmg
+            MiceCam-*-macos-arm64.dmg
 
   package-windows:
     name: Package windows-x64

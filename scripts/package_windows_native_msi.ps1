@@ -149,7 +149,7 @@ if (-not (Test-Path -LiteralPath $WixExe)) {
     }
 }
 
-& $WixExe extension add WixToolset.UI.wixext
+& $WixExe extension add WixToolset.UI.wixext --version 6.0.0
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install WiX UI extension."
 }

@@ -25,10 +25,8 @@ jobs:
         include:
           - os: ubuntu-24.04
             name: linux-x64
-            archive_ext: tar.gz
           - os: macos-14
             name: macos-arm64
-            archive_ext: tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +67,7 @@ jobs:
         run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
       - name: Stage native app package
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
@@ -98,16 +97,24 @@ jobs:
                    "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/bin/micecam-ffmpeg" \
                    "${STAGE}/3rdParty/bundled_plugins/micecam.oak/bin/micecam-oak"
 
-          tar -C dist -czf "MiceCam-${{ matrix.name }}.${{ matrix.archive_ext }}" "MiceCam-${{ matrix.name }}"
+          tar -C dist -czf "MiceCam-${{ matrix.name }}.tar.gz" "MiceCam-${{ matrix.name }}"
+
+      - name: Build macOS DMG
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x scripts/package_macos_dmg.sh
+          scripts/package_macos_dmg.sh build dist "${GITHUB_REF_NAME#v}"
 
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: MiceCam-${{ matrix.name }}
-          path: MiceCam-${{ matrix.name }}.${{ matrix.archive_ext }}
+          path: |
+            MiceCam-linux-x64.tar.gz
+            dist/MiceCam-*-macos-arm64.dmg
 
-  package-windows-core:
-    name: Package windows-x64-core
+  package-windows:
+    name: Package windows-x64
     runs-on: windows-2022
     timeout-minutes: 60
 
@@ -130,6 +137,8 @@ jobs:
             mingw-w64-ucrt-x86_64-spdlog
             mingw-w64-ucrt-x86_64-nlohmann-json
             mingw-w64-ucrt-x86_64-gtest
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-declarative
 
       - name: Configure
         shell: msys2 {0}
@@ -138,48 +147,41 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SPIKE=OFF \
-            -DBUILD_UI=OFF
+            -DBUILD_UI=ON
 
       - name: Build
         shell: msys2 {0}
-        run: cmake --build build --config Release -j
+        run: cmake --build build --config Release -j 3
 
       - name: Test
         shell: msys2 {0}
         run: cd build && ctest --output-on-failure -C Release --exclude-regex '.*hil.*|.*stress.*|.*stream_liveness.*'
 
-      - name: Stage Windows core package
+      - name: Build native Windows MSI
         shell: pwsh
         run: |
-          $Stage = "dist/MiceCam-windows-x64-core"
-          New-Item -ItemType Directory -Force -Path "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\bin" | Out-Null
-          New-Item -ItemType Directory -Force -Path "$Stage\3rdParty\bundled_plugins\micecam.oak\bin" | Out-Null
-
-          Copy-Item "3rdParty\bundled_plugins\micecam.ffmpeg\plugin.json" "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\plugin.json"
-          Copy-Item "3rdParty\bundled_plugins\micecam.oak\plugin.json" "$Stage\3rdParty\bundled_plugins\micecam.oak\plugin.json"
-          Copy-Item "build\cmd\plugins\micecam_ffmpeg\micecam_ffmpeg_plugin.exe" "$Stage\3rdParty\bundled_plugins\micecam.ffmpeg\bin\micecam-ffmpeg.exe"
-          Copy-Item "build\cmd\plugins\micecam_oak\micecam_oak_plugin.exe" "$Stage\3rdParty\bundled_plugins\micecam.oak\bin\micecam-oak.exe"
-
-          @"
-          MiceCam beta Windows core package.
-
-          This artifact contains the camera plugin binaries and manifests.
-          Native Qt/QML Windows UI packaging is still a beta validation gate.
-          "@ | Set-Content "$Stage\README-beta.txt"
-
-          Compress-Archive -Path "$Stage\*" -DestinationPath "MiceCam-windows-x64-core.zip" -Force
+          $version = "${env:GITHUB_REF_NAME}" -replace '^v',''
+          if ($version -match '^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$') {
+            $msiVersion = "$($Matches[1]).$($Matches[2]).$($Matches[4])"
+          } else {
+            $msiVersion = ($version -split '-')[0]
+          }
+          powershell -ExecutionPolicy Bypass -File .\scripts\package_windows_native_msi.ps1 `
+            -BuildDir build `
+            -DistDir dist `
+            -Version $msiVersion
 
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: MiceCam-windows-x64-core
-          path: MiceCam-windows-x64-core.zip
+          name: MiceCam-windows-x64
+          path: dist/MiceCam-*-windows-x64.msi
 
   publish:
     name: Publish beta prerelease
     needs:
       - package-unix
-      - package-windows-core
+      - package-windows
     runs-on: ubuntu-24.04
 
     steps:
@@ -213,6 +215,7 @@ jobs:
             Beta release for multi-platform validation.
 
             Notes:
-            - macOS and Linux artifacts contain the native Qt/QML UI binary plus bundled official plugin manifests and plugin executables.
-            - Windows artifact is currently a core/plugin package; native Qt/QML Windows packaging remains a beta validation gate.
+            - macOS artifact is a DMG containing a native .app bundle.
+            - Windows artifact is a native Qt/QML MSI containing official bundled plugins.
+            - Linux artifact is a tarball containing the native UI binary plus official bundled plugins.
             - HIL/OAK hardware validation is expected to run outside GitHub-hosted runners.

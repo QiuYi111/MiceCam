@@ -1,49 +1,57 @@
-# Active Stage: 003 Camera Plugin Runtime — Phase 6 Hardware Gate
+# Active Stage: 007 Phase 5 — Notifications, Metrics, Flaky Test Fix
 
 ## Stage ID
 
-`003-phase-6-hardware-gate`
+`007-phase-5-metrics-notifications-flakytest`
 
 ## Stage goal
 
-Prepare and run the USB/AVFoundation plugin runtime hardware validation gate for two real video sources.
+Close backend feedback loops: push live fps/drops from `StatsCollector` to `CameraSourceModel` via C++ timer, surface plugin crash/device disconnect through tiered alert system, and eliminate the flaky `StallCountResetsOnActivity` test by replacing timing-sensitive `sleep_for` with deterministic `cycle_count_` synchronization.
 
 ## Why this stage matters
 
-The architecture now has protocol contracts, plugin registry, FFmpeg plugin path, recording consumer, resource manager, and OAK skeleton. Phase 6 proves the available real USB/AVFoundation plugin path is production-worthy on target hardware, with explicit artifact validation and no silent drops.
+Without live metrics, the UI shows static fps/drop values. Without crash/disconnect notifications, the operator has no feedback when a plugin crashes or a device disconnects. The flaky test breaks CI reliability.
 
 ## Inputs
 
-- Official FFmpeg plugin
-- Plugin recording consumer
-- Resource manager
-- Hardware matrix: MacBook Pro Camera and iPhone Continuity Camera
-- Existing recording output artifacts: `.mp4`, `.srt`, `_meta.json`, `_stats.json`
+- `specs/007-plugin-ui-integration/spec.md` — FR-024 through FR-027, FR-032, NFR-003, NFR-006
+- `specs/007-plugin-ui-integration/plan.md` — Phase 5 actions
+- Existing: `internal/pipeline/StatsCollector.*`, `internal/infrastructure/StreamLivenessMonitor.*`
+- Existing: `cmd/micecam_ui/AppController.*`, `cmd/micecam_ui/AppAlertModel.*`
 
 ## Allowed work
 
-- Add hardware gate scripts/procedures that can be skipped or dry-run without hardware
-- Add artifact validation script for MP4/SRT/meta/stats
-- Add plugin smoke test harness for two source recording
-- Add crash/disconnect test procedure documentation
-- Add ffprobe/SRT monotonicity/stat validation helpers
-- Add no-hardware-safe tests for validators/scripts
+- Add C++ QTimer in `AppController` that polls `StatsCollector` snapshots and pushes fps/drops to `CameraSourceModel` device roles (at most 1Hz per NFR-003)
+- Emit `dataChanged` signals so QML binds update without polling
+- Plugin crash/device disconnect notification path:
+  - Amber banner for recoverable crashes (auto-dismiss on recovery)
+  - Red banner/modal for fatal crashes (requires user acknowledge)
+  - Warning banner for device disconnect
+  - Log all events to activity feed
+- Fix `StreamLivenessMonitor`:
+  - Add atomic `std::atomic<int> cycle_count_`
+  - Increment after each monitor loop iteration
+  - Replace `sleep_for` in `StallCountResetsOnActivity` with spin-wait on `cycle_count_`
+  - Run test 10 consecutive times on macOS
+- Add/expand unit tests for notifications, metrics push, and liveness fix
 
 ## Forbidden work
 
-- UI/QML changes
-- Changing proto definitions
-- Security/sandboxing/signing policy
-- Requiring hardware in normal unit/CI tests
-- OAK hardware validation beyond documented pending status
+- No QML changes (UI frozen)
+- No proto changes
+- No new RPC definitions
+- No changes to Plugin Management or Plugin Detail QML
+- No CameraSourceModel role renames/removals (additive only)
+- No AppCameraModel changes
 
 ## Exit criteria
 
-- [ ] Hardware gate procedure exists.
-- [ ] Artifact validation script exists and is test-covered without hardware.
-- [ ] MP4 validation uses `ffprobe` when available and reports structured skip/error when unavailable.
-- [ ] SRT timestamps are checked for monotonicity.
-- [ ] `_meta.json` and `_stats.json` required plugin fields are checked.
-- [ ] Two-source one-hour run command/procedure is documented.
-- [ ] Normal build and unit tests pass without hardware.
-- [ ] If real hardware is unavailable in this environment, PM stops with a precise user decision/request for hardware execution.
+- [ ] Live metrics timer pushes fps/drops from StatsCollector to CameraSourceModel at <=1Hz
+- [ ] Plugin crash surfaces as banner with recovery status, escalates to modal on failure
+- [ ] Device disconnect surfaces as warning banner with device name
+- [ ] All plugin events appear in activity feed/logs
+- [ ] `StreamLivenessMonitor::cycle_count_` is atomic and incremented per loop cycle
+- [ ] `StallCountResetsOnActivity` uses `cycle_count_` spin-wait, not `sleep_for`
+- [ ] Flaky test passes 10/10 consecutive runs on macOS
+- [ ] All existing tests pass (no regressions)
+- [ ] Build passes: `cmake --build build -j 4`

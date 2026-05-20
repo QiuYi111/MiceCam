@@ -2,35 +2,35 @@
 
 ## Current state
 
-Spec `003-camera-plugin-runtime` Phase 6 Hardware Gate preparation is accepted at commit `8555131`, but the Ubuntu/jingyi-lab hardware and stress gate is blocked by infrastructure.
+**Spec 007: COMPLETE.** All 8 phases delivered and accepted. Ready for merge.
 
-PM verified Phase 6 prep before delegation:
+**Completed**:
+- Phase 0: Planning ✅
+- Phase 1: Source Model Foundation ✅
+- Phase 2: Grouped Camera UI ✅
+- Phase 3: Plugin Management ✅
+- Phase 4: Plugin Detail/Settings ✅
+- Phase 5: Live Metrics/Notifications/Flaky Test Fix ✅
+- Phase 6: AppSettings Fix ✅
+- Phase 7: HIL Tests on jingyi-lab ✅
+- Phase 8: Release Gate ✅
 
-- `cmake --build build -j 4` — PASS
-- `ctest --test-dir build --output-on-failure` — PASS, 33/33 tests
-- `python3 tests/unit/test_validate_session_artifacts.py -v` — PASS, 30/30 tests
-- `bash scripts/hardware_gate_two_source.sh --dry-run` — PASS
-- Independent OpenCode review — ACCEPT, 0 blocking issues
+**Test evidence**: 45/45 local pass, 4/4 HIL pass on jingyi-lab
 
-Worker then attempted the Ubuntu gate and stopped correctly because `jingyi-lab` is unreachable:
+**Deferred**: packaging validation (no multi-platform machines), UI screenshots (user not at machine), OAK-D hardware
 
-- SSH to `192.168.2.2:22` — `No route to host`
-- Ping to `192.168.2.2` — 100% packet loss
-- Tailscale — `jingyi-lab` offline, last seen 120d ago
+## Merge Recommendation
 
-## Last action
+**`codex/007-plugin-ui-release` → `dev`**
 
-Reviewed and accepted the Worker blocker report as valid infrastructure blockage. No product code or tests were modified.
+- 7 commits ahead of `dev`, 48 files changed, +4835/-750
+- All tests pass on macOS arm64 and jingyi-lab (Ubuntu 24.04)
+- No QML regressions
+- Do NOT merge without user approval
+
+## Branch
+`codex/007-plugin-ui-release` (7 implementation commits ahead of dev).
 
 ## Next expected action
 
-User must power on or network-attach `jingyi-lab`, or provide another reachable Ubuntu/HIL target. Once reachable, re-run `.pm/runtime/next-task.md` unchanged to sync commit `8555131`, build on Ubuntu, run HIL/stress gates, and validate artifacts.
-
-## Open decisions
-
-- Restore `jingyi-lab` connectivity, or
-- Provide an alternate Ubuntu machine with camera/GPU access for the same gate.
-
-## Branch
-
-Current branch: `plugin-system`. Do not merge. PM runtime files are dirty by design.
+User reviews release gate report at `docs/reports/implements/spec-007-release-gate-05-19.md`, then approves merge `codex/007-plugin-ui-release` → `dev`.

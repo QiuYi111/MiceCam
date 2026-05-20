@@ -502,8 +502,15 @@ endif()
 if(BUILD_UI)
     add_micecam_test(test_app_models tests/unit/test_app_models.cpp)
     add_micecam_test(test_app_controller tests/unit/test_app_controller.cpp)
+    add_micecam_test(test_app_alert_notifications tests/unit/test_app_alert_notifications.cpp)
+    add_micecam_test(test_app_settings tests/unit/test_app_settings.cpp)
     target_link_libraries(test_app_models PRIVATE Qt6::Core)
+    target_link_libraries(test_app_settings PRIVATE Qt6::Core)
     target_link_libraries(test_app_controller PRIVATE Qt6::Core Qt6::Qml)
+    target_link_libraries(test_app_alert_notifications PRIVATE Qt6::Core)
+    target_compile_definitions(test_app_controller PRIVATE
+        MICECAM_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    )
     target_sources(test_app_models PRIVATE
         cmd/micecam_ui/AppCameraModel.cpp
         cmd/micecam_ui/AppAlertModel.cpp
@@ -515,6 +522,12 @@ if(BUILD_UI)
         cmd/micecam_ui/AppSettings.cpp
         cmd/micecam_ui/AppController.cpp
         cmd/micecam_ui/CameraSourceModel.cpp
+    )
+    target_sources(test_app_alert_notifications PRIVATE
+        cmd/micecam_ui/AppAlertModel.cpp
+    )
+    target_sources(test_app_settings PRIVATE
+        cmd/micecam_ui/AppSettings.cpp
     )
 endif()
 
@@ -538,6 +551,8 @@ endif()
 if(BUILD_HIL)
     add_micecam_test(test_real_camera_hil tests/hil/test_real_camera.cpp)
     add_micecam_test(test_e2e_stress tests/hil/test_e2e_stress.cpp)
+    add_micecam_test(test_hil_e2e tests/hil/test_hil_e2e.cpp)
+    add_micecam_test(test_hil_crash_recovery tests/hil/test_hil_crash_recovery.cpp)
 endif()
 
 # Spike subdirectory (headless feasibility tests)

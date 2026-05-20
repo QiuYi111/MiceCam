@@ -36,12 +36,15 @@ public:
     void set_stall_callback(StallCallback cb);
     void set_all_stalled_callback(AllStalledCallback cb);
 
+    int cycle_count() const;
+
 private:
     void monitor_loop();
     ClockFn clock_;
     uint64_t stall_timeout_ms_;
     std::atomic<bool> running_{false};
     std::atomic<bool> stop_requested_{false};
+    std::atomic<int> cycle_count_{0};
     std::thread monitor_thread_;
 
     std::mutex mutex_;

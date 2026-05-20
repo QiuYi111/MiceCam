@@ -337,15 +337,18 @@ std::vector<domain::PluginSource> PluginRegistryService::getSources() const {
         src.plugin_api_version = p.api_version;
         src.enabled = p.enabled;
         src.diagnostics_state = domain::PluginDiagnosticsState::OK;
+        src.restart_required = pending_restart_;
 
         for (const auto& d : diagnostics_) {
             if (d.plugin_id == p.id) {
                 src.diagnostics_state = domain::PluginDiagnosticsState::ERROR;
+                src.diagnostics_message = d.message;
                 break;
             }
         }
         if (!p.enabled) {
             src.diagnostics_state = domain::PluginDiagnosticsState::DISABLED;
+            src.diagnostics_message = "Plugin disabled";
         }
 
         sources.push_back(std::move(src));

@@ -1,11 +1,15 @@
 #include "AppController.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
+#include <vector>
 
 #include <nlohmann/json.hpp>
+#include <QCoreApplication>
 
 #include "domain/Capabilities.h"
 #include "domain/PluginManifest.h"
@@ -15,9 +19,40 @@ namespace micecam::ui {
 
 namespace fs = std::filesystem;
 
+namespace {
+
+std::string resolveBundledPluginsDir() {
+    if (const char* override_dir = std::getenv("MICECAM_BUNDLED_PLUGINS_DIR")) {
+        if (*override_dir != '\0') {
+            return fs::absolute(override_dir).lexically_normal().string();
+        }
+    }
+
+    std::vector<fs::path> candidates;
+    candidates.push_back(fs::current_path() / "3rdParty" / "bundled_plugins");
+    candidates.push_back(fs::current_path() / ".." / "3rdParty" / "bundled_plugins");
+
+    const auto app_dir = fs::path(QCoreApplication::applicationDirPath().toStdString());
+    candidates.push_back(app_dir / ".." / ".." / ".." / "3rdParty" / "bundled_plugins");
+    candidates.push_back(app_dir / ".." / "Resources" / "3rdParty" / "bundled_plugins");
+
+    for (const auto& candidate : candidates) {
+        std::error_code ec;
+        const auto normalized = fs::weakly_canonical(candidate, ec);
+        const auto& path = ec ? candidate.lexically_normal() : normalized;
+        if (fs::exists(path) && fs::is_directory(path)) {
+            return path.string();
+        }
+    }
+
+    return candidates.front().lexically_normal().string();
+}
+
+} // namespace
+
 AppController::AppController(QObject* parent)
     : QObject(parent)
-    , plugin_registry_("../3rdParty/bundled_plugins", ".")
+    , plugin_registry_(resolveBundledPluginsDir(), ".")
     , camera_model_(new AppCameraModel(this))
     , source_model_(new CameraSourceModel(this))
     , alert_model_(new AppAlertModel(this))
@@ -26,6 +61,10 @@ AppController::AppController(QObject* parent)
     plugin_registry_.initialize();
     manager_.set_plugin_registry(&plugin_registry_);
     setupCrashAlertHandler();
+
+    metrics_timer_ = new QTimer(this);
+    metrics_timer_->setInterval(1000);
+    connect(metrics_timer_, &QTimer::timeout, this, [this] { pushLiveMetrics(); });
 }
 
 QAbstractListModel* AppController::cameraModel() const { return camera_model_; }
@@ -121,38 +160,71 @@ void AppController::refreshCameras() {
     auto devices = manager_.discover_all();
     auto sources = manager_.get_sources();
 
+    std::unordered_map<std::string, const domain::PluginSource*> source_by_device;
+    for (const auto& source : sources) {
+        for (const auto& device_id : source.device_ids) {
+            source_by_device[device_id] = &source;
+        }
+    }
+    const domain::PluginSource* fallback_source = sources.size() == 1 ? &sources.front() : nullptr;
+
     std::vector<CameraRow> rows;
+    std::vector<domain::PluginDeviceInfo> plugin_devices;
     for (const auto& device : devices) {
+        const auto source_it = source_by_device.find(device.id);
+        const domain::PluginSource* source = source_it != source_by_device.end()
+            ? source_it->second
+            : fallback_source;
+
+        domain::PluginDeviceInfo plugin_device;
+        plugin_device.device_id = device.id;
+        plugin_device.display_name = device.name.empty() ? device.id : device.name;
+        plugin_device.plugin_id = source ? source->source_id : device.type;
+        plugin_device.status = "available";
+        plugin_device.max_width = 0;
+        plugin_device.max_height = 0;
+        plugin_device.max_framerate = 0.0;
+
         for (const auto& stream : device.streams) {
             CameraRow row;
             row.cameraId = QString::fromStdString(device.id) + "_" + QString::number(stream.index);
             row.name = QString::fromStdString(stream.label);
-            row.sourceId.clear();
-            row.sourceGroup.clear();
+            row.sourceId = source ? QString::fromStdString(source->source_id) : QString::fromStdString(device.type);
+            row.sourceGroup = source ? QString::fromStdString(source->source_name) : QString::fromStdString(device.type);
             row.fps = stream.supported_framerates.empty() ? 0.0 : static_cast<double>(stream.supported_framerates.front());
             row.dropCount = 0;
             row.recording = recording_;
-            row.status = 0;
-            row.alertMessage.clear();
+            row.status = stream.available ? 0 : 2;
+            row.alertMessage = QString::fromStdString(stream.unavailable_reason);
 
             for (const auto& res : stream.resolutions) {
                 row.resolutionLabels.append(
                     QString::asprintf("%d x %d", res.width, res.height));
+                plugin_device.max_width = std::max(plugin_device.max_width, res.width);
+                plugin_device.max_height = std::max(plugin_device.max_height, res.height);
             }
             for (int fr : stream.supported_framerates) {
                 row.framerateLabels.append(QStringLiteral("%1 fps").arg(fr));
+                plugin_device.max_framerate = std::max(plugin_device.max_framerate, static_cast<double>(fr));
             }
             for (const auto& fmt : stream.supported_formats) {
                 row.formatLabels.append(QString::fromStdString(fmt));
             }
             rows.push_back(std::move(row));
         }
+        if (source) {
+            plugin_devices.push_back(std::move(plugin_device));
+        }
+    }
+
+    for (const auto& source : sources) {
+        auto source_devices = manager_.get_devices_for_source(source.source_id);
+        plugin_devices.insert(plugin_devices.end(), source_devices.begin(), source_devices.end());
     }
 
     const int previous_count = cameraCount();
     camera_model_->replaceRows(std::move(rows));
 
-    std::vector<domain::PluginDeviceInfo> plugin_devices;
     source_model_->populateFromSources(sources, plugin_devices);
 
     preflight_message_ = cameraCount() == 0
@@ -229,6 +301,10 @@ bool AppController::startRecording() {
 
     session_start_ = std::chrono::steady_clock::now();
     recording_ = true;
+    stream_frame_counts_.clear();
+    stream_drop_counts_.clear();
+    last_metrics_push_ = std::chrono::steady_clock::now();
+    metrics_timer_->start();
     emit isRecordingChanged();
     emit canStartRecordingChanged();
     emit recordButtonTextChanged();
@@ -239,6 +315,7 @@ bool AppController::startRecording() {
 void AppController::stopRecording() {
     if (!recording_) return;
 
+    metrics_timer_->stop();
     stopCaptureLoop();
     pipeline_.stop();
 
@@ -334,7 +411,13 @@ QVariantList AppController::pluginList() {
         item["type"] = src.source_type == domain::PluginSourceType::BUNDLED
                             ? QStringLiteral("bundled")
                             : QStringLiteral("linked");
+        item["apiVersion"] = static_cast<int>(src.plugin_api_version);
         item["deviceCount"] = static_cast<int>(src.device_ids.size());
+        item["restartRequired"] = src.restart_required;
+        item["canToggle"] = src.source_type != domain::PluginSourceType::BUNDLED && !recording_;
+        item["canRemove"] = src.source_type == domain::PluginSourceType::LINKED && !recording_;
+        item["canOpenSettings"] = true;
+        item["statusMessage"] = QString::fromStdString(src.diagnostics_message);
 
         switch (src.diagnostics_state) {
             case domain::PluginDiagnosticsState::OK:
@@ -373,6 +456,13 @@ void AppController::togglePlugin(const QString& pluginPath, bool enabled) {
     auto sources = plugin_registry_.getSources();
     for (const auto& src : sources) {
         if (src.plugin_path == pluginPath.toStdString()) {
+            if (src.source_type == domain::PluginSourceType::BUNDLED) {
+                pushLogEntry(log_entries_,
+                    QStringLiteral("[WARN] Bundled plugin cannot be disabled: %1")
+                        .arg(QString::fromStdString(src.source_id)));
+                emit logEntriesChanged();
+                return;
+            }
             if (enabled) {
                 plugin_registry_.enablePlugin(src.source_id);
             } else {
@@ -387,6 +477,32 @@ void AppController::togglePlugin(const QString& pluginPath, bool enabled) {
             return;
         }
     }
+}
+
+bool AppController::removePlugin(const QString& pluginPath) {
+    if (recording_) return false;
+
+    auto sources = plugin_registry_.getSources();
+    for (const auto& src : sources) {
+        if (src.plugin_path == pluginPath.toStdString()) {
+            if (src.source_type != domain::PluginSourceType::LINKED) {
+                pushLogEntry(log_entries_,
+                    QStringLiteral("[WARN] Bundled plugin cannot be removed: %1")
+                        .arg(QString::fromStdString(src.source_id)));
+                emit logEntriesChanged();
+                return false;
+            }
+            bool ok = plugin_registry_.removeLinkedDirectory(src.plugin_path);
+            if (ok) {
+                pushLogEntry(log_entries_,
+                    QStringLiteral("[INFO] Plugin removed: %1 (restart required)")
+                        .arg(QString::fromStdString(src.source_id)));
+                emit pluginsChanged();
+            }
+            return ok;
+        }
+    }
+    return false;
 }
 
 QVariantMap AppController::getPluginDetail(const QString& pluginPath) {
@@ -456,6 +572,8 @@ QVariantMap AppController::getPluginDetail(const QString& pluginPath) {
             result["type"] = src.source_type == domain::PluginSourceType::BUNDLED
                                 ? QStringLiteral("bundled")
                                 : QStringLiteral("linked");
+            result["restartRequired"] = src.restart_required;
+            result["statusMessage"] = QString::fromStdString(src.diagnostics_message);
 
             switch (src.diagnostics_state) {
                 case domain::PluginDiagnosticsState::OK:
@@ -498,9 +616,11 @@ void AppController::captureLoop() {
             if (!active.stream->read_frame(bytes, pts))
                 continue;
 
-            pipeline::FrameData frame;
-            frame.stream_id = active.config.device_id + "_" +
+            std::string stream_id = active.config.device_id + "_" +
                 std::to_string(active.config.stream_index);
+
+            pipeline::FrameData frame;
+            frame.stream_id = stream_id;
             frame.data = bytes.data();
             frame.size = bytes.size();
             frame.width = active.stream->width();
@@ -511,6 +631,8 @@ void AppController::captureLoop() {
             if (pipeline_.push_frame(frame)) {
                 total_frames_++;
                 bytes_written_ += bytes.size();
+                stream_frame_counts_[stream_id]++;
+                stream_drop_counts_[stream_id] += frame.dropped_frame_count;
             }
         }
         QMetaObject::invokeMethod(this, [this] { refreshLiveStatus(); },
@@ -536,6 +658,29 @@ void AppController::refreshLiveStatus() {
     emit logEntriesChanged();
 }
 
+void AppController::pushLiveMetrics() {
+    if (!recording_) return;
+
+    auto now = std::chrono::steady_clock::now();
+    double elapsed_sec = std::chrono::duration<double>(now - last_metrics_push_).count();
+    if (elapsed_sec < 0.5) return;
+    last_metrics_push_ = now;
+
+    for (auto& active : active_streams_) {
+        std::string sid = active.config.device_id + "_" +
+            std::to_string(active.config.stream_index);
+
+        uint64_t frames = stream_frame_counts_[sid];
+        double fps = elapsed_sec > 0 ? static_cast<double>(frames) / elapsed_sec : 0.0;
+        uint64_t drops = stream_drop_counts_[sid];
+
+        QString deviceId = QString::fromStdString(active.config.device_id);
+        source_model_->updateDeviceMetrics(deviceId, fps, static_cast<int>(drops));
+
+        stream_frame_counts_[sid] = 0;
+    }
+}
+
 void AppController::setupCrashAlertHandler() {
     plugin_registry_.set_crash_alert_callback([this](const std::string& plugin_id) {
         QMetaObject::invokeMethod(this, [this, plugin_id] {
@@ -545,9 +690,17 @@ void AppController::setupCrashAlertHandler() {
 }
 
 void AppController::handlePluginCrash(const std::string& pluginId) {
+    QString pluginName = QString::fromStdString(pluginId);
     pushLogEntry(log_entries_,
-        QStringLiteral("[WARN] Plugin crashed: %1").arg(QString::fromStdString(pluginId)));
-    emit pluginCrashAlert(QString::fromStdString(pluginId));
+        QStringLiteral("[WARN] Plugin crashed: %1").arg(pluginName));
+
+    alert_model_->pushAlert(
+        QStringLiteral("Plugin crash detected — recovering..."),
+        pluginName, 1,
+        QStringLiteral("crash_%1").arg(pluginName),
+        true);
+
+    emit pluginCrashAlert(pluginName);
 
     auto streams = plugin_registry_.get_streams_for_plugin(pluginId);
     for (const auto& stream_id : streams) {
@@ -556,23 +709,42 @@ void AppController::handlePluginCrash(const std::string& pluginId) {
 
     auto result = plugin_registry_.handle_plugin_crash(pluginId);
     if (result.restart_succeeded) {
+        alert_model_->dismissBySource(pluginName);
         pushLogEntry(log_entries_,
             QStringLiteral("[INFO] Plugin %1 restarted, starting reconnect recording")
-                .arg(QString::fromStdString(pluginId)));
+                .arg(pluginName));
         int reconnect_idx = 1;
         for (const auto& stream_id : result.finalized_streams) {
             pipeline_.start_reconnect(stream_id, reconnect_idx);
         }
+    } else {
+        alert_model_->dismissBySource(pluginName);
+        alert_model_->pushAlert(
+            QStringLiteral("Plugin recovery failed — %1").arg(pluginName),
+            pluginName, 2,
+            QStringLiteral("crash_%1").arg(pluginName),
+            false);
+        pushLogEntry(log_entries_,
+            QStringLiteral("[ERROR] Plugin %1 recovery failed")
+                .arg(pluginName));
     }
 }
 
 void AppController::handleDeviceDisconnect(const std::string& streamId,
                                             const std::string& deviceName) {
+    QString devName = QString::fromStdString(deviceName);
     pushLogEntry(log_entries_,
         QStringLiteral("[WARN] Device disconnected: %1 (stream: %2)")
-            .arg(QString::fromStdString(deviceName),
+            .arg(devName,
                  QString::fromStdString(streamId)));
-    emit deviceDisconnected(QString::fromStdString(deviceName));
+
+    alert_model_->pushAlert(
+        QStringLiteral("Device disconnected: %1 — check connection").arg(devName),
+        devName, 1,
+        QStringLiteral("disconnect_%1").arg(QString::fromStdString(streamId)),
+        false);
+
+    emit deviceDisconnected(devName);
 
     if (recording_) {
         pipeline_.finalize_stream(streamId);

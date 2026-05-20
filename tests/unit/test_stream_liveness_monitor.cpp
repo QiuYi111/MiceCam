@@ -191,8 +191,11 @@ TEST_F(StreamLivenessMonitorTest, StallCountResetsOnActivity) {
     monitor_->register_stream("cam1", "plugin_a");
     monitor_->start();
 
+    int start = monitor_->cycle_count();
     advance_clock(std::chrono::milliseconds(stall_timeout_ms_ + 100));
-    wait_for_monitor_cycle();
+    while (monitor_->cycle_count() < start + 1) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 
     {
         std::lock_guard<std::mutex> lock(events_mutex_);
@@ -201,8 +204,11 @@ TEST_F(StreamLivenessMonitorTest, StallCountResetsOnActivity) {
     }
 
     monitor_->update_activity("cam1");
+    start = monitor_->cycle_count();
     advance_clock(std::chrono::milliseconds(stall_timeout_ms_ + 100));
-    wait_for_monitor_cycle();
+    while (monitor_->cycle_count() < start + 1) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 
     monitor_->stop();
 

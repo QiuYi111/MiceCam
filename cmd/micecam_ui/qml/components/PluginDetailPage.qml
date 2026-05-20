@@ -8,6 +8,7 @@ Item {
 
     property string pluginPath: ""
     property var detailData: ({})
+    readonly property bool hasDiagnostics: detailData.diagnostics !== undefined && detailData.diagnostics.length > 0
 
     signal backClicked()
 
@@ -17,26 +18,38 @@ Item {
         }
     }
 
+    function featureText(values) {
+        return values && values.length > 0 ? values.join(", ") : "None"
+    }
+
+    function platformText(values) {
+        if (!values) return "-"
+        var keys = Object.keys(values)
+        return keys.length > 0 ? keys.map(function(k) { return k + ": " + values[k] }).join("\n") : "-"
+    }
+
     onPluginPathChanged: loadDetail()
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 32
-        spacing: 24
+        spacing: 18
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
+            spacing: 14
 
             Button {
+                text: "\u2039  Back to Plugins"
                 background: Rectangle {
                     radius: 6
                     color: Theme.bgSecondary
-                    implicitWidth: 80
-                    implicitHeight: 32
+                    border.color: Theme.borderColor
+                    implicitWidth: 132
+                    implicitHeight: 34
                 }
                 contentItem: Text {
-                    text: "\u2190 Back"
+                    text: parent.text
                     font.family: Theme.fontPrimary
                     font.pixelSize: 13
                     color: Theme.navyPrimary
@@ -46,35 +59,63 @@ Item {
                 onClicked: root.backClicked()
             }
 
-            Text {
-                text: detailData.name || "Plugin Detail"
-                font.family: Theme.fontPrimary
-                font.pixelSize: 24
-                font.weight: Font.Bold
+            AppIcon {
+                name: detailData.type === "bundled" ? "camera" : "gear"
+                size: 28
                 color: Theme.textPrimary
             }
 
-            Item { Layout.fillWidth: true }
-
-            Rectangle {
-                visible: detailData.status !== undefined
-                width: statusText.implicitWidth + 16
-                height: 24
-                radius: 12
-                color: detailData.status === "OK" ? "#E8F5E9"
-                     : detailData.status === "Error" ? "#FFEBEE"
-                     : Theme.bgTertiary
-
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 4
+                RowLayout {
+                    spacing: 10
+                    Text {
+                        text: detailData.name || "Plugin Detail"
+                        font.family: Theme.fontPrimary
+                        font.pixelSize: 26
+                        font.weight: Font.Bold
+                        color: Theme.textPrimary
+                    }
+                    Badge {
+                        text: detailData.type === "bundled" ? "Bundled" : "Linked"
+                        tone: "blue"
+                    }
+                    Badge {
+                        text: detailData.apiVersion !== undefined ? "API v" + detailData.apiVersion : "API"
+                        tone: "gray"
+                    }
+                    Badge {
+                        text: detailData.restartRequired ? "Restart required" : (detailData.status || "")
+                        tone: detailData.restartRequired ? "amber" : (detailData.status === "OK" ? "green" : "red")
+                        visible: text.length > 0
+                    }
+                }
                 Text {
-                    id: statusText
-                    anchors.centerIn: parent
-                    text: detailData.status || ""
+                    text: detailData.description || "Configure plugin behavior and inspect runtime status."
                     font.family: Theme.fontPrimary
-                    font.pixelSize: 11
-                    font.weight: Font.Medium
-                    color: detailData.status === "OK" ? "#2E7D32"
-                         : detailData.status === "Error" ? Theme.statusRed
-                         : Theme.textSecondary
+                    font.pixelSize: 13
+                    color: Theme.textSecondary
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+
+            Button {
+                text: "Plugin Documentation"
+                background: Rectangle {
+                    radius: 6
+                    color: Theme.bgPrimary
+                    border.color: Theme.borderColor
+                    implicitHeight: 34
+                }
+                contentItem: Text {
+                    text: parent.text
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 13
+                    color: Theme.textSecondary
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
         }
@@ -85,242 +126,312 @@ Item {
             clip: true
 
             ColumnLayout {
-                width: Math.max(implicitWidth, 600)
-                spacing: 20
+                width: Math.max(parent.width - 24, 760)
+                spacing: 14
 
-                GridLayout {
-                    columns: 2
-                    columnSpacing: 24
-                    rowSpacing: 12
+                SectionPanel {
+                    title: "Diagnostics"
+                    visible: root.hasDiagnostics
                     Layout.fillWidth: true
 
-                    Text {
-                        text: "Plugin ID"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.pluginId || "-"
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: Theme.textPrimary
-                    }
+                    ColumnLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: parent.contentTop
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        spacing: 0
 
-                    Text {
-                        text: "Version"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.pluginVersion || "-"
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: Theme.textPrimary
-                    }
+                        Repeater {
+                            model: detailData.diagnostics || []
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                height: 72
+                                color: "transparent"
+                                border.color: Theme.divider
 
-                    Text {
-                        text: "API Version"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.apiVersion !== undefined ? String(detailData.apiVersion) : "-"
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: Theme.textPrimary
-                    }
-
-                    Text {
-                        text: "Type"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.type || "-"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        color: Theme.textPrimary
-                    }
-
-                    Text {
-                        text: "Enabled"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.enabled !== undefined ? (detailData.enabled ? "Yes" : "No") : "-"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        color: detailData.enabled ? Theme.statusGreen : Theme.statusRed
-                    }
-
-                    Text {
-                        text: "Process Model"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.processModel || "-"
-                        font.family: Theme.fontMono
-                        font.pixelSize: 13
-                        color: Theme.textPrimary
-                    }
-
-                    Text {
-                        text: "Author"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.author || "-"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        color: Theme.textPrimary
-                    }
-
-                    Text {
-                        text: "Path"
-                        font.family: Theme.fontPrimary
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        color: Theme.textSecondary
-                    }
-                    Text {
-                        text: detailData.path || "-"
-                        font.family: Theme.fontMono
-                        font.pixelSize: 11
-                        color: Theme.textSecondary
-                        wrapMode: Text.WrapAnywhere
-                        Layout.fillWidth: true
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 12
+                                    AppIcon { name: "warning"; size: 18; color: Theme.statusAmber }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 3
+                                        Text {
+                                            text: "Plugin diagnostic"
+                                            font.family: Theme.fontPrimary
+                                            font.pixelSize: 14
+                                            font.weight: Font.DemiBold
+                                            color: Theme.textPrimary
+                                        }
+                                        Text {
+                                            text: modelData
+                                            font.family: Theme.fontPrimary
+                                            font.pixelSize: 12
+                                            color: Theme.textSecondary
+                                            elide: Text.ElideRight
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                    Badge { text: "Recoverable"; tone: "amber" }
+                                }
+                            }
+                        }
                     }
                 }
 
-                Rectangle {
+                SectionPanel {
+                    title: "Manifest"
                     Layout.fillWidth: true
-                    height: 1
-                    color: Theme.divider
-                }
+                    implicitHeight: 356
 
-                Text {
-                    text: "Description"
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textSecondary
-                }
-                Text {
-                    text: detailData.description || "No description available."
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 13
-                    color: Theme.textPrimary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
+                    ColumnLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: parent.contentTop
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        spacing: 0
 
-                Text {
-                    text: "Required Features"
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textSecondary
-                }
-                Text {
-                    text: {
-                        var feats = detailData.requiredFeatures
-                        return feats && feats.length > 0 ? feats.join(", ") : "None"
+                        DetailRow { label: "Plugin ID"; value: detailData.pluginId || "-" }
+                        DetailRow { label: "Display name"; value: detailData.name || "-" }
+                        DetailRow { label: "Version"; value: detailData.pluginVersion || "-" }
+                        DetailRow { label: "API version"; value: detailData.apiVersion !== undefined ? "v" + detailData.apiVersion : "-" }
+                        DetailRow { label: "Source type"; value: detailData.type || "-" }
+                        DetailRow { label: "Process model"; value: detailData.processModel || "-" }
+                        DetailRow { label: "Plugin path"; value: detailData.path || "-" }
+                        DetailRow { label: "Platform entrypoints"; value: root.platformText(detailData.platforms) }
                     }
-                    font.family: Theme.fontMono
-                    font.pixelSize: 12
-                    color: Theme.textPrimary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
                 }
 
-                Text {
-                    text: "Optional Features"
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textSecondary
-                }
-                Text {
-                    text: {
-                        var feats = detailData.optionalFeatures
-                        return feats && feats.length > 0 ? feats.join(", ") : "None"
+                SectionPanel {
+                    title: "Capabilities"
+                    Layout.fillWidth: true
+                    implicitHeight: 118
+
+                    RowLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: parent.contentTop
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        spacing: 12
+
+                        CapabilityChip { text: root.featureText(detailData.requiredFeatures) === "None" ? "No required features" : root.featureText(detailData.requiredFeatures) }
+                        CapabilityChip { text: root.featureText(detailData.optionalFeatures) === "None" ? "No optional features" : root.featureText(detailData.optionalFeatures) }
+                        CapabilityChip { text: "Schema-ready config" }
+                        CapabilityChip { text: "External process" }
                     }
-                    font.family: Theme.fontMono
-                    font.pixelSize: 12
-                    color: Theme.textPrimary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
                 }
 
-                Text {
-                    text: "Platforms"
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textSecondary
-                }
-                Text {
-                    text: {
-                        var plats = detailData.platforms
-                        if (!plats) return "-"
-                        var keys = Object.keys(plats)
-                        return keys.length > 0
-                            ? keys.map(function(k) { return k + ": " + plats[k] }).join("\n")
-                            : "-"
+                SectionPanel {
+                    title: "Devices"
+                    Layout.fillWidth: true
+                    implicitHeight: 118
+
+                    RowLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: parent.contentTop
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        spacing: 12
+
+                        Rectangle {
+                            width: 10; height: 10; radius: 5
+                            color: Theme.textTertiary
+                        }
+                        Text {
+                            text: "0 devices"
+                            font.family: Theme.fontPrimary
+                            font.pixelSize: 14
+                            font.weight: Font.Medium
+                            color: Theme.textPrimary
+                        }
+                        Text {
+                            text: "No devices are currently reported by this plugin."
+                            font.family: Theme.fontPrimary
+                            font.pixelSize: 13
+                            color: Theme.textSecondary
+                            Layout.fillWidth: true
+                        }
                     }
-                    font.family: Theme.fontMono
-                    font.pixelSize: 12
-                    color: Theme.textPrimary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
                 }
 
-                Rectangle {
+                SectionPanel {
+                    title: "Configuration"
                     Layout.fillWidth: true
-                    height: 1
-                    color: Theme.divider
-                    visible: diagList.text.length > 0
-                }
+                    implicitHeight: 168
 
-                Text {
-                    text: "Diagnostics"
-                    font.family: Theme.fontPrimary
-                    font.pixelSize: 13
-                    font.weight: Font.Medium
-                    color: Theme.textSecondary
-                    visible: diagList.text.length > 0
-                }
-                Text {
-                    id: diagList
-                    text: {
-                        var diags = detailData.diagnostics
-                        return diags && diags.length > 0 ? diags.join("\n") : ""
+                    ColumnLayout {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: parent.contentTop
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 18
+                        spacing: 10
+
+                        ConfigRow { label: "Width"; value: "Default"; mode: "pre-open" }
+                        ConfigRow { label: "Height"; value: "Default"; mode: "pre-open" }
+                        ConfigRow { label: "Framerate"; value: "Default"; mode: "pre-open" }
                     }
-                    font.family: Theme.fontMono
-                    font.pixelSize: 11
-                    color: Theme.statusRed
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                    visible: text.length > 0
                 }
             }
+        }
+    }
+
+    component SectionPanel : Rectangle {
+        id: panel
+        property string title: ""
+        readonly property int contentTop: 56
+        radius: 8
+        color: Theme.bgPrimary
+        border.color: Theme.borderColor
+        implicitHeight: 96
+
+        Text {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.leftMargin: 18
+            anchors.topMargin: 16
+            text: panel.title
+            font.family: Theme.fontPrimary
+            font.pixelSize: 16
+            font.weight: Font.DemiBold
+            color: Theme.textPrimary
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: 48
+            height: 1
+            color: Theme.divider
+        }
+    }
+
+    component DetailRow : Rectangle {
+        property string label: ""
+        property string value: ""
+        Layout.fillWidth: true
+        height: Math.max(32, valueText.implicitHeight + 12)
+        color: "transparent"
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 1
+            color: Theme.divider
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 16
+            Text {
+                text: label
+                font.family: Theme.fontPrimary
+                font.pixelSize: 12
+                font.weight: Font.Medium
+                color: Theme.textSecondary
+                Layout.preferredWidth: 210
+            }
+            Text {
+                id: valueText
+                text: value
+                font.family: value.indexOf("/") >= 0 || value.indexOf(".") >= 0 ? Theme.fontMono : Theme.fontPrimary
+                font.pixelSize: 12
+                color: Theme.textPrimary
+                wrapMode: Text.WrapAnywhere
+                Layout.fillWidth: true
+            }
+        }
+    }
+
+    component Badge : Rectangle {
+        property string text: ""
+        property string tone: "gray"
+        width: badgeText.implicitWidth + 18
+        height: 26
+        radius: 8
+        color: tone === "green" ? "#E8F5E9"
+             : tone === "red" ? "#FFEBEE"
+             : tone === "amber" ? "#FFF7ED"
+             : tone === "blue" ? Theme.navyTint
+             : Theme.bgSecondary
+        Text {
+            id: badgeText
+            anchors.centerIn: parent
+            text: parent.text
+            font.family: Theme.fontPrimary
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            color: parent.tone === "green" ? "#2E7D32"
+                 : parent.tone === "red" ? Theme.statusRed
+                 : parent.tone === "amber" ? Theme.statusAmber
+                 : parent.tone === "blue" ? Theme.navyPrimary
+                 : Theme.textSecondary
+        }
+    }
+
+    component CapabilityChip : Rectangle {
+        property string text: ""
+        height: 36
+        width: chipText.implicitWidth + 28
+        radius: 8
+        color: Theme.bgSecondary
+        border.color: Theme.borderColor
+        Text {
+            id: chipText
+            anchors.centerIn: parent
+            text: parent.text
+            font.family: Theme.fontPrimary
+            font.pixelSize: 12
+            color: Theme.textPrimary
+        }
+    }
+
+    component ConfigRow : Rectangle {
+        property string label: ""
+        property string value: ""
+        property string mode: ""
+        Layout.fillWidth: true
+        height: 32
+        color: "transparent"
+
+        RowLayout {
+            anchors.fill: parent
+            Text {
+                text: label
+                font.family: Theme.fontPrimary
+                font.pixelSize: 13
+                color: Theme.textPrimary
+                Layout.preferredWidth: 180
+            }
+            Rectangle {
+                Layout.preferredWidth: 160
+                height: 28
+                radius: 6
+                color: Theme.bgSecondary
+                border.color: Theme.borderColor
+                Text {
+                    anchors.centerIn: parent
+                    text: value
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 12
+                    color: Theme.textSecondary
+                }
+            }
+            Badge { text: mode; tone: "blue" }
+            Item { Layout.fillWidth: true }
         }
     }
 }

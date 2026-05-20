@@ -3,10 +3,12 @@
 #include <atomic>
 #include <memory>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -75,6 +77,7 @@ public:
     Q_INVOKABLE QVariantList pluginList();
     Q_INVOKABLE bool importPlugin(const QString& dirPath);
     Q_INVOKABLE void togglePlugin(const QString& pluginPath, bool enabled);
+    Q_INVOKABLE bool removePlugin(const QString& pluginPath);
     Q_INVOKABLE QVariantMap getPluginDetail(const QString& pluginPath);
 
     void setOutputDirectory(const QString& dir);
@@ -134,9 +137,15 @@ private:
     std::vector<ActiveStream> active_streams_;
     QStringList log_entries_;
 
+    QTimer* metrics_timer_ = nullptr;
+    std::unordered_map<std::string, uint64_t> stream_frame_counts_;
+    std::unordered_map<std::string, uint64_t> stream_drop_counts_;
+    std::chrono::steady_clock::time_point last_metrics_push_;
+
     void captureLoop();
     void stopCaptureLoop();
     void refreshLiveStatus();
+    void pushLiveMetrics();
     void setupCrashAlertHandler();
 };
 

@@ -14,7 +14,7 @@ Item {
     property int menuTargetDrops: 0
     property bool menuTargetRecording: false
     property int menuTargetStatus: 0
-    readonly property bool empty: appController.cameraCount === 0
+    readonly property bool empty: appController.cameraCount === 0 && sourceRepeater.count === 0
 
     ScrollView {
         id: gridScroll
@@ -22,25 +22,145 @@ Item {
         clip: true
         contentWidth: availableWidth
 
-        Flow {
+        Column {
             width: gridScroll.availableWidth
             spacing: 12
             padding: 16
 
             Repeater {
-                model: appController.cameraModel
-                delegate: CameraCard {
-                    width: index < 2 ? (parent.width - 12) / 2 : (parent.width - 24) / 3
-                    height: index < 2 ? root.height / 2 - 22 : root.height / 2 - 22
-                    cameraName: model.name
-                    fps: model.fps
-                    drops: model.dropCount
-                    status: model.status
-                    isRecording: model.isRecording
-                    elapsedText: appController.elapsedText
-                    onContextFullscreen: root.cardFullscreen(model.name, model.fps, model.dropCount, model.isRecording, model.status,
-                        model.resolutionLabels, model.framerateLabels, model.formatLabels)
-                    onContextMenuRequested: function(gx, gy) { root.showContextMenu(model.name, model.fps, model.dropCount, model.isRecording, model.status, gx, gy) }
+                id: sourceRepeater
+                model: appController.sourceModel
+
+                delegate: Column {
+                    width: parent.width - 32
+                    spacing: 8
+                    property var sourceDevices: model.devices || []
+
+                    RowLayout {
+                        width: parent.width
+                        height: 28
+                        spacing: 8
+
+                        Text {
+                            text: model.sourceName
+                            font.family: Theme.fontPrimary
+                            font.pixelSize: 15
+                            font.weight: Font.DemiBold
+                            color: Theme.textPrimary
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Rectangle {
+                            height: 22
+                            width: apiText.implicitWidth + 16
+                            radius: 11
+                            color: Theme.bgSecondary
+                            visible: model.pluginApiVersion > 0
+                            Text {
+                                id: apiText
+                                anchors.centerIn: parent
+                                text: "API v" + model.pluginApiVersion
+                                font.family: Theme.fontPrimary
+                                font.pixelSize: 11
+                                color: Theme.textSecondary
+                            }
+                        }
+
+                        Rectangle {
+                            height: 22
+                            width: countText.implicitWidth + 16
+                            radius: 11
+                            color: Theme.bgSecondary
+                            Text {
+                                id: countText
+                                anchors.centerIn: parent
+                                text: model.deviceCount + " devices"
+                                font.family: Theme.fontPrimary
+                                font.pixelSize: 11
+                                color: Theme.textSecondary
+                            }
+                        }
+
+                        Rectangle {
+                            width: 8; height: 8; radius: 4
+                            color: model.diagnostics === 0 ? Theme.statusGreen
+                                 : model.diagnostics === 2 ? Theme.textTertiary
+                                 : model.diagnostics === 3 ? Theme.statusRed
+                                 : Theme.statusAmber
+                        }
+                    }
+
+                    Flow {
+                        width: parent.width
+                        spacing: 12
+                        visible: model.deviceCount > 0
+
+                        Repeater {
+                            model: sourceDevices
+                            delegate: CameraCard {
+                                width: parent.width > 760 ? (parent.width - 12) / 2 : parent.width
+                                height: Math.max(220, root.height / 2 - 42)
+                                cameraName: modelData.name || modelData.displayName
+                                fps: modelData.fps || 0
+                                drops: modelData.dropCount || 0
+                                status: modelData.statusCode || 0
+                                isRecording: modelData.isRecording || false
+                                elapsedText: appController.elapsedText
+                                onContextFullscreen: root.cardFullscreen(cameraName, fps, drops, isRecording, status, [], [], [])
+                                onContextMenuRequested: function(gx, gy) {
+                                    root.showContextMenu(cameraName, fps, drops, isRecording, status, gx, gy)
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 48
+                        radius: 8
+                        color: Theme.bgSecondary
+                        border.color: Theme.divider
+                        visible: model.deviceCount === 0
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            spacing: 10
+
+                            AppIcon {
+                                name: model.diagnostics === 3 ? "warning" : "camera"
+                                size: 16
+                                color: model.diagnostics === 3 ? Theme.statusRed : Theme.textSecondary
+                            }
+
+                            Text {
+                                text: model.sourceName
+                                font.family: Theme.fontPrimary
+                                font.pixelSize: 14
+                                font.weight: Font.Medium
+                                color: Theme.textPrimary
+                            }
+
+                            Text {
+                                text: model.diagnosticsMessage || model.statusLabel || "No devices"
+                                font.family: Theme.fontPrimary
+                                font.pixelSize: 13
+                                color: Theme.textSecondary
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+
+                            Text {
+                                text: model.restartRequired ? "restart required" : ""
+                                font.family: Theme.fontPrimary
+                                font.pixelSize: 12
+                                color: Theme.statusAmber
+                                visible: model.restartRequired
+                            }
+                        }
+                    }
                 }
             }
         }

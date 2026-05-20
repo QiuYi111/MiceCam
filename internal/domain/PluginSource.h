@@ -18,6 +18,8 @@ struct PluginSource {
     uint32_t plugin_api_version = 0;
     bool enabled = true;
     PluginDiagnosticsState diagnostics_state = PluginDiagnosticsState::OK;
+    std::string diagnostics_message;
+    bool restart_required = false;
     std::vector<std::string> device_ids;
 };
 

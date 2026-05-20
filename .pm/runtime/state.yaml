@@ -1,10 +1,10 @@
 project_id: "micecam-v2"
-status: active
-current_stage: "003-phase-6-hardware-gate"
-current_stage_goal: "Run USB/FFmpeg plugin runtime hardware validation and Ubuntu lab stress gates with artifact validation and no-silent-drop checks."
-loop_iteration: 13
-iteration_valid_count: 8
-iteration_total_count: 14
+status: complete
+current_stage: "007-phase-8-release-gate"
+current_stage_goal: "Spec 007 release gate completed. All 8 phases delivered. Merge recommendation prepared."
+loop_iteration: 20
+iteration_valid_count: 5
+iteration_total_count: 5
 consecutive_failures: 0
 feasibility_ready: true
 product_definition_ready: true
@@ -12,22 +12,21 @@ roadmap_ready: true
 ux_ready: true
 ux_depth: "full"
 ui_direction_ready: true
-spec_003_phase: 2
-spec_003_total_phases: 7
-last_verified:
-  commit: 8555131
-  test_command: "cmake --build build -j 4 && ctest --test-dir build --output-on-failure && python3 tests/unit/test_validate_session_artifacts.py -v && bash scripts/hardware_gate_two_source.sh --dry-run && independent OpenCode /harness review"
-  test_result: "PASS. Phase 6 preparation accepted: full build succeeds, 33/33 CTest tests pass, 30/30 validator tests pass, dry-run procedure works, independent review found 0 blocking issues. Ubuntu/jingyi-lab hardware gate is BLOCKED because remote host is unreachable."
-next_action:
-  type: "request_user_decision"
-  summary: "Restore jingyi-lab connectivity or provide an alternate reachable Ubuntu/HIL target, then re-run the current gate task."
-  blocked: true
-  needs_user_decision: true
-current_phase: "003-phase-6-hardware-gate done - user checked success"
-last_updated: "2026-05-16 10:43:03 +0800"
+spec_007_phase: 8
+spec_007_total_phases: 8
+spec_007_complete: true
+blast_radius: "leaf"
 max_iterations: null
 max_consecutive_failures: 3
+last_updated: "2026-05-19 20:00:00 +0800"
+next_action:
+  type: "handoff"
+  summary: "Spec 007 complete. 45/45 tests pass, 4/4 HIL pass. Merge codex/007-plugin-ui-release → dev pending user approval. Deferred: packaging validation, UI screenshots, OAK-D hardware."
+  blocked: false
+  needs_user_decision: true
+  decision: "Approve merge codex/007-plugin-ui-release → dev"
+current_phase: "complete"
 failure_tracking:
-  last_failure_signature: "blocked_dependency"
-  last_failure_reason: "jingyi-lab is unreachable via LAN SSH and offline on Tailscale."
-  same_failure_count: 1
+  last_failure_signature: ""
+  last_failure_reason: ""
+  same_failure_count: 0

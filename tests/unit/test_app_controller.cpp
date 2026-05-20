@@ -2,6 +2,7 @@
 #include <QCoreApplication>
 #include <QThread>
 #include <chrono>
+#include <filesystem>
 #define private public
 #include "cmd/micecam_ui/AppController.h"
 #undef private
@@ -69,8 +70,54 @@ TEST(AppController, PluginListReturnsBundledPlugins) {
         EXPECT_TRUE(m.contains("enabled"));
         EXPECT_TRUE(m.contains("type"));
         EXPECT_TRUE(m.contains("status"));
+        EXPECT_TRUE(m.contains("apiVersion"));
+        EXPECT_TRUE(m.contains("restartRequired"));
+        EXPECT_TRUE(m.contains("canToggle"));
+        EXPECT_TRUE(m.contains("canRemove"));
+        EXPECT_TRUE(m.contains("statusMessage"));
         EXPECT_EQ(m["type"].toString(), QStringLiteral("bundled"));
+        EXPECT_FALSE(m["canToggle"].toBool());
+        EXPECT_FALSE(m["canRemove"].toBool());
     }
+}
+
+TEST(AppController, PluginListReturnsBundledPluginsFromRepoRootCwd) {
+#ifdef MICECAM_TEST_SOURCE_DIR
+    auto original = std::filesystem::current_path();
+    std::filesystem::current_path(MICECAM_TEST_SOURCE_DIR);
+
+    micecam::ui::AppController controller;
+    QVariantList plugins = controller.pluginList();
+
+    std::filesystem::current_path(original);
+    EXPECT_GE(plugins.size(), 1);
+#else
+    GTEST_SKIP() << "MICECAM_TEST_SOURCE_DIR is not defined";
+#endif
+}
+
+TEST(AppController, BundledPluginToggleIsLocked) {
+    micecam::ui::AppController controller;
+
+    QVariantList plugins = controller.pluginList();
+    ASSERT_GE(plugins.size(), 1);
+
+    QVariantMap first = plugins.first().toMap();
+    ASSERT_EQ(first["type"].toString(), QStringLiteral("bundled"));
+
+    controller.togglePlugin(first["path"].toString(), false);
+
+    QVariantList updated = controller.pluginList();
+    bool found = false;
+    for (const auto& item : updated) {
+        QVariantMap m = item.toMap();
+        if (m["path"].toString() == first["path"].toString()) {
+            found = true;
+            EXPECT_TRUE(m["enabled"].toBool());
+            EXPECT_FALSE(m["canToggle"].toBool());
+        }
+    }
+    EXPECT_TRUE(found);
 }
 
 TEST(AppController, ImportPluginRejectsInvalidPath) {

@@ -14,6 +14,7 @@
 #include "domain/Capabilities.h"
 #include "domain/PluginManifest.h"
 #include "pipeline/PreflightValidator.h"
+#include "infrastructure/FFmpegCameraBackend.h"
 
 namespace micecam::ui {
 
@@ -60,6 +61,7 @@ AppController::AppController(QObject* parent)
 {
     plugin_registry_.initialize();
     manager_.set_plugin_registry(&plugin_registry_);
+    manager_.register_backend(std::make_unique<infrastructure::FFmpegCameraBackend>());
     setupCrashAlertHandler();
 
     metrics_timer_ = new QTimer(this);

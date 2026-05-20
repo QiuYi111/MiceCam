@@ -7,6 +7,10 @@
 #include <regex>
 #include <set>
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include <spdlog/spdlog.h>
 
 extern "C" {
@@ -19,8 +23,10 @@ namespace micecam::plugin {
 
 AVFoundationEnumerator::AVFoundationEnumerator() {
     avdevice_register_all();
-#if defined(__APPLE__) && TARGET_OS_MAC
+#ifdef __APPLE__
     available_ = true;
+#else
+    available_ = false;
 #endif
 }
 
@@ -28,7 +34,7 @@ std::vector<EnumeratedDevice> AVFoundationEnumerator::enumerate() const {
     std::vector<EnumeratedDevice> result;
     if (!available_) return result;
 
-#if defined(__APPLE__) && TARGET_OS_MAC
+#ifdef __APPLE__
     const AVInputFormat* fmt = av_find_input_format("avfoundation");
     if (!fmt) {
         spdlog::warn("avfoundation input format not found in FFmpeg");

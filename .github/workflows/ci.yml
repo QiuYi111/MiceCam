@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +96,7 @@ jobs:
 
       - name: Build (Unix)
         if: runner.os != 'Windows'
-        run: cmake --build build --config Release -j
+        run: cmake --build build --config Release -j 3
 
       - name: Test (Unix)
         if: runner.os != 'Windows'

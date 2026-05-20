@@ -95,14 +95,24 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
   <true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <key>NSCameraUsageDescription</key>
+  <string>MiceCam needs camera access to capture video streams.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>MiceCam needs microphone access to capture audio with video.</string>
 </dict>
 </plist>
 EOF
 
 if command -v macdeployqt >/dev/null 2>&1; then
-  macdeployqt "${APP_DIR}" -qmldir="${ROOT_DIR}/cmd/micecam_ui/qml" -always-overwrite
+  macdeployqt "${APP_DIR}" -qmldir="${ROOT_DIR}/cmd/micecam_ui/qml" \
+    -executable="${PLUGIN_ROOT}/micecam.ffmpeg/bin/micecam-ffmpeg" \
+    -executable="${PLUGIN_ROOT}/micecam.oak/bin/micecam-oak" \
+    -always-overwrite
 elif [[ -x "$(brew --prefix qt@6 2>/dev/null)/bin/macdeployqt" ]]; then
-  "$(brew --prefix qt@6)/bin/macdeployqt" "${APP_DIR}" -qmldir="${ROOT_DIR}/cmd/micecam_ui/qml" -always-overwrite
+  "$(brew --prefix qt@6)/bin/macdeployqt" "${APP_DIR}" -qmldir="${ROOT_DIR}/cmd/micecam_ui/qml" \
+    -executable="${PLUGIN_ROOT}/micecam.ffmpeg/bin/micecam-ffmpeg" \
+    -executable="${PLUGIN_ROOT}/micecam.oak/bin/micecam-oak" \
+    -always-overwrite
 else
   echo "macdeployqt is missing. Install Qt 6 or add macdeployqt to PATH." >&2
   exit 1

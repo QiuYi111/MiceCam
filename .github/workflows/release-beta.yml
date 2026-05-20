@@ -182,7 +182,7 @@ jobs:
           cat > "${STAGE}/qt.conf" <<'QTCONF'
           [Paths]
           Plugins=.
-          Qml2Imports=.
+          QmlImports=.
           QTCONF
 
           # Deploy Qt platform plugin
@@ -206,7 +206,8 @@ jobs:
           cp -r "${QML_SRC}/" "${STAGE}/"
 
           # Copy all transitive DLL dependencies via ldd
-          bash scripts/copy_msys2_deps.sh "${STAGE}/MiceCam.exe" "${STAGE}" \
+          bash scripts/copy_msys2_deps.sh "${STAGE}" \
+            "${STAGE}/MiceCam.exe" \
             "${STAGE}/3rdParty/bundled_plugins/micecam.ffmpeg/bin/micecam-ffmpeg.exe" \
             "${STAGE}/3rdParty/bundled_plugins/micecam.oak/bin/micecam-oak.exe"
 

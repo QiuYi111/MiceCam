@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Copy MSYS2 DLL dependencies of an executable to a destination directory.
+# Copy MSYS2 DLL dependencies of executables to a destination directory.
+# Usage: $0 <dest-dir> <executable> [executable...]
 # Uses ldd to find transitive dependencies, filtering for MSYS2 UCRT64 paths.
 
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 <executable> <dest-dir> [additional executables...]"
+    echo "Usage: $0 <dest-dir> <executable> [executable...]"
     exit 1
 fi
 
-DEST="$2"
-shift 2
+DEST="$1"
+shift
 
 declare -A SEEN
 PENDING=("$@")
@@ -23,9 +24,7 @@ while [ ${#PENDING[@]} -gt 0 ]; do
         continue
     fi
 
-    # Run ldd and extract DLL paths that are in MSYS2 UCRT64 prefix
     while IFS= read -r line; do
-        # Match: something => /ucrt64/bin/foo.dll
         if [[ "$line" =~ \=\>\ (/ucrt64/bin/[^\ ]+\.dll) ]]; then
             DLL_PATH="${BASH_REMATCH[1]}"
             DLL_NAME="$(basename "$DLL_PATH")"
@@ -35,7 +34,6 @@ while [ ${#PENDING[@]} -gt 0 ]; do
                 cp "$DLL_PATH" "$DEST/"
                 PENDING+=("$DEST/$DLL_NAME")
             fi
-        # Match: something => /mingw64/bin/foo.dll (runtime deps)
         elif [[ "$line" =~ \=\>\ (/mingw64/bin/[^\ ]+\.dll) ]]; then
             DLL_PATH="${BASH_REMATCH[1]}"
             DLL_NAME="$(basename "$DLL_PATH")"

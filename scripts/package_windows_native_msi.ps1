@@ -202,7 +202,9 @@ if (-not (Test-Path -LiteralPath $WixExe)) {
     }
 }
 
-& $WixExe extension add WixToolset.UI.wixext
+$env:WIX_ACCEPT_OSMF_EULA = "true"
+
+& $WixExe extension add WixToolset.UI.wixext --accept-osmf-eula
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install WiX UI extension."
 }

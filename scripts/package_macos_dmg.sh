@@ -13,6 +13,7 @@ MACOS_DIR="${CONTENTS_DIR}/MacOS"
 RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 PLUGIN_ROOT="${RESOURCES_DIR}/3rdParty/bundled_plugins"
 DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}-macos-arm64.dmg"
+ICON_SRC="${ROOT_DIR}/specs/001-micecam-v2-rewrite/UIDesign/Icon.png"
 
 require_file() {
   if [[ ! -f "$1" ]]; then
@@ -46,6 +47,26 @@ chmod +x "${MACOS_DIR}/${APP_NAME}" \
          "${PLUGIN_ROOT}/micecam.ffmpeg/bin/micecam-ffmpeg" \
          "${PLUGIN_ROOT}/micecam.oak/bin/micecam-oak"
 
+# Generate app icon from source PNG
+ICONSET_DIR="${RESOURCES_DIR}/${APP_NAME}.iconset"
+rm -rf "${ICONSET_DIR}" "${RESOURCES_DIR}/${APP_NAME}.icns"
+mkdir -p "${ICONSET_DIR}"
+
+if [[ -f "${ICON_SRC}" ]] && command -v sips >/dev/null 2>&1; then
+  # Generate all required icon sizes from source PNG (assumed 1024x1024)
+  for size in 16 32 64 128 256 512; do
+    sips -z ${size} ${size} "${ICON_SRC}" --out "${ICONSET_DIR}/icon_${size}x${size}.png" >/dev/null 2>&1
+    sips -z $((size * 2)) $((size * 2)) "${ICON_SRC}" --out "${ICONSET_DIR}/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+  done
+  sips -z 1024 1024 "${ICON_SRC}" --out "${ICONSET_DIR}/icon_512x512@2x.png" >/dev/null 2>&1
+
+  iconutil -c icns "${ICONSET_DIR}" -o "${RESOURCES_DIR}/${APP_NAME}.icns"
+  rm -rf "${ICONSET_DIR}"
+  echo "App icon generated: ${RESOURCES_DIR}/${APP_NAME}.icns"
+else
+  echo "Warning: sips not available or icon source missing, skipping icon generation"
+fi
+
 cat > "${CONTENTS_DIR}/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -58,6 +79,8 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
   <string>com.neuralgrid.micecam</string>
   <key>CFBundleName</key>
   <string>${APP_NAME}</string>
+  <key>CFBundleIconFile</key>
+  <string>${APP_NAME}.icns</string>
   <key>CFBundleDisplayName</key>
   <string>${APP_NAME}</string>
   <key>CFBundlePackageType</key>

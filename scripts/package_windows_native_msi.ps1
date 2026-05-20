@@ -143,14 +143,11 @@ plugins. Hardware-in-the-loop validation must be performed on target machines.
 }
 
 if (-not (Test-Path -LiteralPath $WixExe)) {
-    dotnet tool install wix --tool-path (Join-Path $ProjectRoot $WixToolPath)
+    dotnet tool install wix --version 6.0.0 --tool-path (Join-Path $ProjectRoot $WixToolPath)
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to install WiX CLI."
     }
 }
-
-# Accept WiX v7 Open Source Maintenance Fee (OSMF) EULA
-& $WixExe --accept-osmf-eula
 
 & $WixExe extension add WixToolset.UI.wixext
 if ($LASTEXITCODE -ne 0) {

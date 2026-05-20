@@ -1,0 +1,23 @@
+{
+  "id": "micecam.oak",
+  "name": "MiceCam OAK Capture",
+  "version": "1.0.0",
+  "plugin_api_version": 1,
+  "min_micecam_version": "2.0.0",
+  "description": "Official MiceCam camera backend for Luxonis OAK-D spatial AI cameras via DepthAI SDK.",
+  "author": "MiceCam Team",
+  "platforms": {
+    "darwin": {
+      "entrypoint": "bin/micecam-oak",
+      "arch": "arm64"
+    },
+    "linux": {
+      "entrypoint": "bin/micecam-oak",
+      "arch": "x86_64"
+    }
+  },
+  "required_features": [],
+  "optional_features": ["depthai_sdk"],
+  "supported_process_models": ["SINGLETON", "PER_DEVICE"],
+  "preferred_process_model": "SINGLETON"
+}

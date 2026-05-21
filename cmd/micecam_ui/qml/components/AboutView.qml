@@ -41,36 +41,41 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             spacing: 32
             
-            LinkButton { text: "Documentation"; icon: "logging" }
-            LinkButton { text: "GitHub Repository"; icon: "encoding" }
-            LinkButton { text: "Check for Updates"; icon: "check" }
+            LinkButton { text: "Documentation"; icon: "logging"; onClicked: Qt.openUrlExternally("https://github.com/QiuYi111/MiceCam/wiki") }
+            LinkButton { text: "GitHub Repository"; icon: "encoding"; onClicked: Qt.openUrlExternally("https://github.com/QiuYi111/MiceCam") }
+            LinkButton { text: "Check for Updates"; icon: "check"; onClicked: Qt.openUrlExternally("https://github.com/QiuYi111/MiceCam/releases") }
         }
     }
     
-    component LinkButton : RowLayout {
+    component LinkButton : Item {
         property string text: ""
         property string icon: ""
-        spacing: 8
-        
-        AppIcon { name: icon; size: 16; color: Theme.navyPrimary }
-        
-        Text {
-            text: parent.text
-            font.family: Theme.fontPrimary
-            font.pixelSize: 14
-            color: Theme.navyPrimary
+        signal clicked()
+
+        implicitWidth: rowLayout.implicitWidth
+        implicitHeight: rowLayout.implicitHeight
+
+        RowLayout {
+            id: rowLayout
+            spacing: 8
+            
+            AppIcon { name: parent.icon; size: 16; color: Theme.navyPrimary }
+            
+            Text {
+                text: parent.parent.text
+                font.family: Theme.fontPrimary
+                font.pixelSize: 14
+                color: Theme.navyPrimary
+            }
         }
         
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            MouseArea { 
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                hoverEnabled: true
-                onEntered: parent.parent.opacity = 0.7
-                onExited: parent.parent.opacity = 1.0
-            }
+        MouseArea { 
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onEntered: parent.opacity = 0.7
+            onExited: parent.opacity = 1.0
+            onClicked: parent.clicked()
         }
     }
 }

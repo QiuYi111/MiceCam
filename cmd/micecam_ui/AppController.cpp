@@ -633,6 +633,23 @@ QVariantMap AppController::getPluginDetail(const QString& pluginPath) {
     }
     result["diagnostics"] = diagList;
 
+    // Populate devices from CameraManager for this plugin's source
+    QVariantList deviceList;
+    for (const auto& src : sources) {
+        if (src.plugin_path == pluginPath.toStdString()) {
+            auto plugin_devices = manager_.get_devices_for_source(src.source_id);
+            for (const auto& pd : plugin_devices) {
+                QVariantMap dev;
+                dev["deviceId"] = QString::fromStdString(pd.device_id);
+                dev["displayName"] = QString::fromStdString(pd.display_name);
+                dev["status"] = QString::fromStdString(pd.status);
+                deviceList.append(dev);
+            }
+            break;
+        }
+    }
+    result["devices"] = deviceList;
+
     return result;
 }
 

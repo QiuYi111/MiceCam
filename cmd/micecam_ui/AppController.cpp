@@ -390,10 +390,10 @@ QVariantList AppController::preflightItems() {
 
     {
         QVariantMap item;
-        item["name"] = QStringLiteral("Camera Detection");
+        item["title"] = QStringLiteral("Camera Detection");
         bool has_cameras = camera_model_->rowCount() > 0;
-        item["status"] = has_cameras ? QStringLiteral("pass") : QStringLiteral("fail");
-        item["detail"] = has_cameras
+        item["severity"] = has_cameras ? 0 : 2;
+        item["message"] = has_cameras
             ? QStringLiteral("%1 camera(s) detected").arg(camera_model_->rowCount())
             : QStringLiteral("No cameras detected");
         items.append(item);
@@ -401,12 +401,12 @@ QVariantList AppController::preflightItems() {
 
     {
         QVariantMap item;
-        item["name"] = QStringLiteral("Disk Space");
+        item["title"] = QStringLiteral("Disk Space");
         pipeline::PreflightValidator validator;
         std::string out_dir = output_dir_.isEmpty() ? "." : output_dir_.toStdString();
         bool disk_ok = validator.check_disk_space(out_dir, 500 * 1024 * 1024);
-        item["status"] = disk_ok ? QStringLiteral("pass") : QStringLiteral("fail");
-        item["detail"] = disk_ok
+        item["severity"] = disk_ok ? 0 : 1;
+        item["message"] = disk_ok
             ? QStringLiteral("Sufficient disk space available")
             : QStringLiteral("Insufficient disk space for recording");
         items.append(item);
@@ -414,10 +414,10 @@ QVariantList AppController::preflightItems() {
 
     {
         QVariantMap item;
-        item["name"] = QStringLiteral("Encoder Availability");
+        item["title"] = QStringLiteral("Encoder Availability");
         bool encoder_ok = current_encoder_name_ != QStringLiteral("—") || camera_model_->rowCount() > 0;
-        item["status"] = encoder_ok ? QStringLiteral("pass") : QStringLiteral("fail");
-        item["detail"] = encoder_ok
+        item["severity"] = encoder_ok ? 0 : 1;
+        item["message"] = encoder_ok
             ? QStringLiteral("H.264 encoder available")
             : QStringLiteral("No H.264 encoder found");
         items.append(item);

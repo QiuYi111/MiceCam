@@ -14,6 +14,7 @@ Rectangle {
 
     signal adjustSettings()
     signal dismissed()
+    signal forceStart()
 
     function open() { visible = true }
     function close() { visible = false }
@@ -155,6 +156,28 @@ Rectangle {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: { root.dismissed(); root.close() }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 40
+                    radius: 8
+                    color: Theme.statusAmber
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Start Anyway"
+                        font.family: Theme.fontPrimary
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        color: "white"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: { root.forceStart(); root.close() }
                     }
                 }
 

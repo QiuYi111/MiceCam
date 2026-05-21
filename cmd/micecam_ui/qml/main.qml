@@ -201,6 +201,10 @@ ApplicationWindow {
             onAdjustSettings: {
                 currentViewIndex = 1
             }
+            onForceStart: {
+                appController.startRecording()
+            }
+            onDismissed: {}
         }
     }
 }

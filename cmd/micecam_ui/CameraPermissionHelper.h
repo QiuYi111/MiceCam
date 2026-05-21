@@ -1,7 +1,16 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
+struct MacCameraDevice {
+    std::string id;
+    std::string name;
+};
+
 /// Request camera access permission on platforms that require it.
-/// On macOS, this triggers the system permission dialog if not yet granted.
-/// On other platforms, returns true (permission not required or handled by OS).
-/// Returns true if access is granted or not required.
 bool micecam_request_camera_access();
+
+/// Enumerate cameras using native platform APIs.
+/// Returns vector of {id, name} pairs. Empty if no cameras or platform not supported.
+std::vector<MacCameraDevice> micecam_enumerate_cameras();

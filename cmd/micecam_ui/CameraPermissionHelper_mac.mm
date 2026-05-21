@@ -25,5 +25,23 @@ bool micecam_request_camera_access() {
     return granted;
 }
 
+std::vector<MacCameraDevice> micecam_enumerate_cameras() {
+    std::vector<MacCameraDevice> result;
+    @autoreleasepool {
+        AVCaptureDeviceDiscoverySession* session =
+            [AVCaptureDeviceDiscoverySession
+                discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeExternal, AVCaptureDeviceTypeBuiltInWideAngleCamera]
+                mediaType:AVMediaTypeVideo
+                position:AVCaptureDevicePositionUnspecified];
+        for (AVCaptureDevice* device in session.devices) {
+            MacCameraDevice d;
+            d.id = device.uniqueID.UTF8String;
+            d.name = device.localizedName.UTF8String;
+            result.push_back(d);
+        }
+    }
+    return result;
+}
+
 #endif
 #endif

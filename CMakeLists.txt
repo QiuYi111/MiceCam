@@ -159,9 +159,19 @@ target_link_libraries(micecam_encoding PUBLIC
         target_sources(micecam_encoding PRIVATE
             internal/infrastructure/Win32SharedMemory.cpp
         )
+    elseif(APPLE)
+        target_sources(micecam_encoding PRIVATE
+            internal/infrastructure/PosixSharedMemory.cpp
+            internal/infrastructure/NativeCameraEnumerator_mac.mm
+        )
+        target_link_libraries(micecam_encoding PUBLIC
+            "-framework AVFoundation"
+            "-framework Foundation"
+        )
     else()
         target_sources(micecam_encoding PRIVATE
             internal/infrastructure/PosixSharedMemory.cpp
+            internal/infrastructure/NativeCameraEnumerator_stub.cpp
         )
     endif()
 

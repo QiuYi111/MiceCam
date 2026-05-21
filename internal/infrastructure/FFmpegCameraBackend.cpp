@@ -5,6 +5,10 @@
 
 #include "domain/Capabilities.h"
 
+#ifdef __APPLE__
+#include "NativeCameraEnumerator.h"
+#endif
+
 extern "C" {
 #include <libavdevice/avdevice.h>
 #include <libavformat/avformat.h>
@@ -108,13 +112,39 @@ FFmpegCameraBackend::FFmpegCameraBackend() {
 
 std::vector<domain::DeviceInfo> FFmpegCameraBackend::enumerate_devices() {
     std::vector<domain::DeviceInfo> result;
-#if defined(__APPLE__)
-    const char* input_format = "avfoundation";
-#elif defined(_WIN32)
-    const char* input_format = "dshow";
+
+#ifdef __APPLE__
+    // Use native AVFoundation API — FFmpeg's avdevice_list_input_sources
+    // does not implement get_device_list for avfoundation (returns ENOSYS).
+    spdlog::info("FFmpegCameraBackend: enumerating via native AVFoundation");
+    auto cameras = enumerate_native_cameras();
+    for (size_t i = 0; i < cameras.size(); i++) {
+        domain::DeviceInfo info;
+        info.id = "avfoundation:" + cameras[i].id;
+        info.name = cameras[i].name;
+        info.type = "avfoundation";
+        domain::StreamInfo si;
+        si.index = 0;
+        si.max_width = 1920;
+        si.max_height = 1080;
+        si.label = cameras[i].name;
+        si.resolutions = {{1920,1080,"1080p"},{1280,720,"720p"}};
+        si.supported_formats = {"yuv420p", "mjpeg"};
+        si.supported_framerates = {15, 30, 60};
+        si.available = true;
+        info.streams.push_back(si);
+        result.push_back(info);
+    }
+    spdlog::info("FFmpegCameraBackend: found {} cameras via AVFoundation", cameras.size());
+    return result;
 #else
-    const char* input_format = "v4l2";
-#endif
+    // Linux/Windows: use FFmpeg avdevice
+    const char* input_format =
+# ifdef _WIN32
+        "dshow";
+# else
+        "v4l2";
+# endif
 
     spdlog::info("FFmpegCameraBackend: enumerating devices via {}", input_format);
 
@@ -169,6 +199,7 @@ std::vector<domain::DeviceInfo> FFmpegCameraBackend::enumerate_devices() {
         avdevice_free_list_devices(&dev_list);
     avformat_free_context(ctx);
     return result;
+#endif
 }
 
 std::unique_ptr<domain::CameraStream> FFmpegCameraBackend::open_stream(const domain::StreamConfig& config) {

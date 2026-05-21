@@ -39,8 +39,25 @@ std::vector<domain::PluginSource> CameraManager::get_sources() {
 
 std::vector<domain::PluginDeviceInfo> CameraManager::get_devices_for_source(const std::string& source_id) {
     std::vector<domain::PluginDeviceInfo> result;
-    if (!plugin_registry_) return result;
-    (void)source_id;
+    // Return devices from registered backends that match this source.
+    // For bundled plugins without running plugin processes, the main
+    // backend (FFmpegCameraBackend) provides all devices.
+    for (auto& backend : backends_) {
+        auto devices = backend->enumerate_devices();
+        for (const auto& d : devices) {
+            domain::PluginDeviceInfo pdi;
+            pdi.device_id = d.id;
+            pdi.display_name = d.name;
+            pdi.plugin_id = source_id;
+            pdi.status = "available";
+            for (const auto& s : d.streams) {
+                pdi.max_width = std::max(pdi.max_width, s.max_width);
+                pdi.max_height = std::max(pdi.max_height, s.max_height);
+                pdi.max_framerate = std::max(pdi.max_framerate, 0.0);
+            }
+            result.push_back(pdi);
+        }
+    }
     return result;
 }
 

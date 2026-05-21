@@ -272,6 +272,7 @@ bool PluginRegistryService::addLinkedDirectory(const std::string& path) {
     linked_config_.add(abs_path);
     linked_config_.save();
 
+    registerPlugin(abs_path, domain::PluginSourceType::LINKED);
     pending_restart_ = true;
     return true;
 }
@@ -279,6 +280,15 @@ bool PluginRegistryService::addLinkedDirectory(const std::string& path) {
 bool PluginRegistryService::removeLinkedDirectory(const std::string& path) {
     linked_config_.remove(path);
     linked_config_.save();
+
+    // Remove from in-memory registry immediately
+    plugins_.erase(
+        std::remove_if(plugins_.begin(), plugins_.end(),
+                       [&path](const domain::PluginDescriptor& p) {
+                           return p.path == path;
+                       }),
+        plugins_.end());
+
     pending_restart_ = true;
     return true;
 }

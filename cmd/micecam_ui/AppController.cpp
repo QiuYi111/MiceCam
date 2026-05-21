@@ -175,13 +175,30 @@ void AppController::refreshCameras() {
     auto devices = manager_.discover_all();
     auto sources = manager_.get_sources();
 
+    // Build source-by-device map from populated device_ids.
     std::unordered_map<std::string, const domain::PluginSource*> source_by_device;
+    bool any_source_has_devices = false;
     for (const auto& source : sources) {
         for (const auto& device_id : source.device_ids) {
             source_by_device[device_id] = &source;
+            any_source_has_devices = true;
         }
     }
-    const domain::PluginSource* fallback_source = sources.size() == 1 ? &sources.front() : nullptr;
+
+    // Find the best fallback source when device_ids are empty (bundled plugins).
+    const domain::PluginSource* fallback_source = nullptr;
+    if (!any_source_has_devices && !sources.empty()) {
+        // Prefer the FFmpeg source since that's where cameras come from.
+        for (const auto& s : sources) {
+            if (s.source_id == "micecam.ffmpeg") {
+                fallback_source = &s;
+                break;
+            }
+        }
+        if (!fallback_source) fallback_source = &sources.front();
+    } else if (sources.size() == 1) {
+        fallback_source = &sources.front();
+    }
 
     std::vector<CameraRow> rows;
     std::vector<domain::PluginDeviceInfo> plugin_devices;

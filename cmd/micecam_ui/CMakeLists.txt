@@ -6,8 +6,13 @@ add_executable(micecam_ui
     AppSettings.cpp
     AppController.cpp
     CameraSourceModel.cpp
-    CameraPermissionHelper.mm
 )
+
+if(APPLE)
+    target_sources(micecam_ui PRIVATE CameraPermissionHelper_mac.mm)
+else()
+    target_sources(micecam_ui PRIVATE CameraPermissionHelper_stub.cpp)
+endif()
 
 target_compile_definitions(micecam_ui PRIVATE
     MICECAM_VERSION="${PROJECT_VERSION}"

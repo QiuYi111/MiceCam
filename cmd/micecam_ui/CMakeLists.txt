@@ -6,6 +6,7 @@ add_executable(micecam_ui
     AppSettings.cpp
     AppController.cpp
     CameraSourceModel.cpp
+    CameraPermissionHelper.mm
 )
 
 target_compile_definitions(micecam_ui PRIVATE
@@ -59,6 +60,13 @@ target_link_libraries(micecam_ui PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
 )
+
+if(APPLE)
+    target_link_libraries(micecam_ui PRIVATE
+        "-framework AVFoundation"
+        "-framework Foundation"
+    )
+endif()
 
 target_compile_options(micecam_ui PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4>

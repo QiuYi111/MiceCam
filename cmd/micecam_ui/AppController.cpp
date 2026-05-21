@@ -15,6 +15,7 @@
 #include "domain/PluginManifest.h"
 #include "pipeline/PreflightValidator.h"
 #include "infrastructure/FFmpegCameraBackend.h"
+#include "CameraPermissionHelper.h"
 
 namespace micecam::ui {
 
@@ -170,6 +171,7 @@ static void pushLogEntry(QStringList& entries, const QString& msg) {
 }
 
 void AppController::refreshCameras() {
+    micecam_request_camera_access();
     auto devices = manager_.discover_all();
     auto sources = manager_.get_sources();
 

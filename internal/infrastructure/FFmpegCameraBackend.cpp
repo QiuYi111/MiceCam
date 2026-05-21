@@ -1,6 +1,7 @@
 #include "FFmpegCameraBackend.h"
 
 #include <algorithm>
+#include <spdlog/spdlog.h>
 
 #include "domain/Capabilities.h"
 
@@ -115,16 +116,35 @@ std::vector<domain::DeviceInfo> FFmpegCameraBackend::enumerate_devices() {
     const char* input_format = "v4l2";
 #endif
 
+    spdlog::info("FFmpegCameraBackend: enumerating devices via {}", input_format);
+
     AVDeviceInfoList* dev_list = nullptr;
     const AVInputFormat* fmt = av_find_input_format(input_format);
-    if (!fmt) return result;
+    if (!fmt) {
+        spdlog::error("FFmpegCameraBackend: input format '{}' not found in FFmpeg", input_format);
+        return result;
+    }
 
     AVFormatContext* ctx = avformat_alloc_context();
-    if (!ctx) return result;
+    if (!ctx) {
+        spdlog::error("FFmpegCameraBackend: failed to allocate format context");
+        return result;
+    }
 
     int ret = avdevice_list_input_sources(fmt, nullptr, nullptr, &dev_list);
-    if (ret >= 0 && dev_list) {
-        for (int i = 0; i < dev_list->nb_devices; i++) {
+    if (ret < 0) {
+        spdlog::error("FFmpegCameraBackend: avdevice_list_input_sources({}) failed, ret={}", input_format, ret);
+        avformat_free_context(ctx);
+        return result;
+    }
+    if (!dev_list || dev_list->nb_devices == 0) {
+        spdlog::warn("FFmpegCameraBackend: {} returned 0 devices", input_format);
+        avformat_free_context(ctx);
+        return result;
+    }
+
+    spdlog::info("FFmpegCameraBackend: found {} devices via {}", dev_list->nb_devices, input_format);
+    for (int i = 0; i < dev_list->nb_devices; i++) {
             domain::DeviceInfo info;
             info.id = std::string(input_format) + ":" + std::to_string(i);
             info.name = dev_list->devices[i]->device_name
@@ -147,7 +167,6 @@ std::vector<domain::DeviceInfo> FFmpegCameraBackend::enumerate_devices() {
             result.push_back(info);
         }
         avdevice_free_list_devices(&dev_list);
-    }
     avformat_free_context(ctx);
     return result;
 }

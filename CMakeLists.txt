@@ -507,6 +507,10 @@ if(BUILD_UI)
     target_link_libraries(test_app_models PRIVATE Qt6::Core)
     target_link_libraries(test_app_settings PRIVATE Qt6::Core)
     target_link_libraries(test_app_controller PRIVATE Qt6::Core Qt6::Qml)
+    target_sources(test_app_controller PRIVATE cmd/micecam_ui/CameraPermissionHelper.mm)
+    if(APPLE)
+        target_link_libraries(test_app_controller PRIVATE "-framework AVFoundation" "-framework Foundation")
+    endif()
     target_link_libraries(test_app_alert_notifications PRIVATE Qt6::Core)
     target_compile_definitions(test_app_controller PRIVATE
         MICECAM_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"

@@ -323,8 +323,19 @@ bool AppController::startRecording() {
     if (!pipeline_.start(config)) return false;
 
     if (!config.streams.empty()) {
-        current_encoder_name_ = QStringLiteral("H.264");
-        current_bitrate_ = QStringLiteral("5.0 Mbps");
+#ifdef __APPLE__
+        current_encoder_name_ = config.encoder.prefer_hardware
+            ? QStringLiteral("H.264 (VideoToolbox)")
+            : QStringLiteral("H.264 (libx264)");
+#elif defined(_WIN32)
+        current_encoder_name_ = config.encoder.prefer_hardware
+            ? QStringLiteral("H.264 (NVENC)")
+            : QStringLiteral("H.264 (libx264)");
+#else
+        current_encoder_name_ = QStringLiteral("H.264 (libx264)");
+#endif
+        current_bitrate_ = QStringLiteral("%1 Mbps").arg(
+            static_cast<double>(config.encoder.bitrate_kbps) / 1000.0, 0, 'f', 1);
         emit encoderNameChanged();
         emit bitrateChanged();
     }

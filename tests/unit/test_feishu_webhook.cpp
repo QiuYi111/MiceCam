@@ -19,7 +19,7 @@ TEST(FeishuWebhook, FormatPayloadValidJson) {
     EXPECT_FALSE(payload.empty());
     EXPECT_NE(payload.find("msg_type"), std::string::npos);
     EXPECT_NE(payload.find("\"text\""), std::string::npos);
-    EXPECT_NE(payload.find("PIPELINE_STALL"), std::string::npos);
+    EXPECT_NE(payload.find("Pipeline Stall"), std::string::npos);
 }
 
 TEST(FeishuWebhook, ObserverInterfaceCalled) {

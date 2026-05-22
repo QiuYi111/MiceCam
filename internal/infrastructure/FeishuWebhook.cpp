@@ -1,15 +1,15 @@
 #include "FeishuWebhook.h"
 
-#include <nlohmann/json.hpp>
-
+#include <cstdio>
 #include <chrono>
-#include <thread>
+#include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
 
 namespace micecam::infrastructure {
 
-FeishuWebhook::FeishuWebhook() = default;
+FeishuWebhook::FeishuWebhook() {}
 
-FeishuWebhook::~FeishuWebhook() = default;
+FeishuWebhook::~FeishuWebhook() {}
 
 void FeishuWebhook::configure(const std::string& url) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -17,48 +17,69 @@ void FeishuWebhook::configure(const std::string& url) {
 }
 
 void FeishuWebhook::on_alert(const domain::AlertRecord& alert) {
-    std::string local_url;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        local_url = url_;
-    }
-
-    if (local_url.empty()) return;
-
-    std::string payload = format_payload(alert);
-
-    for (int attempt = 0; attempt < 2; attempt++) {
-        if (send(payload)) break;
-        if (attempt == 0) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }
+    send(format_payload(alert));
 }
 
 std::string FeishuWebhook::format_payload(const domain::AlertRecord& alert) const {
-    std::string type_str;
+    nlohmann::json payload;
+    payload["msg_type"] = "interactive";
+    payload["card"]["header"]["title"]["tag"] = "plain_text";
+    payload["card"]["header"]["title"]["content"] = "[MiceCam Alert] " + alert.message;
+    payload["card"]["header"]["template"] =
+        alert.severity == domain::AlertSeverity::RED ? "red" : "yellow";
+
+    std::string typeStr;
     switch (alert.type) {
-        case domain::AlertType::CAMERA_DISCONNECT: type_str = "CAMERA_DISCONNECT"; break;
-        case domain::AlertType::CAMERA_RECONNECT: type_str = "CAMERA_RECONNECT"; break;
-        case domain::AlertType::HIGH_DROP_RATE: type_str = "HIGH_DROP_RATE"; break;
-        case domain::AlertType::ENCODE_STALL: type_str = "ENCODE_STALL"; break;
-        case domain::AlertType::ENCODER_FALLBACK: type_str = "ENCODER_FALLBACK"; break;
-        case domain::AlertType::DISK_FULL: type_str = "DISK_FULL"; break;
-        case domain::AlertType::PIPELINE_STALL: type_str = "PIPELINE_STALL"; break;
+        case domain::AlertType::CAMERA_DISCONNECT: typeStr = "Camera Disconnect"; break;
+        case domain::AlertType::HIGH_DROP_RATE:    typeStr = "High Drop Rate"; break;
+        case domain::AlertType::ENCODE_STALL:      typeStr = "Encoder Stall"; break;
+        case domain::AlertType::ENCODER_FALLBACK:  typeStr = "Encoder Fallback"; break;
+        case domain::AlertType::DISK_FULL:         typeStr = "Disk Full"; break;
+        case domain::AlertType::PIPELINE_STALL:    typeStr = "Pipeline Stall"; break;
+        default:                                   typeStr = "Unknown"; break;
     }
 
-    std::string severity_str = (alert.severity == domain::AlertSeverity::RED) ? "RED" : "YELLOW";
+    nlohmann::json fields;
+    fields.push_back({{"is_short", true}, {"text", {{"tag", "lark_md"}, {"content", "**Type:** " + typeStr}}}});
+    fields.push_back({{"is_short", true}, {"text", {{"tag", "lark_md"}, {"content", "**Stream:** " + alert.stream_id}}}});
 
-    std::string text = "[MiceCam] ALERT: " + type_str + " — " + alert.message +
-                       " (stream: " + alert.stream_id + ", severity: " + severity_str + ")";
-
-    nlohmann::json payload;
-    payload["msg_type"] = "text";
-    payload["content"]["text"] = text;
+    payload["card"]["elements"] = {{{"tag", "div"}, {"fields", fields}}};
     return payload.dump();
 }
 
-bool FeishuWebhook::send(const std::string& /*payload*/) {
+bool FeishuWebhook::send(const std::string& payload) {
+    std::string url;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        url = url_;
+    }
+    if (url.empty()) {
+        spdlog::warn("FeishuWebhook: no URL configured, skipping send");
+        return false;
+    }
+
+    // Use curl via popen for cross-platform HTTP POST without adding libcurl dependency
+    std::string cmd = "curl -s -X POST -H 'Content-Type: application/json' -d '" + payload + "' '" + url + "' --connect-timeout 5 --max-time 10";
+
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        spdlog::error("FeishuWebhook: failed to execute curl");
+        return false;
+    }
+
+    char buf[256];
+    std::string response;
+    while (fgets(buf, sizeof(buf), pipe) != nullptr) {
+        response += buf;
+    }
+    int rc = pclose(pipe);
+
+    if (rc != 0) {
+        spdlog::error("FeishuWebhook: curl failed with code {}, response: {}", rc, response);
+        return false;
+    }
+
+    spdlog::info("FeishuWebhook: sent alert, response: {}", response.substr(0, 100));
     return true;
 }
 

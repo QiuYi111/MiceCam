@@ -42,6 +42,18 @@ bool RecordingPipeline::start(const SessionConfig& config) {
     for (size_t i = 0; i < config.streams.size(); i++) {
         auto& sc = config.streams[i];
         if (!create_stream_pipeline(sc, output_dir, config.encoder)) {
+            // Rollback: close and remove partially created streams
+            for (auto& [id, sp] : streams_) {
+                if (sp->initialized) {
+                    if (sp->transcoder) {
+                        std::vector<uint8_t> dummy;
+                        sp->transcoder->flush(dummy);
+                    }
+                    if (sp->writer) sp->writer->close();
+                    if (sp->srt) sp->srt->close();
+                }
+            }
+            streams_.clear();
             return false;
         }
     }
@@ -95,9 +107,9 @@ bool RecordingPipeline::create_stream_pipeline(const domain::StreamConfig& sc,
 }
 
 bool RecordingPipeline::push_frame(const FrameData& frame) {
-    if (state_ != PipelineState::RUNNING) return false;
-
     std::lock_guard<std::mutex> lock(mutex_);
+
+    if (state_ != PipelineState::RUNNING) return false;
 
     auto it = streams_.find(frame.stream_id);
     if (it == streams_.end()) return false;
@@ -151,6 +163,7 @@ void RecordingPipeline::stop() {
         watchdog_->stop();
     }
 
+    std::lock_guard<std::mutex> lock(mutex_);
     for (auto& [id, sp] : streams_) {
         if (!sp->initialized) continue;
 

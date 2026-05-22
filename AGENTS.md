@@ -85,3 +85,17 @@
 - 维护好 `.gitignore`，保持提交的 Git 历史干净，避免无关文件带入。
 - 将代码 Commit 到此前创建的【独立 Branch】。
 - 不要自行合并。请请示用户审核最终报告，用户同意后，再将该【独立 Branch】合并到目标主干分支。
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (repo: QiuYi111/MiceCam). Use the `gh` CLI for all operations. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses default triage vocabulary: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.

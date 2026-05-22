@@ -49,6 +49,7 @@ class AppController : public QObject {
 
 public:
     explicit AppController(QObject* parent = nullptr);
+    ~AppController() override;
 
     QAbstractListModel* cameraModel() const;
     QAbstractListModel* sourceModel() const;
@@ -128,9 +129,9 @@ private:
     bool recording_ = false;
     QString output_dir_;
     QString session_id_;
-    uint64_t total_frames_ = 0;
+    std::atomic<uint64_t> total_frames_{0};
     double average_fps_ = 0.0;
-    uint64_t bytes_written_ = 0;
+    std::atomic<uint64_t> bytes_written_{0};
     QString disk_remaining_;
     QString preflight_message_;
     QString current_encoder_name_ = QStringLiteral("—");
@@ -142,9 +143,11 @@ private:
     std::atomic<bool> capture_running_{false};
     std::thread capture_thread_;
     std::vector<ActiveStream> active_streams_;
+    std::mutex streams_mutex_;
     QStringList log_entries_;
 
     QTimer* metrics_timer_ = nullptr;
+    std::mutex metrics_mutex_;
     std::unordered_map<std::string, uint64_t> stream_frame_counts_;
     std::unordered_map<std::string, uint64_t> stream_drop_counts_;
     std::chrono::steady_clock::time_point last_metrics_push_;

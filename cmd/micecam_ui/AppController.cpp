@@ -78,6 +78,18 @@ AppController::AppController(QObject* parent)
     connect(metrics_timer_, &QTimer::timeout, this, [this] { pushLiveMetrics(); });
 }
 
+AppController::~AppController() {
+    if (recording_) {
+        stopRecording();
+    }
+    if (capture_running_) {
+        capture_running_ = false;
+        if (capture_thread_.joinable()) {
+            capture_thread_.join();
+        }
+    }
+}
+
 QAbstractListModel* AppController::cameraModel() const { return camera_model_; }
 QAbstractListModel* AppController::sourceModel() const { return source_model_; }
 QAbstractListModel* AppController::alertModel() const { return alert_model_; }
@@ -118,7 +130,7 @@ QString AppController::elapsedText() const {
 }
 
 QString AppController::totalFramesText() const {
-    return QString::number(total_frames_);
+    return QString::number(total_frames_.load());
 }
 
 QString AppController::averageFpsText() const {
@@ -126,7 +138,7 @@ QString AppController::averageFpsText() const {
 }
 
 QString AppController::bytesWrittenText() const {
-    return QString::number(bytes_written_ / (1024 * 1024)) + QStringLiteral(" MB");
+    return QString::number(bytes_written_.load() / (1024 * 1024)) + QStringLiteral(" MB");
 }
 
 QString AppController::diskRemainingText() const {
@@ -333,8 +345,11 @@ bool AppController::startRecording() {
 
     session_start_ = std::chrono::steady_clock::now();
     recording_ = true;
-    stream_frame_counts_.clear();
-    stream_drop_counts_.clear();
+    {
+        std::lock_guard<std::mutex> lock(metrics_mutex_);
+        stream_frame_counts_.clear();
+        stream_drop_counts_.clear();
+    }
     last_metrics_push_ = std::chrono::steady_clock::now();
     metrics_timer_->start();
     emit isRecordingChanged();
@@ -354,19 +369,22 @@ void AppController::stopRecording() {
     pushLogEntry(log_entries_, QStringLiteral("[INFO] Recording stopped: %1").arg(session_id_));
 
     auto [meta, stats_vec] = pipeline_.result();
-    total_frames_ = 0;
-    bytes_written_ = 0;
+    uint64_t total_frames_sum = 0;
+    uint64_t bytes_written_sum = 0;
     double total_fps = 0.0;
     int stats_count = 0;
 
     for (const auto& s : stats_vec) {
-        total_frames_ += s.frames_actual;
-        bytes_written_ += s.bytes_written;
+        total_frames_sum += s.frames_actual;
+        bytes_written_sum += s.bytes_written;
         if (s.frames_actual > 0) {
             total_fps += s.frames_actual;
             stats_count++;
         }
     }
+    total_frames_.store(total_frames_sum);
+    bytes_written_.store(bytes_written_sum);
+
     if (stats_count > 0) {
         average_fps_ = total_fps / stats_count;
     }
@@ -678,10 +696,13 @@ void AppController::captureLoop() {
             frame.source_format = active.stream->pixel_format();
 
             if (pipeline_.push_frame(frame)) {
-                total_frames_++;
-                bytes_written_ += bytes.size();
-                stream_frame_counts_[stream_id]++;
-                stream_drop_counts_[stream_id] += frame.dropped_frame_count;
+                total_frames_.fetch_add(1);
+                bytes_written_.fetch_add(bytes.size());
+                {
+                    std::lock_guard<std::mutex> lock(metrics_mutex_);
+                    stream_frame_counts_[stream_id]++;
+                    stream_drop_counts_[stream_id] += frame.dropped_frame_count;
+                }
             }
         }
         QMetaObject::invokeMethod(this, [this] { refreshLiveStatus(); },
@@ -700,7 +721,7 @@ void AppController::stopCaptureLoop() {
 
 void AppController::refreshLiveStatus() {
     pushLogEntry(log_entries_, QStringLiteral("[DEBUG] Frames: %1, Elapsed: %2")
-        .arg(QString::number(total_frames_), elapsedText()));
+        .arg(QString::number(total_frames_.load()), elapsedText()));
     emit elapsedTextChanged();
     emit totalFramesTextChanged();
     emit bytesWrittenTextChanged();
@@ -715,18 +736,22 @@ void AppController::pushLiveMetrics() {
     if (elapsed_sec < 0.5) return;
     last_metrics_push_ = now;
 
-    for (auto& active : active_streams_) {
-        std::string sid = active.config.device_id + "_" +
-            std::to_string(active.config.stream_index);
+    {
+        std::lock_guard<std::mutex> slock(streams_mutex_);
+        std::lock_guard<std::mutex> mlock(metrics_mutex_);
+        for (auto& active : active_streams_) {
+            std::string sid = active.config.device_id + "_" +
+                std::to_string(active.config.stream_index);
 
-        uint64_t frames = stream_frame_counts_[sid];
-        double fps = elapsed_sec > 0 ? static_cast<double>(frames) / elapsed_sec : 0.0;
-        uint64_t drops = stream_drop_counts_[sid];
+            uint64_t frames = stream_frame_counts_[sid];
+            double fps = elapsed_sec > 0 ? static_cast<double>(frames) / elapsed_sec : 0.0;
+            uint64_t drops = stream_drop_counts_[sid];
 
-        QString deviceId = QString::fromStdString(active.config.device_id);
-        source_model_->updateDeviceMetrics(deviceId, fps, static_cast<int>(drops));
+            QString deviceId = QString::fromStdString(active.config.device_id);
+            source_model_->updateDeviceMetrics(deviceId, fps, static_cast<int>(drops));
 
-        stream_frame_counts_[sid] = 0;
+            stream_frame_counts_[sid] = 0;
+        }
     }
 }
 
